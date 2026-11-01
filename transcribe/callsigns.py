@@ -1,7 +1,12 @@
 """Normalize phonetically-spelled callsigns in Whisper output back to callsign strings.
-'kilo seven alpha bravo charlie' -> 'K7ABC'. Also matches against the roster."""
+'kilo seven alpha bravo charlie' -> 'K7ABC'. Also matches against the roster.
+
+Vocabulary comes from config/vocab.yaml merged with the git-ignored config/local.yaml
+(lists concatenated, scalars overridden) so a private roster never has to be committed."""
 import re, yaml
 from pathlib import Path
+
+CONFIG_DIR = Path(__file__).parent.parent / "config"
 
 PHON = {
  "alpha":"A","alfa":"A","bravo":"B","charlie":"C","delta":"D","echo":"E","foxtrot":"F","golf":"G",
@@ -15,9 +20,27 @@ _pat = re.compile(r"\b((?:" + "|".join(PHON) + r")(?:[\s-]+(?:" + "|".join(PHON)
 _cs = re.compile(r"^[AKNW][A-Z]?\d[A-Z]{1,3}$")
 
 
-def load_roster(path=Path(__file__).parent.parent / "config/vocab.yaml"):
-    v = yaml.safe_load(open(path))
-    return set(c.split("-")[0].upper() for c in v.get("roster", []))
+def load_vocab(config_dir: Path = CONFIG_DIR) -> dict:
+    v = yaml.safe_load(open(config_dir / "vocab.yaml")) or {}
+    local = config_dir / "local.yaml"
+    if local.exists():
+        for k, val in (yaml.safe_load(open(local)) or {}).items():
+            if isinstance(val, list) and isinstance(v.get(k), list):
+                v[k] = v[k] + [x for x in val if x not in v[k]]
+            else:
+                v[k] = val
+    return v
+
+
+def _base(cs: str) -> str:
+    return cs.split("-")[0].upper()
+
+
+def load_roster(config_dir: Path = CONFIG_DIR) -> set:
+    v = load_vocab(config_dir)
+    calls = set(_base(c) for c in v.get("roster", []))
+    calls |= set(_base(r["callsign"]) for r in v.get("repeaters", []) if r.get("callsign"))
+    return calls
 
 
 def normalize(text: str, roster=None):
@@ -37,8 +60,14 @@ def normalize(text: str, roster=None):
     return out, found
 
 
-def initial_prompt(path=Path(__file__).parent.parent / "config/vocab.yaml"):
-    v = yaml.safe_load(open(path))
-    return " ".join([v["area"], ", ".join(v["phrases"]) + ".",
-                     "Tacticals: " + ", ".join(v["tacticals"]) + ".",
-                     "Stations: " + ", ".join(v["roster"]) + "."])
+def initial_prompt(config_dir: Path = CONFIG_DIR) -> str:
+    """Whisper keeps only the tail of a long prompt, so the most valuable tokens go last."""
+    v = load_vocab(config_dir)
+    stations = sorted(set(_base(c) for c in v.get("roster", [])))
+    reps = [f"{r['callsign']} repeater {r['output_mhz']}" for r in v.get("repeaters", []) if r.get("callsign")]
+    parts = [v.get("area", "").strip(),
+             ", ".join(v.get("phrases", [])) + ".",
+             "Tacticals: " + ", ".join(v.get("tacticals", [])) + ".",
+             "Repeaters: " + ", ".join(reps) + "." if reps else "",
+             "Stations: " + ", ".join(stations) + "."]
+    return " ".join(p for p in parts if p)

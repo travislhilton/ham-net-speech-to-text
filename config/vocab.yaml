@@ -1,16 +1,35 @@
 # Vocabulary fed to Whisper's initial_prompt and used by callsigns.py normalization.
 # Edit freely; keep callsigns upper-case.
-area: "Springfield Valley EMCOMM net. Springfield County EOC, Shelbyville County EOC, Springfield, Shelbyville, Capital City."
+#
+# Private roster additions (names, personal callsigns you'd rather not publish) go in
+# config/local.yaml — git-ignored, same keys; lists are merged, scalars override.
+#
+# Whisper only keeps the LAST ~224 tokens of the prompt, so callsigns.initial_prompt()
+# puts tacticals and stations last. Keep `phrases` tight.
+
+area: >-
+  Springfield Valley EMCOMM amateur radio voice net. Springfield County Illinois and Shelbyville County Indiana.
+  Springfield, Shelbyville, Ogdenville, Brockway, North Haverbrook, Capital City. Springfield Amateur Radio Club ARES.
+
 phrases:
   - net control
   - this is net control
+  - the net is now open
+  - the net is closed
   - check in
   - checking in
   - no traffic
   - with traffic
+  - routine traffic
+  - welfare traffic
   - priority traffic
   - emergency traffic
-  - welfare traffic
+  - break
+  - break break
+  - go ahead
+  - say again
+  - affirmative
+  - negative
   - roger
   - copy
   - over
@@ -18,14 +37,47 @@ phrases:
   - clear
   - standing by
   - relay
+  - please copy
   - QSL
   - QRZ
+  - QRT
   - ICS 213
+  - ICS 309
+  - Winlink
+  - VARA FM
+  - simplex
+  - repeater
+  - emergency power
+  - acknowledge
+
 tacticals:
+  - Net Control
   - Springfield County EOC
+  - Springfield County EOC
+  - Springfield County Sheriff
   - Shelbyville EOC
+  - Shelbyville County EOC
+  - Stake Center EOC
+  - Satellite EOC
+  - Area EOC
+  - Council Area EOC
   - Springfield Regional
   - Shelbyville Station
-roster:            # known callsigns; expand from the net roster
-  - W9XYZ
-  - W9XYZ-10
+
+# Repeaters likely heard on the net (callsign IDs and frequencies). Public data from
+# the state VHF society / RepeaterBook; see winlink-forms docs/research.
+repeaters:
+  - callsign: WA7XQZ
+    output_mhz: 146.940
+    note: Mount Springfield, primary ARES system, linked to 442.125
+  - callsign: K7NET
+    output_mhz: 145.410
+    note: Springfield, Ogdenville to Brockway
+  - callsign: WA7XQY
+    output_mhz: 146.820
+    note: Springfield County Sheriff's Office site, SARC
+
+roster:            # known station callsigns; the real net roster goes here or in config/local.yaml
+  - W9XYZ          # Pat — station / net control
+  - W9XYZ-10       # Winlink VARA FM gateway, 145.070, Shelbyville
+  - W9XYZ-3        # EOC Winlink station

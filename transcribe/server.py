@@ -35,7 +35,10 @@ async def transcribe(audio: UploadFile = File(...), meta: str = Form("{}"),
         raise HTTPException(401)
     m = json.loads(meta)
     started = m.get("started_utc") or datetime.now(timezone.utc).isoformat()
-    day = started[:10].replace("-", "")
+    started_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+    if started_dt.tzinfo is None:
+        started_dt = started_dt.replace(tzinfo=timezone.utc)
+    day = started_dt.strftime("%Y%m%d")
     d = DATA / day
     d.mkdir(parents=True, exist_ok=True)
     wav = d / audio.filename
@@ -59,7 +62,7 @@ async def transcribe(audio: UploadFile = File(...), meta: str = Form("{}"),
     wav.with_suffix(".transcript.json").write_text(json.dumps(out, indent=2))
     if _db:
         with _db() as s:
-            s.add(Transmission(started_utc=started, duration_s=m.get("duration_s"),
+            s.add(Transmission(started_utc=started_dt, duration_s=m.get("duration_s"),
                                frequency_mhz=m.get("frequency_mhz"), net_name=m.get("net_name"),
                                station=m.get("station"), wav_path=str(wav), text=text,
                                callsigns=found, model=MODEL, host="home-server",
