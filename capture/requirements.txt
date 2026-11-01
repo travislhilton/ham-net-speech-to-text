@@ -1,0 +1,9 @@
+sounddevice>=0.5
+numpy>=1.26
+soundfile>=0.12
+torch>=2.2          # CPU wheel is fine; needed by silero-vad
+silero-vad>=5.1
+requests>=2.31
+pyyaml>=6
+pyserial>=3.5       # optional: Digirig/CAT COS line
+faster-whisper>=1.0 # optional local fallback

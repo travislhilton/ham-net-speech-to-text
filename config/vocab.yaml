@@ -1,0 +1,31 @@
+# Vocabulary fed to Whisper's initial_prompt and used by callsigns.py normalization.
+# Edit freely; keep callsigns upper-case.
+area: "Springfield Valley EMCOMM net. Springfield County EOC, Shelbyville County EOC, Springfield, Shelbyville, Capital City."
+phrases:
+  - net control
+  - this is net control
+  - check in
+  - checking in
+  - no traffic
+  - with traffic
+  - priority traffic
+  - emergency traffic
+  - welfare traffic
+  - roger
+  - copy
+  - over
+  - out
+  - clear
+  - standing by
+  - relay
+  - QSL
+  - QRZ
+  - ICS 213
+tacticals:
+  - Springfield County EOC
+  - Shelbyville EOC
+  - Springfield Regional
+  - Shelbyville Station
+roster:            # known callsigns; expand from the net roster
+  - W9XYZ
+  - W9XYZ-10

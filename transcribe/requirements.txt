@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+mlx-whisper>=0.4
+numpy>=1.26
+pyyaml>=6
+sqlalchemy>=2.0
+psycopg[binary]>=3.1
