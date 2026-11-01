@@ -16,7 +16,10 @@ PHON = {
  "zero":"0","one":"1","two":"2","three":"3","four":"4","five":"5","six":"6","seven":"7","eight":"8",
  "nine":"9","niner":"9",
 }
-_pat = re.compile(r"\b((?:" + "|".join(PHON) + r")(?:[\s-]+(?:" + "|".join(PHON) + r")){3,6})\b", re.I)
+# A run of 4-7 tokens, each a phonetic word or a bare digit (Whisper often writes "Kilo 7"),
+# separated by spaces, hyphens or commas ("Kilo 7, Alpha Bravo Charlie").
+_TOK = r"(?:" + "|".join(PHON) + r"|\d)"
+_pat = re.compile(r"\b(" + _TOK + r"(?:[\s,-]+" + _TOK + r"){3,6})\b", re.I)
 _cs = re.compile(r"^[AKNW][A-Z]?\d[A-Z]{1,3}$")
 
 
@@ -46,8 +49,8 @@ def load_roster(config_dir: Path = CONFIG_DIR) -> set:
 def normalize(text: str, roster=None):
     found = []
     def rep(m):
-        toks = re.split(r"[\s-]+", m.group(1).lower())
-        cs = "".join(PHON[t] for t in toks)
+        toks = re.split(r"[\s,-]+", m.group(1).lower())
+        cs = "".join(t if t.isdigit() else PHON[t] for t in toks)
         if _cs.match(cs):
             found.append(cs)
             return cs
