@@ -46,5 +46,18 @@ python -m analyze.net_report --net-id 1            # needs LiteLLM reachable
 Puck: `pip install -r capture/requirements.txt`, then `python recorder.py --list-devices`,
 set `config.yaml`, run as a Windows service via NSSM (`deploy/windows/`).
 
+## Deploy (home server)
+
+```bash
+ssh home-server 'cd ~/Projects/ham-net-speech-to-text && git pull && deploy/home-server/install.sh'
+```
+
+`install.sh` is idempotent: python3.11 venv, requirements, `~/.config/emcomm-stt/env` (mode 600,
+fresh `EMCOMM_STT_KEY` on first run — the puck needs the same value), `emcomm_voice` database and
+schema, launchd `com.example.emcomm-stt` (port 8090, logs in `~/Library/Logs/example/`). The
+plist in git holds no secrets; `run.sh` sources the env file. A private roster goes in
+`config/local.yaml` (git-ignored, merged over `config/vocab.yaml`).
+
 ## Status
-2026-10-31 — scaffolded. Nothing deployed. See `docs/ARCHITECTURE.md` and `CLAUDE.md`.
+2026-11-01 — transcribe service deployed on the home server; `emcomm/*` aliases committed in
+llm-platform. Puck capture not yet run against a real net. See `docs/HANDOFF.md`.

@@ -1,10 +1,11 @@
 """home server transcription service. POST /transcribe (multipart: audio, meta JSON).
 Stores WAV under STT_DATA_DIR and the transcript in Postgres (optional; skipped if no DSN)."""
-import json, os, time
+import json, os, time, wave
 from datetime import datetime, timezone
 from pathlib import Path
 
 import mlx_whisper
+import numpy as np
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 
 from . import callsigns
@@ -21,6 +22,19 @@ _db = None
 if DSN:
     from db.models import Session, Transmission  # type: ignore
     _db = Session
+
+
+def load_audio(path: Path):
+    """16 kHz mono 16-bit WAV (what capture/ produces) is decoded here with no ffmpeg dependency;
+    anything else is handed to mlx_whisper as a path and decoded by ffmpeg."""
+    try:
+        with wave.open(str(path)) as w:
+            if w.getnchannels() == 1 and w.getframerate() == 16000 and w.getsampwidth() == 2:
+                pcm = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+                return pcm.astype(np.float32) / 32768.0
+    except wave.Error:
+        pass
+    return str(path)
 
 
 @app.get("/health")
@@ -46,7 +60,7 @@ async def transcribe(audio: UploadFile = File(...), meta: str = Form("{}"),
     wav.with_suffix(".json").write_text(json.dumps(m, indent=2))
 
     t0 = time.time()
-    r = mlx_whisper.transcribe(str(wav), path_or_hf_repo=MODEL, language="en",
+    r = mlx_whisper.transcribe(load_audio(wav), path_or_hf_repo=MODEL, language="en",
                                initial_prompt=_prompt, word_timestamps=True,
                                condition_on_previous_text=False)
     text, found = callsigns.normalize(r["text"].strip(), _roster)
