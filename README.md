@@ -51,6 +51,17 @@ Tests: `pip install -r requirements-dev.txt && python -m pytest -q` (the DB test
 
 ## Running a net
 
+One tap, from any checkout (standard library only; the key comes from `$EMCOMM_STT_KEY` or the
+home server env file; `--url`/`$EMCOMM_STT_URL` for another host, default `localhost:8090`):
+
+```bash
+python -m tools.net start "Springfield Valley ARES" --freq 146.94 --ncs W9XYZ
+python -m tools.net status          # open nets (--all for recent)
+python -m tools.net stop            # the one open net; prints the net_report command
+```
+
+The same with curl:
+
 ```bash
 H="X-API-Key: $EMCOMM_STT_KEY"   # value from ~/.config/emcomm-stt/env on the home server
 curl -s -H "$H" -H 'content-type: application/json' \
@@ -79,4 +90,4 @@ plist in git holds no secrets; `run.sh` sources the env file. A private roster g
 
 ## Status
 2026-11-01 — transcribe service deployed on the home server; `emcomm/*` aliases committed in
-llm-platform. Net start/stop API + `retranscribe.py` live (17 tests). Puck capture not yet run against a real net. See `docs/HANDOFF.md`.
+llm-platform. Net start/stop API + `retranscribe.py` live; `tools/net.py` CLI (25 tests). Puck capture not yet run against a real net. See `docs/HANDOFF.md`.
