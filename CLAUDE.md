@@ -14,5 +14,6 @@
   copied from `deploy/home-server/`, never edited in `~/Library/LaunchAgents` directly.
 
 ## Resume here
-Read `docs/HANDOFF.md` first — it holds the full design conversation, hardware details, decisions
-and the agreed next-step order. Then `docs/ARCHITECTURE.md` and `README.md`.
+Read `continuation-prompt.md` first (current state, hosts, next steps), then `docs/HANDOFF.md`
+(the design conversation), `docs/ARCHITECTURE.md` and `README.md`. Update the continuation
+prompt at the end of every session.
