@@ -30,8 +30,8 @@ transcription survives a LAN/Mac outage — the EMCOMM case.
 | Dir | Runs on | What |
 |-----|---------|------|
 | `capture/` | puck (Windows) | `recorder.py` — continuous listen on a named input device, Silero VAD (or Digirig COS) gates each transmission into `YYYYmmdd/HHMMSS.wav` + sidecar JSON; `uploader.py` ships clips and queues on failure |
-| `transcribe/` | home server | `server.py` — `POST /transcribe` (WAV → segments, words, callsign normalization), `GET /health`; launchd plist in `deploy/home-server` |
-| `analyze/` | home server (calls LLM server) | `structure.py` per-transmission JSON (speaker callsign, type, traffic), `net_report.py` → ICS-309 CSV/MD + summary |
+| `transcribe/` | home server | `server.py` — `POST /transcribe` (WAV → segments, callsign normalization, auto `net_id`), `POST /nets/start`, `POST /nets/{id}/stop`, `GET /nets`, `POST /reload-vocab`, `GET /health`; `engine.py` (the one Whisper path); `nets.py` (which net a clip belongs to); launchd plist in `deploy/home-server` |
+| `analyze/` | home server (calls LLM server) | `structure.py` per-transmission JSON (speaker callsign, type, traffic), `net_report.py` → ICS-309 CSV/MD + summary, `retranscribe.py` re-runs stored WAVs (new roster/model) |
 | `db/` | home server | `schema.sql`, `models.py` (SQLAlchemy) |
 
 ## Quick start (dev, this dev laptop)
@@ -45,6 +45,25 @@ python -m analyze.net_report --net-id 1            # needs LiteLLM reachable
 
 Puck: `pip install -r capture/requirements.txt`, then `python recorder.py --list-devices`,
 set `config.yaml`, run as a Windows service via NSSM (`deploy/windows/`).
+
+Tests: `pip install -r requirements-dev.txt && python -m pytest -q` (the DB tests create and drop
+`emcomm_voice_test` on local Postgres 17 and stub Whisper; skipped when Postgres is absent).
+
+## Running a net
+
+```bash
+H="X-API-Key: $EMCOMM_STT_KEY"   # value from ~/.config/emcomm-stt/env on the home server
+curl -s -H "$H" -H 'content-type: application/json' \
+  -d '{"name":"Springfield Valley ARES","frequency_mhz":146.94,"net_control":"W9XYZ"}' home-server:8090/nets/start
+# ... every clip whose start falls inside the window (and on that frequency) gets the net's id ...
+curl -s -H "$H" -H 'content-type: application/json' -d '{}' home-server:8090/nets/1/stop
+python -m analyze.net_report --net-id 1
+```
+Both endpoints take an optional `started_utc` / `ended_utc` to log a net after the fact; stop
+back-fills `net_id` on unassigned rows in the window. Overlapping nets are split by frequency
+(±0.5 kHz); a net with no frequency takes any clip. After adding the roster:
+`curl -X POST -H "$H" home-server:8090/reload-vocab`, then
+`python -m analyze.retranscribe --since 2026-11-01 --dry-run` (drop `--dry-run` to write).
 
 ## Deploy (home server)
 
@@ -60,4 +79,4 @@ plist in git holds no secrets; `run.sh` sources the env file. A private roster g
 
 ## Status
 2026-11-01 — transcribe service deployed on the home server; `emcomm/*` aliases committed in
-llm-platform. Puck capture not yet run against a real net. See `docs/HANDOFF.md`.
+llm-platform. Net start/stop API + `retranscribe.py` live (17 tests). Puck capture not yet run against a real net. See `docs/HANDOFF.md`.
