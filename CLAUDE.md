@@ -12,3 +12,7 @@
   `initial_prompt` is built from it; `callsigns.py` normalizes phonetic spellings back to callsigns.
 - Deploy like the rest of the house: edit here → commit → push → pull on home server; launchd plist
   copied from `deploy/home-server/`, never edited in `~/Library/LaunchAgents` directly.
+
+## Resume here
+Read `docs/HANDOFF.md` first — it holds the full design conversation, hardware details, decisions
+and the agreed next-step order. Then `docs/ARCHITECTURE.md` and `README.md`.
