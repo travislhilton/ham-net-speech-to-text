@@ -4,7 +4,7 @@
 Writes one WAV + JSON sidecar per transmission into out_dir/YYYYmmdd/, then hands the
 pair to uploader.enqueue(). Runs forever; Ctrl-C or service stop to exit.
 """
-import argparse, json, queue, sys, threading, time
+import argparse, collections, json, queue, sys, threading, time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,6 +14,7 @@ import soundfile as sf
 import yaml
 
 import uploader
+from gates import CarrierGate
 
 FRAME_MS = 32  # 512 samples @16k — Silero's native window
 
@@ -60,13 +61,20 @@ class Recorder:
         self.cfg = cfg
         self.sr = cfg["sample_rate"]
         self.frame = int(self.sr * FRAME_MS / 1000)
-        self.gate = CosGate(cfg["cos"]) if cfg["vad"]["mode"] == "cos" else SileroGate(cfg["vad"])
+        mode = cfg["vad"]["mode"]
+        if mode == "carrier":
+            self.gate = CarrierGate(cfg.get("carrier", {}), self.sr)
+        elif mode == "cos":
+            self.gate = CosGate(cfg["cos"])
+        else:
+            self.gate = SileroGate(cfg["vad"])
         self.q = queue.Queue()
         self.out = Path(cfg["out_dir"])
         v = cfg["vad"]
         self.min_frames = v["min_speech_ms"] // FRAME_MS
         self.hang_frames = v["hangover_ms"] // FRAME_MS
         self.max_frames = int(v["max_tx_s"] * 1000 // FRAME_MS)
+        self.pre = collections.deque(maxlen=max(1, v.get("preroll_ms", 250) // FRAME_MS))
 
     def _cb(self, indata, frames, t, status):
         if status:
@@ -85,8 +93,10 @@ class Recorder:
                 speech = self.gate.is_speech(frame)
                 if not active:
                     if speech:
-                        active, silent, buf = True, 0, [frame]
+                        # keep the audio just before the gate opened (first syllable)
+                        active, silent, buf = True, 0, list(self.pre) + [frame]
                         started = datetime.now(timezone.utc)
+                    self.pre.append(frame)
                     continue
                 buf.append(frame)
                 silent = 0 if speech else silent + 1
