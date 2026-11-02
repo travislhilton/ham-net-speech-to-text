@@ -172,10 +172,110 @@ class Station:
     def _operator_path(self) -> Path:
         return self.data / "operator.json"
 
-    def _apply_operator(self):
+    def _saved(self) -> dict:
         try:
-            saved = json.loads(self._operator_path().read_text(encoding="utf-8"))
+            return json.loads(self._operator_path().read_text(encoding="utf-8"))
         except (OSError, ValueError):
+            return {}
+
+    def _save(self, saved: dict):
+        self._operator_path().parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._operator_path().with_suffix(".tmp")
+        tmp.write_text(json.dumps(saved, indent=2), encoding="utf-8"); os.replace(tmp, self._operator_path())
+
+    def operator(self) -> dict:
+        from . import winlink
+        op = {"callsign": self.me, "name": "", "grid": "", "winlink_dir": "", "winlink_account": ""} | \
+             {k: v for k, v in (self._saved().get("operator") or {}).items() if v is not None}
+        op["callsign"] = self.me
+        installs = winlink.find_installs([op["winlink_dir"]] if op["winlink_dir"] else [])
+        if not op["winlink_dir"] and installs:
+            op["winlink_dir"] = installs[0]
+        info = [winlink.describe(i) for i in installs]
+        cur = next((i for i in info if i["path"].lower() == (op["winlink_dir"] or "").lower()), None)
+        if cur and not op["winlink_account"]:
+            op["winlink_account"] = cur["active"] if cur["active"] in cur["accounts"] else (cur["accounts"] or [""])[0]
+        return op | {"installs": info, "express_running": winlink.express_running()}
+
+    def set_operator(self, body: dict) -> dict:
+        """The operator's own settings, set on the dashboard: callsign (hints, IDs, Winlink sender), name,
+        grid, which Winlink Express install and which callsign account in it."""
+        call = str(body.get("callsign", self.me) or "").upper().strip()
+        if call and not re.fullmatch(r"[A-Z0-9]{3,8}(-\d{1,2})?", call):
+            raise ValueError("callsign looks wrong")
+        grid = str(body.get("grid", "") or "").strip()
+        if grid and not re.fullmatch(r"[A-Ra-r]{2}\d{2}([A-Xa-x]{2})?", grid):
+            raise ValueError("grid square must look like EM59 or EM59et")
+        with self.lock:
+            saved = self._saved()
+            op = saved.get("operator") or {}
+            op.update(callsign=call, name=str(body.get("name", op.get("name", "")))[:80], grid=grid,
+                      winlink_dir=str(body.get("winlink_dir", op.get("winlink_dir", "")))[:260],
+                      winlink_account=str(body.get("winlink_account", op.get("winlink_account", ""))).upper()[:12])
+            saved["operator"] = op
+            self._save(saved)
+            self._apply_callsign(call)
+        return self.operator()
+
+    def _apply_callsign(self, call: str):
+        if call and call != self.me:
+            self.me = call
+            self.roster.add(call)
+            for h in self.hinters.values():
+                h.me = call
+            if self.callbook:
+                self.callbook.roster.add(call)
+
+    # ---------- Winlink ----------
+    def winlink_preview(self, rid: str, start: str | None = None, end: str | None = None, title: str | None = None) -> dict:
+        from . import ics
+        if rid not in self.radios:
+            raise KeyError(rid)
+        with self.lock:
+            tx = list(self.tx)
+        if not (start and end):
+            b = ics.session_bounds(tx, rid)
+            if not b:
+                raise ValueError("no transcribed transmissions on this radio yet")
+            start, end = b
+        span = ics.select(tx, rid, start, end)
+        op = self.operator()
+        me = {c.split("-")[0] for c in (self.me, op.get("winlink_account")) if c}
+        people = ics.participants(span, me, self.heard)
+        net = (self.hints.get(rid) or {}).get("net") or {}
+        sched = self._current_by_radio(datetime.fromisoformat(start)).get(rid) or {}
+        d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), title or sched.get("name"))
+        return {"radio": rid, "start": start, "end": end, "count": len(span), "to": people, "drafts": d,
+                "operator": {k: op[k] for k in ("callsign", "name", "winlink_dir", "winlink_account", "express_running")}}
+
+    def winlink_send(self, body: dict) -> dict:
+        """Build the chosen drafts from the installed templates and place them in the account's Outbox."""
+        from . import winlink
+        op = self.operator()
+        install, account = op.get("winlink_dir"), op.get("winlink_account")
+        if not install or not account:
+            raise ValueError("set the Winlink Express folder and callsign account in Settings first")
+        to = [c.upper() for c in body.get("to", []) if re.fullmatch(r"[A-Za-z0-9]{3,8}(-\d{1,2})?", str(c))]
+        if not to:
+            raise ValueError("choose at least one recipient")
+        msgs = []
+        for d in body.get("drafts", []):
+            if d.get("form") not in winlink.TEMPLATES:
+                continue
+            t = winlink.load_template(install, d["form"])
+            msgs.append(winlink.build(d["form"], t, d.get("values") or {}, account, to, grid=op.get("grid")))
+        if not msgs:
+            raise ValueError("no forms selected")
+        res = winlink.put_in_outbox(install, account, msgs)
+        print(f"{datetime.now():%H:%M:%S} winlink: {len(msgs)} message(s) to {', '.join(to)} in {install}\\{account} Outbox",
+              flush=True)
+        return res
+
+    def _apply_operator(self):
+        saved = self._saved()
+        if (saved.get("operator") or {}).get("callsign"):
+            self._apply_callsign(saved["operator"]["callsign"])
+        if not saved:
             return
         for rid, s in (saved.get("radios") or {}).items():
             if rid in self.radios:
@@ -202,14 +302,9 @@ class Station:
         at = self.clock().isoformat(timespec="seconds")
         with self.lock:
             self._set_tuning(rid, f, m, at)
-            try:
-                saved = json.loads(self._operator_path().read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                saved = {}
+            saved = self._saved()
             saved.setdefault("radios", {})[rid] = {"freq_mhz": f, "mode": m, "set_at": at}
-            self._operator_path().parent.mkdir(parents=True, exist_ok=True)
-            tmp = self._operator_path().with_suffix(".tmp")
-            tmp.write_text(json.dumps(saved, indent=2), encoding="utf-8"); os.replace(tmp, self._operator_path())
+            self._save(saved)
             radio = dict(self.radios[rid])
         self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
         return radio

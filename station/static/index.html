@@ -30,6 +30,16 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .mv.ok{color:var(--ok)}.mv.warn{color:var(--warn)}.mv.bad{color:var(--bad)}.mv.idle{color:var(--muted)}
 .wf{display:block;width:100%;height:120px;margin-top:9px;border-radius:6px;background:#080c28;image-rendering:auto}
 .axis{position:relative;height:16px;font-size:11px;color:var(--muted)}.axis span{position:absolute;transform:translateX(-50%)}.axis span:first-child{transform:none}
+dialog{max-width:min(860px,96vw);width:100%;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.45)}dialog label{display:block;margin:8px 0 2px;font-size:14px}dialog label input,dialog select{display:block;margin-top:3px}
+dialog select{font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);max-width:100%}
+dialog textarea{width:100%;font:13px/1.4 ui-monospace,Consolas,monospace;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:6px}
+dialog h3{margin:0 0 8px}dialog h4{margin:12px 0 4px;font-size:14px;color:var(--muted);text-transform:uppercase}
+.row{margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.chk{display:flex!important;gap:6px;align-items:center;margin:3px 0!important}
+.chk input{display:inline!important;margin:0!important;width:auto}.tolist{max-height:180px;overflow:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0}summary{cursor:pointer}
+table.log{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}table.log td,table.log th{border-top:1px solid var(--line);padding:3px 4px;text-align:left;vertical-align:top}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}input[type=datetime-local]{width:auto;text-transform:none}
 .err{color:var(--bad);font-size:13px}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;padding:0 16px 24px}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}#radios,main{padding-left:12px;padding-right:12px}}
@@ -61,6 +71,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   <span id="nettype" class="badge">Net type: listening…</span>
   <span class="clock" id="clock"></span>
   <span id="conn" class="muted">connecting…</span>
+  <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
 </header>
 <div id="radios"></div>
 <main>
@@ -72,9 +83,23 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
     <section><h2>Stations heard</h2>
       <div class="small" style="margin-bottom:6px">Look up <input id="q" placeholder="callsign" maxlength="12"> <button id="go">Look up</button></div>
       <div id="lookup"></div><div id="heard"><p class="muted small">None yet.</p></div></section>
+    <section><h2>Winlink messages</h2>
+      <p class="small muted" style="margin:0 0 6px">After a net or conversation: an ICS-309 log and an ICS-213 summary, filled out, addressed to everyone who took part. You review them first; they go to your Winlink Express Outbox and are sent the next time you connect.</p>
+      <div class="small"><select id="wlRadio"></select> <button id="wlPrep">Prepare messages…</button></div></section>
     <section><h2>Schedule</h2><div id="sched" class="small"></div></section>
   </div>
 </main>
+<dialog id="settings"><form method="dialog" id="setForm">
+  <h3>Settings</h3>
+  <label>Your callsign <input name="callsign" maxlength="11" required></label>
+  <label>Your name <input name="name" maxlength="80" style="text-transform:none"></label>
+  <label>Grid square <input name="grid" maxlength="6" placeholder="EM59et" style="text-transform:none"></label>
+  <label>Winlink Express folder <select name="winlink_dir"></select></label>
+  <div class="small muted" id="wlNone"></div>
+  <label>Send as (callsign account in that folder) <select name="winlink_account"></select></label>
+  <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
+</form></dialog>
+<dialog id="wl"><div id="wlBody"></div></dialog>
 <script>
 let editing=null;
 const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[]};
@@ -215,11 +240,72 @@ function cardHtml(c,e){
    <div class="small muted">${(c.sources||[]).join(" · ")||"not found in the callbooks"}${c.qrz_url?` · <a href="${esc(c.qrz_url)}" target="_blank" rel="noopener">QRZ page</a>`:""}</div></div>`;
 }
 function renderHeard(){$("heard").innerHTML=S.heard.length?S.heard.map(e=>cardHtml(e.card||{call:e.call},e)).join(""):'<p class="muted small">None yet.</p>'}
+
+// ---------- settings ----------
+let OP=null;
+async function loadSettings(){OP=await (await fetch("/api/settings")).json();return OP}
+function fillAccounts(f){
+  const inst=(OP.installs||[]).find(i=>i.path===f.winlink_dir.value);
+  f.winlink_account.innerHTML=(inst?inst.accounts:[]).map(a=>`<option${a===OP.winlink_account?" selected":""}>${esc(a)}</option>`).join("");
+}
+$("openSettings").onclick=async()=>{
+  const op=await loadSettings(),f=$("setForm");
+  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";
+  f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
+  $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
+  fillAccounts(f);$("setErr").textContent="";$("settings").showModal();
+};
+$("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
+$("setSave").onclick=async e=>{
+  e.preventDefault();const f=$("setForm");
+  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value})});
+  const d=await r.json();if(!r.ok){$("setErr").textContent=d.error||"not saved";return}
+  OP=d;$("me").textContent=d.callsign+" station";$("settings").close();
+};
+// ---------- Winlink ----------
+function wlRadios(){const s=$("wlRadio"),v=s.value;s.innerHTML=S.radios.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");if(v)s.value=v}
+let WL=null;
+async function wlPreview(body){
+  $("wlBody").innerHTML='<p>Preparing…</p>';if(!$("wl").open)$("wl").showModal();
+  const r=await fetch("/api/winlink/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok){$("wlBody").innerHTML=`<p class="bad">${esc(d.error||"could not prepare")}</p><button onclick="$('wl').close()">Close</button>`;return}
+  WL=d;renderWl();
+}
+$("wlPrep").onclick=()=>wlPreview({radio:$("wlRadio").value});
+function renderWl(){
+  const d=WL,op=d.operator;
+  const warn=!op.winlink_dir?'<p class="bad">Set your Winlink Express folder in Settings first.</p>':op.express_running?'<p class="rem">Winlink Express is open. Close it before putting messages in the Outbox.</p>':"";
+  const to=d.to.map(p=>`<label class="chk"><input type="checkbox" name="to" value="${esc(p.call)}"${p.confirmed?" checked":""}> <b>${esc(p.call)}</b> ${esc(p.name||"")} <span class="muted">${p.confirmed?"":"(not in any callbook: check it)"}</span></label>`).join("")||'<p class="muted">No callsigns were identified.</p>';
+  const forms=d.drafts.map((f,i)=>{
+    const body=f.form==="ics213"?`<label>Subject <input data-i="${i}" data-k="Subjectline" value="${esc(f.values.Subjectline)}" style="text-transform:none;width:100%"></label><label>Message<textarea data-i="${i}" data-k="Message" rows="9">${esc(f.values.Message)}</textarea></label>`
+      :`<label>Title <input data-i="${i}" data-k="Title" value="${esc(f.values.Title)}" style="text-transform:none;width:100%"></label><table class="log"><tr><th>Time</th><th>From</th><th>To</th><th>Subject</th></tr>${f.rows.map(r=>`<tr><td>${esc(r.time.slice(11))}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td><td>${esc(r.sub)}</td></tr>`).join("")}</table>`;
+    return `<details open><summary><label class="chk"><input type="checkbox" name="form" value="${i}" checked> ${esc(f.label)}</label></summary>${body}</details>`}).join("");
+  $("wlBody").innerHTML=`<h3>Winlink messages</h3>${warn}
+   <div class="small">From <input type="datetime-local" id="wlS" value="${esc(d.start)}"> to <input type="datetime-local" id="wlE" value="${esc(d.end)}"> <button id="wlRe">Update</button> <span class="muted">${d.count} transmissions</span></div>
+   <p class="small muted">Sending as <b>${esc(op.winlink_account||"?")}</b> from ${esc(op.winlink_dir||"?")}.</p>
+   <h4>To</h4><div class="tolist">${to}</div><div class="small">Add: <input id="wlAdd" maxlength="11" placeholder="callsign"> <button id="wlAddB">Add</button></div>
+   <h4>Forms</h4>${forms}
+   <div class="row"><button id="wlSend" class="primary">Put in Winlink Express Outbox</button> <button onclick="$('wl').close()">Close</button> <span id="wlMsg"></span></div>`;
+  $("wlRe").onclick=()=>wlPreview({radio:d.radio,start:$("wlS").value,end:$("wlE").value});
+  $("wlAddB").onclick=()=>{const c=$("wlAdd").value.trim().toUpperCase();if(!/^[A-Z0-9]{3,8}(-\d{1,2})?$/.test(c))return;
+    d.to.push({call:c,name:"",confirmed:true});renderWl()};
+  $("wlBody").querySelectorAll("[data-k]").forEach(el=>el.oninput=()=>{d.drafts[+el.dataset.i].values[el.dataset.k]=el.value});
+  $("wlSend").onclick=async()=>{
+    const to=[...$("wlBody").querySelectorAll("input[name=to]:checked")].map(x=>x.value);
+    const drafts=[...$("wlBody").querySelectorAll("input[name=form]:checked")].map(x=>d.drafts[+x.value]);
+    const m=$("wlMsg");m.className="";m.textContent="Writing…";
+    const r=await fetch("/api/winlink/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to,drafts})});
+    const res=await r.json();
+    if(!r.ok){m.className="bad";m.textContent=res.error||"not written";return}
+    m.className="ok";m.textContent=`${res.written.length} message(s) are in the ${res.account} Outbox. Open Winlink Express to check them, then connect to send.`;
+  };
+}
 function renderSched(){
   $("sched").innerHTML=(S.schedule||[]).length?S.schedule.map(n=>`<div>${esc(n.name)} — ${esc((n.days||[]).join(", ")||"daily")} ${esc(n.start)} · ${esc(n.freq_mhz||"")} MHz${n.radio?" · "+esc(n.radio):""}</div>`).join(""):'<span class="muted">No nets scheduled. Add them to <code>config\\station.yaml</code>.</span>';
 }
 function renderEngine(e){if(!e)return;$("engine").textContent=e.status==="ready"?"· "+e.final:e.status==="loading"?"· loading speech models…":"· "+(e.status||"")+" "+(e.final||e.final_error||"")}
-function all(){renderRadios();renderNet();renderHints();renderHeard();renderFeed();renderSched()}
+function all(){wlRadios();renderRadios();renderNet();renderHints();renderHeard();renderFeed();renderSched()}
 async function lookup(call){
   call=call.trim().toUpperCase();if(!call)return;
   $("lookup").innerHTML='<p class="muted small">Looking up…</p>';

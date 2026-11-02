@@ -42,6 +42,8 @@ def make_handler(station):
                 if not re.fullmatch(r"[A-Z0-9/]{3,12}", call) or not station.callbook:
                     return self._json({"error": "bad callsign"}, 400)
                 return self._json(station.callbook.card(call, qrz_network=station.cfg.get("qrz_online", True)))
+            if u.path == "/api/settings":
+                return self._json(station.operator())
             if u.path.startswith("/audio/"):
                 tid = u.path.rsplit("/", 1)[-1]
                 tx = station._find(tid)
@@ -56,13 +58,23 @@ def make_handler(station):
         def do_POST(self):
             u = urlparse(self.path)
             m = re.fullmatch(r"/api/radios/([\w-]+)", u.path)
-            # JSON only: a plain cross-site form cannot send it, so another web page cannot retune us
-            if not m or not self.headers.get("Content-Type", "").startswith("application/json"):
+            routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send"}
+            # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
+            if not (m or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json({"error": "not found"}, 404)
             try:
-                n = min(int(self.headers.get("Content-Length") or 0), 4096)
+                n = min(int(self.headers.get("Content-Length") or 0), 512 * 1024)
                 body = json.loads(self.rfile.read(n) or b"{}")
+                if u.path == "/api/settings":
+                    return self._json(station.set_operator(body))
+                if u.path == "/api/winlink/preview":
+                    return self._json(station.winlink_preview(body.get("radio"), body.get("start"), body.get("end"),
+                                                              body.get("title")))
+                if u.path == "/api/winlink/send":
+                    return self._json(station.winlink_send(body))
                 return self._json(station.set_radio(m.group(1), body.get("freq_mhz"), body.get("mode")))
+            except (RuntimeError, FileNotFoundError) as e:
+                return self._json({"error": str(e)}, 409)
             except KeyError:
                 return self._json({"error": "no such radio"}, 404)
             except (ValueError, TypeError) as e:

@@ -67,6 +67,14 @@ The dashboard shows:
 - **Net type**: the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
   with a red banner if it sounds like a real emergency.
 - **Schedule**: your nets, which radio each uses, and a warning if the radio is on another frequency.
+- **Winlink messages**: after a net or conversation, **Prepare messages…** builds an **ICS-309**
+  Communications Log (every transmission: time, from, to, what was said; 30 rows a page) and an
+  **ICS-213** summary (stations heard, traffic and relays), addressed to every callsign that took part
+  (callsigns no callbook confirms start unticked). Edit, then **Put in Winlink Express Outbox**; Winlink
+  Express sends them the next time you connect. Close Winlink Express first; the station refuses
+  while it is open and backs up Winlink's message list before each write.
+- **Settings** (top right): your callsign, name and grid; which Winlink Express folder (found
+  automatically: `C:\\RMS Express` and any other install) and which callsign account sends.
 
 Which radios exist (and their sound inputs) and the nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
 `config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HamNet Station** →
@@ -98,6 +106,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |
 | Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
 | Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
+| Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; first real Outbox write to be checked in Winlink Express |
 | Net schedule with radio, frequency and band | working, edited in `config/station.yaml`; an editor in the dashboard is next |
 | Accurate second pass + ICS-309/213 reports (home network: home server + LLM server) | server side working |
 
