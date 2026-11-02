@@ -74,6 +74,7 @@ cd C:\ham-net-speech-to-text
   for lookups, so the password is stored in Windows Credential Manager / macOS Keychain, typed at a
   hidden prompt:
   ```powershell
+  cd C:\ham-net-speech-to-text
   .\.venv\Scripts\python.exe -m hamkit.qrz set-login     # asks for callsign + password, then tests
   ```
 

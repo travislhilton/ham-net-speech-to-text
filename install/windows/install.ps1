@@ -55,6 +55,8 @@ $vpy = "$venv\Scripts\python.exe"
 Run { & $vpy -m pip install -q --upgrade pip }
 Run { & $vpy -m pip install -q torch --index-url https://download.pytorch.org/whl/cpu }
 Run { & $vpy -m pip install -q -r "$InstallDir\install\windows\requirements-windows.txt" }
+# Let `python -m hamkit...` work from any folder (not only when PowerShell is in the install dir)
+Set-Content -Path "$venv\Lib\site-packages\ham-net-speech-to-text.pth" -Value $InstallDir -Encoding ascii
 
 Step "Machine settings"
 $data = "$InstallDir\data"
