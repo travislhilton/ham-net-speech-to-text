@@ -9,6 +9,7 @@ order: QRZ_USERNAME / QRZ_PASSWORD in the environment, then config/local.yaml qr
 W9XYZ's account: QRZ Premium with XML Logbook Data enabled (checked 2026-11-02, ends 2027-01-24).
 
     python -m hamkit.qrz set-login      # store username + password in the OS credential store
+    python -m hamkit.qrz export-env     # macOS: copy the Keychain login into the private env file
     python -m hamkit.qrz check          # session status: subscription expiry, lookups today
     python -m hamkit.qrz lookup EA8AB
 """
@@ -33,6 +34,8 @@ class QRZError(RuntimeError):
 
 
 KEYRING_SERVICE = "ham-net-speech-to-text/qrz"
+ENV_FILE = Path(os.environ.get("HAMNET_ENV_FILE", Path.home() / ".config" / "emcomm-stt" / "env"))
+_cred_error = None
 
 
 def _keyring():
@@ -43,7 +46,25 @@ def _keyring():
         return None
 
 
+def _env_file(path: Path = None) -> dict:
+    """KEY=VALUE lines (the home server service's private env file, mode 600)."""
+    path = path or ENV_FILE
+    out = {}
+    try:
+        for line in Path(path).read_text().splitlines():
+            line = line.strip().removeprefix("export ").strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1); out[k.strip()] = v.strip().strip("'\"")
+    except OSError:
+        pass
+    return out
+
+
 def credentials() -> tuple[str, str] | None:
+    """OS credential store first (the Windows station, a desktop session), then the environment,
+    then the private env file (macOS denies Keychain reads outside the GUI session: -25308), then
+    config/local.yaml."""
+    global _cred_error
     kr = _keyring()
     if kr:
         try:
@@ -51,11 +72,14 @@ def credentials() -> tuple[str, str] | None:
             p = u and kr.get_password(KEYRING_SERVICE, u)
             if u and p:
                 return u, p
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            _cred_error = f"credential store: {e}"
     u, p = os.environ.get("QRZ_USERNAME"), os.environ.get("QRZ_PASSWORD")
     if u and p:
         return u, p
+    env = _env_file()
+    if env.get("QRZ_USERNAME") and env.get("QRZ_PASSWORD"):
+        return env["QRZ_USERNAME"], env["QRZ_PASSWORD"]
     f = ROOT / "config" / "local.yaml"
     if f.exists():
         q = (yaml.safe_load(f.read_text()) or {}).get("qrz") or {}
@@ -149,7 +173,23 @@ def main(argv=None):
         kr.set_password(KEYRING_SERVICE, "username", u); kr.set_password(KEYRING_SERVICE, u, p)
         print(f"stored for {u}; testing...")
         a = ["check"]
+    if a[:1] == ["export-env"]:
+        # macOS: copy the Keychain login into the private env file so services and non-GUI
+        # sessions can use it. Run from a desktop Terminal (it can read the Keychain).
+        target = Path(a[1]) if len(a) > 1 else ENV_FILE
+        creds = credentials()
+        if not creds:
+            print(f"no QRZ login found ({_cred_error}); run set-login first"); return 1
+        lines = [l for l in (target.read_text().splitlines() if target.exists() else [])
+                 if not l.startswith(("QRZ_USERNAME=", "QRZ_PASSWORD="))]
+        lines += [f"QRZ_USERNAME={creds[0]}", f"QRZ_PASSWORD={creds[1]}"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("\n".join(lines) + "\n"); os.chmod(target, 0o600)
+        print(f"QRZ login for {creds[0]} written to {target} (mode 600)"); return 0
     c = Client()
+    if not c.creds:
+        print(f"warning: no QRZ login available ({_cred_error or 'none configured'}); cache only",
+              file=sys.stderr)
     if a[:1] == ["check"]:
         s = c.login()
         print(json.dumps({k: s.get(k) for k in ("SubExp", "Count", "GMTime", "Message", "Error")}))
