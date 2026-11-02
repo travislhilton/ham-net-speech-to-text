@@ -20,7 +20,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-width:min(220px,100%);flex:1 1 220px}
 .radio .top{display:flex;justify-content:space-between;gap:8px}.rx{font-weight:700;color:var(--muted)}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
 .meter{height:6px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}.meter i{display:block;height:100%;background:var(--accent);width:0}
-.err{color:var(--bad);font-size:13px}
+.err{color:var(--bad);font-size:13px}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;padding:0 16px 24px}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}#radios,main{padding-left:12px;padding-right:12px}}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
@@ -66,6 +66,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   </div>
 </main>
 <script>
+let editing=null;
 const S={tx:[],heard:[],radios:[],hints:{cards:[],reminders:[]},net:{},schedule:[]};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -106,10 +107,16 @@ function upsertTx(t){
   if(el){el.outerHTML=txHtml(t)}else renderFeed();
 }
 function renderRadios(){
+  if(editing&&document.activeElement&&document.activeElement.closest(".tuneform"))return;  // don't redraw under the operator's typing
   $("radios").innerHTML=S.radios.length?S.radios.map(r=>{
     const pct=r.level_db==null?0:Math.max(0,Math.min(100,(r.level_db+60)*1.67));
     return `<div class="radio"><div class="top"><b>${esc(r.name)}</b><span class="rx${r.carrier?" on":""}">${r.carrier?"RX":"idle"}</span></div>
-    <div class="small muted">${freq(r.band)||"frequency not set"} · ${esc(r.mode||"")} · ${r.gate==="carrier"?"carrier gate":"voice gate"}</div>
+    <div class="small"><b>${r.freq_mhz?Number(r.freq_mhz).toFixed(3)+" MHz":"frequency not set"}</b> <span class="muted">${r.band&&r.band.band?esc(r.band.band):""} · ${esc(r.mode||"")} · ${r.gate==="carrier"?"carrier gate":"voice gate"}</span>
+      <button class="tune" data-tune="${esc(r.id)}" title="Set what this radio is tuned to">Change</button></div>
+    ${editing===r.id?`<form class="tuneform" data-rid="${esc(r.id)}"><input name="f" inputmode="decimal" value="${r.freq_mhz??""}" aria-label="Frequency in MHz"> MHz
+      <select name="m">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===r.mode?" selected":""}>${m}</option>`).join("")}</select>
+      <button type="submit">Save</button> <button type="button" data-cancel>Cancel</button> <span class="err" id="tuneerr"></span>
+      <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.</div></form>`:""}
     <div class="meter"><i style="width:${pct}%"></i></div>${r.error?`<div class="err">${esc(r.error)}</div>`:""}</div>`}).join("")
    :'<div class="radio">No radios set up yet. Add one to <code>config\\station.yaml</code> (see README, "Connecting a radio").</div>';
 }
@@ -152,6 +159,16 @@ async function lookup(call){
 document.addEventListener("click",e=>{
   const c=e.target.closest("[data-call]");if(c){$("q").value=c.dataset.call;lookup(c.dataset.call)}
   const p=e.target.closest("[data-play]");if(p){new Audio("/audio/"+p.dataset.play).play()}
+  const tu=e.target.closest("[data-tune]");if(tu){editing=tu.dataset.tune;renderRadios();const i=document.querySelector(".tuneform input");if(i){i.focus();i.select()}}
+  if(e.target.closest("[data-cancel]")){editing=null;document.activeElement.blur();renderRadios()}
+});
+document.addEventListener("submit",async e=>{
+  const f=e.target.closest(".tuneform");if(!f)return;e.preventDefault();
+  const freq=parseFloat(String(f.f.value).replace(",","."));
+  try{const r=await fetch("/api/radios/"+encodeURIComponent(f.dataset.rid),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({freq_mhz:freq,mode:f.m.value})});
+    const d=await r.json();if(!r.ok){$("tuneerr").textContent=d.error||"not saved";return}
+    const i=S.radios.findIndex(x=>x.id===d.id);if(i>=0)S.radios[i]=d;editing=null;document.activeElement.blur();renderRadios();renderNet()}
+  catch(err){$("tuneerr").textContent="not saved: station unreachable"}
 });
 $("go").onclick=()=>lookup($("q").value);$("q").addEventListener("keydown",e=>{if(e.key==="Enter")lookup($("q").value)});
 function connect(){

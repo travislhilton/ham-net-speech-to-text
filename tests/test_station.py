@@ -159,3 +159,40 @@ def test_callbook_validate_rules(tmp_path):
     assert cb.validate("EA8AB") and not cb.validate("ZZ1")            # foreign: a country + a full call
     cb.roster.add("N0NET"); cb.known.clear()
     assert cb.validate("N0NET")
+
+
+def test_operator_sets_frequency_persisted_and_stamped(station, tmp_path):
+    r = station.set_radio("ftm", "145.900", "fm")
+    assert r["freq_mhz"] == 145.9 and r["mode"] == "FM" and r["band"]["band"] == "2 m"
+    with pytest.raises(ValueError):
+        station.set_radio("ftm", 99999)
+    with pytest.raises(ValueError):
+        station.set_radio("ftm", 145.9, "XYZ")
+    with pytest.raises(KeyError):
+        station.set_radio("nope", 145.9)
+    station.inject("ftm", np.zeros(16000 * 2, np.float32))
+    assert wait_for(lambda: station.tx and station.tx[-1]["status"] == "final")
+    assert station.tx[-1]["freq_mhz"] == 145.9
+    again = Station(CFG, lambda: engine.FakeEngine(), data_dir=tmp_path)       # restart keeps it
+    assert again.radios["ftm"]["freq_mhz"] == 145.9 and again.radios["ftm"]["tuned_at"]
+
+
+def test_post_radio_requires_json(station):
+    srv = serve(station, "127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}/api/radios/ftm"
+    try:
+        req = urllib.request.Request(url, data=b'{"freq_mhz": 146.52, "mode": "FM"}', method="POST",
+                                     headers={"Content-Type": "application/json"})
+        assert json.loads(urllib.request.urlopen(req).read())["freq_mhz"] == 146.52
+        form = urllib.request.Request(url, data=b"freq_mhz=1", method="POST",
+                                      headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with pytest.raises(urllib.error.HTTPError):
+            urllib.request.urlopen(form)
+        bad = urllib.request.Request(url, data=b'{"freq_mhz": "abc"}', method="POST",
+                                     headers={"Content-Type": "application/json"})
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(bad)
+        assert e.value.code == 400
+    finally:
+        srv.shutdown()

@@ -48,6 +48,8 @@ or `http://<station-name>:8091/` from another PC or phone on your home network o
 
 The dashboard shows:
 - **Radios**: each radio's frequency and band, a level meter, and **RX** while a station is transmitting.
+  When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
+  transmission after that is logged with it (kept across restarts in `data\\operator.json`).
 - **On the air**: every transmission as it happens. Grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons
   (the outlined one is the likely speaker), Q-codes and prowords are underlined with their meaning
@@ -61,7 +63,7 @@ The dashboard shows:
   with a red banner if it sounds like a real emergency.
 - **Schedule**: your nets, which radio each uses, and a warning if the radio is on another frequency.
 
-Radios and nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
+Which radios exist (and their sound inputs) and the nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
 `config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HamNet Station** →
 End, then Run (or sign out and back in). Everything heard is kept in `data\logs\<date>.jsonl` and
 `data\recordings\<date>\`; problems are written to `data\station.log`.

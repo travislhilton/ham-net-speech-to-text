@@ -10,7 +10,7 @@ radios:                     # one entry per radio; each needs its own sound inpu
     name: Yaesu FTM-150R
     device: NET-REC         # part of the Windows recording device's name
     gate: carrier           # carrier = FM data jack (unsquelched hiss); voice = SSB/HF or squelched audio
-    freq_mhz: 146.940       # what band A is tuned to (shown on the dashboard; the radio is tuned by hand)
+    freq_mhz: 146.940       # starting value only: the operator sets it on the dashboard (Change) when retuning
     mode: FM
   # - id: ic705
   #   name: Icom IC-705

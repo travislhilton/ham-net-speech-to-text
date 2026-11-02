@@ -53,6 +53,21 @@ def make_handler(station):
                 return self._events()
             self._json({"error": "not found"}, 404)
 
+        def do_POST(self):
+            u = urlparse(self.path)
+            m = re.fullmatch(r"/api/radios/([\w-]+)", u.path)
+            # JSON only: a plain cross-site form cannot send it, so another web page cannot retune us
+            if not m or not self.headers.get("Content-Type", "").startswith("application/json"):
+                return self._json({"error": "not found"}, 404)
+            try:
+                n = min(int(self.headers.get("Content-Length") or 0), 4096)
+                body = json.loads(self.rfile.read(n) or b"{}")
+                return self._json(station.set_radio(m.group(1), body.get("freq_mhz"), body.get("mode")))
+            except KeyError:
+                return self._json({"error": "no such radio"}, 404)
+            except (ValueError, TypeError) as e:
+                return self._json({"error": str(e) or "bad request"}, 400)
+
         def _events(self):
             q = station.bus.subscribe()
             self.send_response(200)

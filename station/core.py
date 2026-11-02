@@ -97,6 +97,7 @@ class Station:
                                  "band": band(r.get("freq_mhz")), "gate": r["gate"], "state": "starting",
                                  "level_db": None, "carrier": False, "error": None}
                        for r in config["radios"]}
+        self._apply_operator()
         self.final_q: queue.Queue = queue.Queue()
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
@@ -125,6 +126,54 @@ class Station:
             if rem != self.hints.get("reminders"):
                 self.hints["reminders"] = rem
                 self.bus.publish("hints", self.hints)
+
+    # ---------- operator settings (set on the dashboard; the operator tunes the radio) ----------
+    MODES = ("FM", "USB", "LSB", "AM", "CW", "DIG")
+
+    def _operator_path(self) -> Path:
+        return self.data / "operator.json"
+
+    def _apply_operator(self):
+        try:
+            saved = json.loads(self._operator_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        for rid, s in (saved.get("radios") or {}).items():
+            if rid in self.radios:
+                self._set_tuning(rid, s.get("freq_mhz"), s.get("mode"), s.get("set_at"))
+
+    def _set_tuning(self, rid, freq, mode, at):
+        r = self.radios[rid]
+        r.update(freq_mhz=freq, band=band(freq), mode=mode or r["mode"], tuned_at=at)
+        for c in self.cfg["radios"]:
+            if c["id"] == rid:
+                c["freq_mhz"], c["mode"] = freq, r["mode"]
+
+    def set_radio(self, rid: str, freq_mhz, mode: str | None = None) -> dict:
+        """The operator says what the radio is tuned to. Validated, saved to data/operator.json
+        (survives restarts and updates), shown everywhere, and stamped on every later transmission."""
+        if rid not in self.radios:
+            raise KeyError(rid)
+        f = round(float(freq_mhz), 4)
+        if not 0.1 <= f <= 3000:
+            raise ValueError("frequency must be between 0.1 and 3000 MHz")
+        m = (mode or self.radios[rid]["mode"] or "FM").upper()
+        if m not in self.MODES:
+            raise ValueError(f"mode must be one of {', '.join(self.MODES)}")
+        at = self.clock().isoformat(timespec="seconds")
+        with self.lock:
+            self._set_tuning(rid, f, m, at)
+            try:
+                saved = json.loads(self._operator_path().read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                saved = {}
+            saved.setdefault("radios", {})[rid] = {"freq_mhz": f, "mode": m, "set_at": at}
+            self._operator_path().parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._operator_path().with_suffix(".tmp")
+            tmp.write_text(json.dumps(saved, indent=2), encoding="utf-8"); os.replace(tmp, self._operator_path())
+            radio = dict(self.radios[rid])
+        self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
+        return radio
 
     # ---------- schedule ----------
     def schedule_now(self, at: datetime | None = None) -> dict:
