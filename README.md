@@ -43,7 +43,7 @@ uvicorn transcribe.server:app --port 8090          # test on a WAV
 python -m analyze.net_report --net-id 1            # needs LiteLLM reachable
 ```
 
-Puck: `pip install -r capture/requirements.txt`, then `python recorder.py --list-devices`,
+Puck (`W9XYZ-5`): enable SSH once with `deploy/windows/enable-ssh.ps1` (admin PowerShell), then `pip install -r capture/requirements.txt`, then `python recorder.py --list-devices`,
 set `config.yaml`, run as a Windows service via NSSM (`deploy/windows/`).
 
 Tests: `pip install -r requirements-dev.txt && python -m pytest -q` (the DB tests create and drop
