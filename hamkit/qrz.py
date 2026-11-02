@@ -13,7 +13,7 @@ W9XYZ's account: QRZ Premium with XML Logbook Data enabled (checked 2026-11-02, 
     python -m hamkit.qrz check          # session status: subscription expiry, lookups today
     python -m hamkit.qrz lookup EA8AB
 """
-import json, os, sqlite3, sys, time, urllib.parse, urllib.request
+import json, os, sqlite3, sys, threading, time, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -110,7 +110,9 @@ class Client:
         self.key = None
         self.fetch = fetch or self._http
         cache.parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(cache)
+        # shared by the station's worker threads: one connection, serialized by a lock
+        self.db = sqlite3.connect(cache, check_same_thread=False)
+        self.lock = threading.RLock()
         self.db.execute("CREATE TABLE IF NOT EXISTS qrz (call TEXT PRIMARY KEY, fetched REAL, rec TEXT)")
 
     @staticmethod
@@ -129,7 +131,8 @@ class Client:
         return s
 
     def cached(self, call: str) -> dict | None:
-        r = self.db.execute("SELECT fetched, rec FROM qrz WHERE call=?", (call.upper(),)).fetchone()
+        with self.lock:
+            r = self.db.execute("SELECT fetched, rec FROM qrz WHERE call=?", (call.upper(),)).fetchone()
         if not r:
             return None
         d = json.loads(r[1]); d["cached_at"] = r[0]; d["stale"] = time.time() - r[0] > TTL_S
@@ -148,8 +151,10 @@ class Client:
                 err = s.get("Error", "")
                 if rec:
                     rec["source"] = "QRZ.com"
-                    self.db.execute("INSERT OR REPLACE INTO qrz VALUES (?,?,?)", (call, time.time(), json.dumps(rec)))
-                    self.db.commit()
+                    with self.lock:
+                        self.db.execute("INSERT OR REPLACE INTO qrz VALUES (?,?,?)",
+                                        (call, time.time(), json.dumps(rec)))
+                        self.db.commit()
                     return rec
                 if "Not found" in err:
                     return None

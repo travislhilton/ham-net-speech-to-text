@@ -44,3 +44,13 @@ def test_session_timeout_relogs_and_not_found(tmp_path):
 def test_no_credentials_is_cache_only(tmp_path):
     c = qrz.Client((), tmp_path / "c.sqlite", Fake([]))
     assert c.lookup("EA8AB") is None
+
+
+def test_cache_readable_from_another_thread(tmp_path):
+    import threading
+    c = qrz.Client(("W9XYZ", "pw"), tmp_path / "c.sqlite", Fake([LOGIN, REC]))
+    c.lookup("EA8AB")
+    out = {}
+    t = threading.Thread(target=lambda: out.update(r=c.lookup("EA8AB", allow_network=False)))
+    t.start(); t.join()
+    assert out["r"]["fname"] == "Juan"

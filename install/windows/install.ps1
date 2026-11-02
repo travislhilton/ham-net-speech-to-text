@@ -40,7 +40,7 @@ Run { & $py --version }
 Step "Program files -> $InstallDir"
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 if ($Src -ne (Resolve-Path $InstallDir).Path) {
-  foreach ($d in 'capture','hamkit','config','tools','install','docs') {
+  foreach ($d in 'capture','hamkit','station','config','tools','install','docs') {
     if (Test-Path "$Src\$d") { robocopy "$Src\$d" "$InstallDir\$d" /MIR /XD __pycache__ .venv /XF local.yaml station.yaml engine.yaml /NFL /NDL /NJH /NJS /NP | Out-Null }
   }
   Copy-Item "$Src\README.md" $InstallDir -Force
@@ -105,6 +105,32 @@ $set = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailab
 Register-ScheduledTask -TaskName 'HamNet Callbook Update' -Action $act, $act2 -Trigger $trg -Settings $set `
   -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
 Write-Host '  registered (runs when online; catches up after a missed day)'
+
+Step "Station service (dashboard http://localhost:8091/)"
+# Port 8091 from this PC's home network and Tailscale only (the dashboard shows callbook addresses)
+if (-not (Get-NetFirewallRule -Name 'HamNet-Station-8091' -ErrorAction SilentlyContinue)) {
+  New-NetFirewallRule -Name 'HamNet-Station-8091' -DisplayName 'HamNet Station dashboard' -Direction Inbound `
+    -Protocol TCP -LocalPort 8091 -Action Allow | Out-Null
+}
+Set-NetFirewallRule -Name 'HamNet-Station-8091' -Enabled True -Profile Any `
+  -RemoteAddress @('LocalSubnet', '100.64.0.0/10', '127.0.0.1')
+# Start at logon in the operator's own session: audio inputs and the QRZ password (Credential Manager)
+# belong to that session. pythonw = no console window; output goes to data\station.log.
+$user = "$env:USERDOMAIN\$env:USERNAME"
+$sAct = New-ScheduledTaskAction -Execute "$venv\Scripts\pythonw.exe" -Argument '-m station --log data\station.log' `
+  -WorkingDirectory $InstallDir
+$sTrg = New-ScheduledTaskTrigger -AtLogOn -User $user
+$sSet = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 `
+  -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
+$sPrn = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName 'HamNet Station' -Action $sAct -Trigger $sTrg -Settings $sSet -Principal $sPrn `
+  -Description 'Live voice-net transcription and dashboard (ham-net-speech-to-text)' -Force | Out-Null
+Set-Content -Path "$env:PUBLIC\Desktop\HamNet Station.url" -Value "[InternetShortcut]`r`nURL=http://localhost:8091/" -Encoding ascii
+Stop-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*-m station*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-ScheduledTask -TaskName 'HamNet Station'
+Write-Host "  started; it also starts at every logon for $user. Open the 'HamNet Station' shortcut on the desktop."
 
 Step "Done"
 Write-Host "Installed in $InstallDir. Audio inputs this station can record from:"
