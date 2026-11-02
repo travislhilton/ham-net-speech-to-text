@@ -72,7 +72,7 @@ def measure(c, audio):
         t0 = time.time(); text = run(audio); times.append(time.time() - t0)
     rtf = min(times) / (len(audio) / 16000)
     return {"load_s": round(load, 1), "rtf": round(rtf, 3), "text": text.strip(),
-            "heard_call": EXPECT in normalize(text)[1]}
+            "heard_call": EXPECT in normalize(text, roster={EXPECT})[1]}
 
 
 def main():
@@ -103,4 +103,8 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    rc = main()
+    sys.stdout.flush(); sys.stderr.flush()
+    # OpenVINO's GPU pipeline can hang in interpreter teardown (seen on W9XYZ-5, 2026-11-02:
+    # one core spinning for 10+ minutes after engine.yaml was written). The work is done; leave.
+    os._exit(rc)
