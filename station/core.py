@@ -249,9 +249,19 @@ class Station:
         return next((t for t in reversed(self.tx) if t["id"] == tid), None)
 
     # ---------- workers ----------
+    @staticmethod
+    def _warm(eng):
+        """The first GPU run compiles kernels (+1-2 s on W9XYZ-5); pay that at startup, not on air."""
+        try:
+            if getattr(eng, "warm", True):
+                eng.transcribe(np.zeros(SR * 2, np.float32))
+        except Exception:  # noqa: BLE001
+            pass
+
     def _partial_worker(self):
         try:
             eng = self._partial_factory()
+            self._warm(eng)
         except Exception as e:  # noqa: BLE001
             self.engines["partial_error"] = str(e); return
         self.engines["partial"] = eng.name
@@ -272,6 +282,7 @@ class Station:
     def _final_worker(self):
         try:
             eng = self._final_factory()
+            self._warm(eng)
             self.engines.update(final=eng.name, status="ready")
         except Exception as e:  # noqa: BLE001
             self.engines.update(status="error", final_error=f"{type(e).__name__}: {e}")

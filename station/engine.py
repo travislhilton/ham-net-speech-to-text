@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class Engine:
     name = "none"
+    warm = True            # run once at startup (GPU kernel compile); fakes opt out
 
     def transcribe(self, audio: np.ndarray) -> dict:
         raise NotImplementedError
@@ -58,6 +59,7 @@ class FasterWhisperEngine(Engine):
 
 class FakeEngine(Engine):
     """Tests and --engine fake: returns a scripted text (or a fixed one)."""
+    warm = False
     def __init__(self, texts=None, name="fake"):
         self.texts, self.name, self.calls = list(texts or []), name, 0
 

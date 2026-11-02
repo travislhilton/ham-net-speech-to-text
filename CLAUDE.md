@@ -7,7 +7,7 @@
 - Capture never shares the VARA FM audio device. Second interface only.
 - Every transcript row records `model` and `host` so puck-fallback transcripts can be re-run on
   the home server later (`analyze/retranscribe.py`). Whisper runs only through `transcribe/engine.py`.
-- Tests: `.venv/bin/python -m pytest -q` from the repo root (43 green 2026-11-02).
+- Tests: `.venv/bin/python -m pytest -q` from the repo root (56 green 2026-11-02).
 - Keep the raw WAV forever (NAS warm tier). Transcripts are derived data.
 - Callsign vocabulary: `config/vocab.yaml` (ITU phonetics, tacticals, EOC names, roster). Whisper
   `initial_prompt` is built from it; `callsigns.py` normalizes phonetic spellings back to callsigns.
@@ -20,6 +20,8 @@
   steps in the same commit as the feature; `install/windows/install.ps1` must stay idempotent.
 - OpenVINO on Windows: never create an `openvino.Core` in a process that runs a GPU WhisperPipeline — the
   process hangs forever at exit (W9XYZ-5, 11-02). List devices in a child process (`tools/pick_engine.py`).
+- The station (`station/`) runs on W9XYZ-5 as task "HamNet Station" in the desktop session (audio +
+  Credential Manager need it); restart it after code changes. Dashboard :8091.
 - Windows over SSH: scp a script and run it with `-File` (piped stdin drops multi-line blocks).
 
 ## Resume here

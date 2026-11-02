@@ -25,6 +25,8 @@ What the installer does (`install/windows/install.ps1`, safe to re-run):
 - downloads the FCC amateur license database and the world country file, and schedules a daily
   update (task "HamNet Callbook Update", 04:15, only when online);
 - keeps your settings (`config/station.yaml`, `config/engine.yaml`, `config/local.yaml`) across updates;
+- starts the station at every sign-in (task "HamNet Station"), puts a **HamNet Station** shortcut on the
+  desktop, and opens port 8091 to your home network and Tailscale only;
 - lists the audio inputs it can record from.
 
 ## Connecting a radio
@@ -38,14 +40,39 @@ the device → Properties → name, e.g. `NET-REC`.
 | Yaesu FTM-150R (VHF/UHF) | DATA jack (10-pin mini-DIN) → Masters DRA-50M (USB) | Set 45 DATA BAND = A-BAND FIX, tune band A to the net; leave 41 DUAL RECEIVE MODE (a priority scan) OFF. The DATA jack is unsquelched, so the recorder's **carrier gate** detects transmissions from the drop in hiss. Step by step: `docs/FTM-150R-SETUP.txt`. |
 | Icom IC-705 (HF/VHF/UHF, Wi-Fi) | planned | Over Wi-Fi via the radio's network remote (e.g. wfview → a virtual audio input, with frequency/mode read from the radio). SSB has no carrier to detect, so this radio will use the voice-activity gate. |
 
-## Using it (today)
+## Using it
 
+After installing, the station starts by itself whenever you sign in to Windows. Open the
+**HamNet Station** shortcut on the desktop, or browse to `http://localhost:8091/` on the station PC,
+or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale.
+
+The dashboard shows:
+- **Radios**: each radio's frequency and band, a level meter, and **RX** while a station is transmitting.
+- **On the air**: every transmission as it happens. Grey words appear while the station is still
+  talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons
+  (the outlined one is the likely speaker), Q-codes and prowords are underlined with their meaning
+  below, and ▶ plays the recording.
+- **What you can do now**: step-by-step help and example phrases when someone asks for a relay,
+  calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
+  reminder when your own 10-minute identification is due.
+- **Stations heard**: name, location, license, grid and zones for each callsign (FCC, QRZ.com and the
+  country file), and a box to look up any callsign.
+- **Net type**: the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
+  with a red banner if it sounds like a real emergency.
+- **Schedule**: your nets, which radio each uses, and a warning if the radio is on another frequency.
+
+Radios and nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
+`config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HamNet Station** →
+End, then Run (or sign out and back in). Everything heard is kept in `data\logs\<date>.jsonl` and
+`data\recordings\<date>\`; problems are written to `data\station.log`.
+
+Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 ```powershell
-cd C:\ham-net-speech-to-text
 .\.venv\Scripts\python.exe capture\recorder.py --list-devices      # find your radio's input
 .\.venv\Scripts\python.exe capture\test_capture.py 30              # 30-second test: levels per second
 .\.venv\Scripts\python.exe -m hamkit.fcc lookup W9XYZ K7ABC         # FCC callbook
 .\.venv\Scripts\python.exe -m hamkit.dxcc lookup EA8AB JA1XYZ       # country of any callsign
+.\.venv\Scripts\python.exe tools\pick_engine.py                    # re-measure after a hardware/driver change
 ```
 
 ## Status
@@ -53,15 +80,17 @@ cd C:\ham-net-speech-to-text
 | Piece | State |
 |---|---|
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
-| Live transcription on the PC (OpenVINO Whisper; turbo 2–4 s per transmission on an Intel i5-12600H's graphics) | engine measured; live service next |
-| Words while someone is still talking (fast small model, replaced by the final text) | next |
+| Weak-signal repetition guard (Whisper loops) | working |
+| Icom IC-705 over Wi-Fi | planned |
+| Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
+| Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
-| QRZ.com online lookups (photo, grid, international names), cached for offline use | client built (`hamkit/qrz.py`); needs your QRZ login in `config/local.yaml` |
+| QRZ.com online lookups (grid, international names), cached for offline use | working (`hamkit.qrz set-login`) |
 | Q-code / proword / abbreviation explanations | working (`config/glossary.yaml`) |
 | Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |
 | Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
-| Live dashboard in the browser (on the station PC or any PC on the network) | designed (`docs/WEBAPP-DESIGN.md`) |
-| Net schedule with radio, frequency and band | designed |
+| Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
+| Net schedule with radio, frequency and band | working, edited in `config/station.yaml`; an editor in the dashboard is next |
 | Accurate second pass + ICS-309/213 reports (home network: home server + LLM server) | server side working |
 
 ## Editing the knowledge

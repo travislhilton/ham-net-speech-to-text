@@ -116,7 +116,7 @@ Set-NetFirewallRule -Name 'HamNet-Station-8091' -Enabled True -Profile Any `
   -RemoteAddress @('LocalSubnet', '100.64.0.0/10', '127.0.0.1')
 # Start at logon in the operator's own session: audio inputs and the QRZ password (Credential Manager)
 # belong to that session. pythonw = no console window; output goes to data\station.log.
-$user = "$env:USERDOMAIN\$env:USERNAME"
+$user = [Security.Principal.WindowsIdentity]::GetCurrent().Name   # e.g. STATIONPC\operator (USERDOMAIN is WORKGROUP over SSH)
 $sAct = New-ScheduledTaskAction -Execute "$venv\Scripts\pythonw.exe" -Argument '-m station --log data\station.log' `
   -WorkingDirectory $InstallDir
 $sTrg = New-ScheduledTaskTrigger -AtLogOn -User $user
