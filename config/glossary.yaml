@@ -1,0 +1,96 @@
+# Q-codes, prowords and amateur abbreviations: what an operator hears and what it means.
+# `ask` is the meaning when said as a question ("QRZ?"). Edit freely; hamkit/glossary.py reads this.
+q_codes:
+  QRA: {means: "The name of my station is ...", ask: "What is the name of your station?"}
+  QRG: {means: "Your exact frequency is ...", ask: "Will you tell me my exact frequency?"}
+  QRH: {means: "Your frequency varies (drifts).", ask: "Does my frequency vary?"}
+  QRI: {means: "The tone of your transmission is ...", ask: "How is the tone of my transmission?"}
+  QRK: {means: "The intelligibility (readability) of your signals is ... (1-5).", ask: "What is the readability of my signals?"}
+  QRL: {means: "I am busy / this frequency is in use.", ask: "Is this frequency in use?"}
+  QRM: {means: "I am being interfered with (man-made interference).", ask: "Is my transmission being interfered with?"}
+  QRN: {means: "I am troubled by static (natural noise).", ask: "Are you troubled by static?"}
+  QRO: {means: "Increase power.", ask: "Shall I increase power?"}
+  QRP: {means: "Decrease power / low-power operation (5 W or less).", ask: "Shall I decrease power?"}
+  QRQ: {means: "Send faster.", ask: "Shall I send faster?"}
+  QRS: {means: "Send more slowly.", ask: "Shall I send more slowly?"}
+  QRT: {means: "Stop sending / I am shutting down.", ask: "Shall I stop sending?"}
+  QRU: {means: "I have nothing (no traffic) for you.", ask: "Have you anything for me?"}
+  QRV: {means: "I am ready.", ask: "Are you ready?"}
+  QRX: {means: "Stand by; I will call you again at ...", ask: "When will you call me again?"}
+  QRZ: {means: "You are being called by ...", ask: "Who is calling me?"}
+  QSA: {means: "The strength of your signals is ... (1-5).", ask: "What is the strength of my signals?"}
+  QSB: {means: "Your signals are fading.", ask: "Are my signals fading?"}
+  QSD: {means: "Your keying is defective.", ask: "Is my keying defective?"}
+  QSK: {means: "I can hear you between my signals (break-in).", ask: "Can you hear me between your signals?"}
+  QSL: {means: "I acknowledge receipt / confirm (also: QSL card).", ask: "Can you acknowledge receipt?"}
+  QSM: {means: "Repeat the last message.", ask: "Shall I repeat the last message?"}
+  QSO: {means: "I can communicate with ... (a contact/conversation).", ask: "Can you communicate with ...?"}
+  QSP: {means: "I will RELAY to ...", ask: "Will you relay to ...?"}
+  QST: {means: "General call to all amateurs (bulletin follows)."}
+  QSX: {means: "I am listening on ... (split frequency).", ask: "Will you listen on ...?"}
+  QSY: {means: "Change frequency to ...", ask: "Shall I change frequency?"}
+  QTA: {means: "Cancel message number ..."}
+  QTC: {means: "I have ... messages (traffic) for you.", ask: "How many messages have you to send?"}
+  QTH: {means: "My location is ...", ask: "What is your location?"}
+  QTR: {means: "The correct time is ...", ask: "What is the correct time?"}
+prowords:
+  BREAK: "Pause in a long transmission, or a request to interrupt the conversation."
+  BREAK BREAK: "Urgent interruption: emergency or priority traffic follows. Stop and yield."
+  OVER: "End of my transmission; I expect a reply."
+  OUT: "End of the conversation; no reply expected."
+  CLEAR: "I am finished and leaving the frequency (often 'clear' with your call)."
+  ROGER: "I received your last transmission (not necessarily agreement)."
+  WILCO: "I will comply (implies roger)."
+  COPY: "I received and understood."
+  SAY AGAIN: "Repeat your last transmission (never 'repeat' alone)."
+  I SAY AGAIN: "I am repeating my transmission or part of it."
+  STAND BY: "Wait; I will call back shortly."
+  GO AHEAD: "Proceed with your transmission."
+  AFFIRMATIVE: "Yes."
+  NEGATIVE: "No."
+  CORRECTION: "An error was made; the correct version follows."
+  I SPELL: "The next word is spelled phonetically."
+  FOR THE LOG: "Check-in or report noted by net control for the record."
+  NO TRAFFIC: "The station has no messages to pass."
+  SHORT TIME: "The station can stay only briefly."
+  EMERGENCY TRAFFIC: "Traffic about immediate danger to life or property. Highest priority."
+  PRIORITY TRAFFIC: "Important, time-sensitive traffic. Second priority."
+  WELFARE TRAFFIC: "Health-and-welfare messages. Lower priority."
+  ROUTINE TRAFFIC: "Ordinary messages. Lowest priority."
+  MAYDAY: "Distress call (life in grave danger). Respond and yield the frequency."
+  THIS IS AN EXERCISE: "Exercise traffic: not a real emergency."
+abbreviations:
+  "73": "Best regards (a sign-off)."
+  "88": "Love and kisses (sign-off, usually to a spouse or close friend)."
+  "CQ": "General call: any station may answer."
+  "DE": "From ('W9XYZ de K7ABC' = to W9XYZ from K7ABC)."
+  "DX": "Distant station / long-distance contact."
+  "NCS": "Net Control Station: the station running the net."
+  "HT": "Handheld transceiver."
+  "XYL": "Wife (ex-young lady)."
+  "YL": "Young lady: any female operator."
+  "OM": "Old man: any male operator."
+  "OP": "Operator."
+  "RST": "Readability-Strength-Tone signal report (e.g. 5 by 9 / 59)."
+  "FIVE BY NINE": "Signal report: perfectly readable (5), extremely strong (9)."
+  "ELMER": "A mentor to new operators."
+  "RIG": "Radio."
+  "SHACK": "The radio room."
+  "RAGCHEW": "A long informal conversation."
+  "KERCHUNK": "Keying a repeater without identifying (poor practice)."
+  "ARES": "Amateur Radio Emergency Service (ARRL)."
+  "RACES": "Radio Amateur Civil Emergency Service (government emergency management)."
+  "SKYWARN": "National Weather Service storm-spotter network."
+  "NTS": "National Traffic System: relays formal radiogram messages."
+  "ICS 213": "Incident Command System General Message form."
+  "ICS 309": "Incident Command System Communications Log."
+  "EOC": "Emergency Operations Center."
+  "PL": "Private Line: CTCSS sub-audible tone used to access a repeater."
+  "SIMPLEX": "Direct radio-to-radio on one frequency, without a repeater."
+  "SPLIT": "Transmitting and receiving on different frequencies (common in DX)."
+  "PILEUP": "Many stations calling one DX station at once."
+  "QRP": "Low-power operation (5 W or less)."
+  "SK": "Silent key (deceased amateur); also 'end of contact' in CW."
+  "MOBILE": "Operating from a vehicle (callsign/M)."
+  "PORTABLE": "Operating away from the home station (callsign/P)."
+  "MARITIME MOBILE": "Operating from a vessel at sea (callsign/MM)."

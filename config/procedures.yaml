@@ -1,0 +1,86 @@
+# Operator guidance cards. A card shows when any trigger phrase is heard (case-insensitive,
+# whole words). `say` lines are example transmissions; {me} is the operator's own callsign,
+# {ncs} the net control station when known. Written for a newer operator.
+cards:
+  relay:
+    title: "Relay (QSP) — passing a message for a station that can't be heard"
+    triggers: ["relay", "QSP", "can anyone relay", "unable to copy", "can't copy", "cannot copy",
+               "you're broken", "you are broken", "you're breaking up", "unreadable", "weak signal"]
+    steps:
+      - "Only offer if you heard the weak station clearly. Wait for a pause; don't talk over net control."
+      - "Offer: give your call and say you can relay. Net control decides who relays."
+      - "When asked, repeat the message word for word. Don't summarize; spell names and numbers phonetically."
+      - "Confirm it back to the original station: 'Your message was passed' (or what net control answered)."
+      - "Identify with your callsign at the end of your transmission."
+    say:
+      - "{me}, I can relay."
+      - "Net control, {me} relaying for <call>: <message exactly as heard>. Over."
+      - "<call>, {me}: net control acknowledges your check-in. {me}."
+  emergency:
+    title: "Emergency or priority traffic — stop and yield"
+    triggers: ["break break", "emergency traffic", "priority traffic", "mayday", "this is not a drill",
+               "real emergency", "life threatening", "injury", "fire"]
+    priority: high
+    steps:
+      - "Stop transmitting. Emergency traffic goes before everything else."
+      - "Don't respond unless net control calls you or you can help directly (e.g. relay, phone 911)."
+      - "If YOU have emergency traffic: say 'Break break', your call, and 'emergency traffic'. Wait to be acknowledged."
+      - "Write down times, callsigns and exact words; you may be asked for them."
+    say:
+      - "Break break, {me}, emergency traffic."
+      - "{me}, standing by."
+  check_in:
+    title: "Checking in to a net"
+    triggers: ["check in", "check-in", "checking in", "check ins", "any check-ins", "taking check-ins",
+               "for the log", "late check-ins", "short time"]
+    steps:
+      - "Wait for net control to ask for check-ins (some nets take them by area or by letter)."
+      - "Give your call phonetically, then name and location, then whether you have traffic."
+      - "Keep it short; then stand by until net control acknowledges you."
+    say:
+      - "{me_phonetic}, <name>, <location>, no traffic."
+      - "{me}, short time, no traffic."
+  traffic:
+    title: "Passing formal traffic (radiogram / ICS-213)"
+    triggers: ["formal traffic", "radiogram", "ICS 213", "ICS-213", "message for", "QTC", "traffic for",
+               "precedence", "ready to copy"]
+    steps:
+      - "Tell net control you have traffic and for whom; wait to be told when and where to pass it (maybe QSY)."
+      - "Ask the receiving station 'Ready to copy?' before you start."
+      - "Send in order: number, precedence, from, to, text, signature. Say 'break' between sections."
+      - "Spell unusual words and every callsign phonetically. Receiver reads back or says 'Roger'."
+    say:
+      - "{me}, I have one priority message for the EOC."
+      - "<call>, {me}, ready to copy?"
+  exercise:
+    title: "This is an exercise"
+    triggers: ["this is an exercise", "this is a drill", "exercise traffic", "simulated", "SET", "drill"]
+    steps:
+      - "Begin and end every exercise message with 'This is an exercise' so it is never mistaken for real."
+      - "If a REAL emergency happens during the exercise, say 'Real world' or 'No-duff' and stop the exercise traffic."
+  net_open:
+    title: "A directed net is opening"
+    triggers: ["this is the", "net control", "this net is now open", "directed net", "net is now in session",
+               "calling the net", "this is a directed net"]
+    steps:
+      - "In a directed net, talk only when net control calls you or invites stations."
+      - "Listen to the preamble: it tells you the check-in order and how traffic is handled."
+  net_close:
+    title: "The net is closing"
+    triggers: ["net is now closed", "closing the net", "secure the net", "net is secured", "return the frequency"]
+    steps:
+      - "After the net closes the frequency returns to normal use; identify if you transmit."
+  calling_cq:
+    title: "Answering CQ or a DX station"
+    triggers: ["CQ", "QRZ", "calling CQ", "any station", "5 9", "five nine", "five by nine", "you're 59"]
+    steps:
+      - "Answer with your call only, once, phonetically; let the other station pick you out."
+      - "Give a signal report and your name/location briefly; DX contacts are often short."
+      - "If the DX station works 'split', transmit where they say they're listening (QSX), not on their frequency."
+    say:
+      - "{me_phonetic}."
+      - "<call>, {me}, thanks, you're five nine in Illinois, name Pat, back to you."
+reminders:
+  identify:
+    rule: "FCC 97.119: identify at the end of each contact and at least every 10 minutes during it."
+    warn_after_s: 540
