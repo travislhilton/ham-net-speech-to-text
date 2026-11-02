@@ -1,4 +1,5 @@
 """The live station end to end with a fake Whisper: segmenting, enrichment, log, server, schedule."""
+import copy
 import json
 import threading
 import time
@@ -91,7 +92,7 @@ def wait_for(cond, s=5):
 @pytest.fixture
 def station(tmp_path):
     texts = ["Break break, emergency traffic. Net control, this is K-7-A-B-C, QTH Springfield. Over."]
-    st = Station(CFG, lambda: engine.FakeEngine(texts, "fake-final"), lambda: engine.FakeEngine(name="fake-partial"),
+    st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(texts, "fake-final"), lambda: engine.FakeEngine(name="fake-partial"),
                  callbook=FakeBook({"K7ABC": "Pat Example", "W9XYZ": "Pat Q Sample"}), data_dir=tmp_path)
     st.start(listen=False)
     yield st
@@ -114,7 +115,7 @@ def test_transmission_flow_enrichment_and_log(station, tmp_path):
     log = list((tmp_path / "logs").glob("*.jsonl"))[0].read_text().splitlines()
     assert json.loads(log[-1])["callsigns"] == ["K7ABC"]
     assert (tmp_path / tx["wav"]).exists()
-    again = Station(CFG, lambda: engine.FakeEngine(), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
+    again = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
     again.load_today()
     assert again.tx[-1]["id"] == tx["id"] and again.heard["K7ABC"]["count"] == 1
     assert again.hints["ftm"]["net"]["type"] == "emergency"
@@ -173,7 +174,7 @@ def test_operator_sets_frequency_persisted_and_stamped(station, tmp_path):
     station.inject("ftm", np.zeros(16000 * 2, np.float32))
     assert wait_for(lambda: station.tx and station.tx[-1]["status"] == "final")
     assert station.tx[-1]["freq_mhz"] == 145.9
-    again = Station(CFG, lambda: engine.FakeEngine(), data_dir=tmp_path)       # restart keeps it
+    again = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path)       # restart keeps it
     assert again.radios["ftm"]["freq_mhz"] == 145.9 and again.radios["ftm"]["tuned_at"]
 
 
@@ -196,3 +197,19 @@ def test_post_radio_requires_json(station):
         assert e.value.code == 400
     finally:
         srv.shutdown()
+
+
+def test_short_prompt_carries_frequency_and_phonetic_call(station):
+    p = station.prompt_for("ftm")
+    assert p == "Ham radio net on 146.940 MHz. This is W9XYZ, Whiskey Nine X-ray Yankee Zulu. Over." and len(p) < 120
+    station.set_radio("ftm", 145.9)
+    assert "145.900 MHz" in station.prompt_for("ftm")
+
+
+def test_raw_ring_keeps_the_last_minutes(tmp_path):
+    from station.core import RawRing
+    r = RawRing(tmp_path / "raw", keep_min=2)
+    for i in range(4):
+        r.buf, r.t0 = [np.zeros(512, np.float32)], datetime(2026, 11, 2, 16, i)
+        r.flush()
+    assert sorted(p.name for p in (tmp_path / "raw").glob("*.wav")) == ["20261102-160200.wav", "20261102-160300.wav"]

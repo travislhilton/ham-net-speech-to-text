@@ -10,7 +10,6 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from hamkit.callsigns import initial_prompt
 from .textclean import collapse_repeats, max_tokens
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,7 +19,7 @@ class Engine:
     name = "none"
     warm = True            # run once at startup (GPU kernel compile); fakes opt out
 
-    def transcribe(self, audio: np.ndarray) -> dict:
+    def transcribe(self, audio: np.ndarray, prompt: str | None = None) -> dict:
         raise NotImplementedError
 
 
@@ -32,13 +31,14 @@ class OpenVINOEngine(Engine):
         self.pipe = ov.WhisperPipeline(str(models_dir / model), device)
         self.prompt = prompt
 
-    def transcribe(self, audio):
+    def transcribe(self, audio, prompt=None):
         cfg = self.pipe.get_generation_config()
         cfg.max_new_tokens = max_tokens(len(audio) / 16000)
         if not self.english_only:
             cfg.language = "<|en|>"; cfg.task = "transcribe"
-        if self.prompt:
-            cfg.initial_prompt = self.prompt
+        p = self.prompt if prompt is None else prompt
+        if p:
+            cfg.initial_prompt = p
         text, looped = collapse_repeats(str(self.pipe.generate(audio.astype(np.float32), cfg)).strip())
         return {"text": text, "looped": looped, "model": self.name}
 
@@ -50,9 +50,10 @@ class FasterWhisperEngine(Engine):
         self.m = WhisperModel(model, device=device, compute_type="float16" if device == "cuda" else "int8")
         self.prompt = prompt
 
-    def transcribe(self, audio):
+    def transcribe(self, audio, prompt=None):
+        p = self.prompt if prompt is None else prompt
         segs, _ = self.m.transcribe(audio.astype(np.float32), language="en", beam_size=1,
-                                    initial_prompt=self.prompt or None, condition_on_previous_text=False)
+                                    initial_prompt=p or None, condition_on_previous_text=False)
         text, looped = collapse_repeats(" ".join(s.text.strip() for s in segs))
         return {"text": text, "looped": looped, "model": self.name}
 
@@ -63,8 +64,8 @@ class FakeEngine(Engine):
     def __init__(self, texts=None, name="fake"):
         self.texts, self.name, self.calls = list(texts or []), name, 0
 
-    def transcribe(self, audio):
-        self.calls += 1
+    def transcribe(self, audio, prompt=None):
+        self.calls += 1; self.last_prompt = prompt
         t = self.texts.pop(0) if self.texts else "This is W9XYZ testing."
         return {"text": t, "looped": False, "model": self.name}
 
@@ -77,7 +78,9 @@ def make(spec: dict | None, models_dir: Path = ROOT / "models", prompt: str | No
     """spec = engine.yaml's `final` or `partial` entry."""
     if not spec:
         return None
-    p = initial_prompt() if prompt is None else prompt
+    # The long vocabulary prompt (~900 chars) sent OpenVINO turbo into repetition loops on real traffic
+    # (W9XYZ-5, 2026-11-02: "TESTING TESTING …"); the station passes a short per-transmission prompt.
+    p = "" if prompt is None else prompt
     if spec["engine"] == "openvino":
         return OpenVINOEngine(spec["model"], spec["device"], models_dir, p)
     if spec["engine"] == "faster-whisper":

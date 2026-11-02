@@ -16,7 +16,7 @@ import yaml
 from hamkit import glossary
 from hamkit.bands import band
 from hamkit.callsigns import load_roster, normalize
-from hamkit.hints import Hinter
+from hamkit.hints import Hinter, phonetic
 from .meter import Meter
 from .segmenter import Segmenter
 
@@ -50,6 +50,37 @@ def speaker_of(text: str, calls: list[str]) -> str | None:
         if m.group(1).upper() in calls:
             return m.group(1).upper()
     return calls[-1]
+
+
+class RawRing:
+    """Everything a radio hears, in one-minute WAVs, kept for `keep_min` minutes (0 = off). When a
+    transmission is missed or garbled, this is the evidence (gate decisions are in station.log)."""
+    def __init__(self, folder: Path, keep_min: int = 60):
+        self.dir, self.keep, self.buf, self.t0 = Path(folder), keep_min, [], None
+        if keep_min > 0:
+            self.dir.mkdir(parents=True, exist_ok=True)
+
+    def add(self, frame: np.ndarray):
+        if self.keep <= 0:
+            return
+        now = datetime.now()
+        if self.t0 is None:
+            self.t0 = now
+        self.buf.append(frame)
+        if now.minute != self.t0.minute or len(self.buf) * FRAME >= SR * 60:
+            self.flush(); self.t0 = now
+
+    def flush(self):
+        if not self.buf:
+            return
+        sf.write(self.dir / f"{self.t0:%Y%m%d-%H%M%S}.wav", np.concatenate(self.buf), SR, subtype="PCM_16")
+        self.buf = []
+        files = sorted(self.dir.glob("*.wav"))
+        for old in files[:-self.keep]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
 
 
 class Bus:
@@ -288,11 +319,13 @@ class Station:
         while not self.stop.is_set():
             try:
                 seg, meter = self.segmenter(r), self.make_meter(r)
+                raw = RawRing(self.data / "raw" / rid, int(r.get("raw_keep_min", self.cfg.get("raw_keep_min", 60))))
                 with self._source(r) as frames:
                     self._set_radio(rid, state="listening", error=None)
                     last = 0.0
                     while not self.stop.is_set():
                         frame = frames.get(timeout=5)
+                        raw.add(frame)
                         self.handle(rid, seg, frame)
                         m = meter.feed(frame, seg.active, seg.gate)
                         if m:
@@ -309,10 +342,17 @@ class Station:
     def handle(self, rid, seg: Segmenter, frame: np.ndarray):
         for ev in seg.feed(frame):
             if ev[0] == "start":
+                g = seg.gate
+                print(f"{datetime.now():%H:%M:%S} {rid} gate OPEN"
+                      + (f" (hiss floor {g.floor:.1f} dB, now {g.last_db:.1f})" if getattr(g, "floor", None) is not None else ""),
+                      flush=True)
                 self._tx_start(rid, ev[1])
             elif ev[0] == "audio":
                 self.partial_slot[rid] = (self._live_id(rid), ev[1]); self.partial_ev.set()
             elif ev[0] == "end":
+                i = ev[2]
+                print(f"{datetime.now():%H:%M:%S} {rid} gate CLOSE {i['duration_s']}s"
+                      + (" -> dropped (shorter than min_speech_ms)" if i["kerchunk"] else ""), flush=True)
                 self._tx_end(rid, ev[1], ev[2])
 
     def _live_id(self, rid):
@@ -365,6 +405,15 @@ class Station:
     def _find(self, tid):
         return next((t for t in reversed(self.tx) if t["id"] == tid), None)
 
+    def prompt_for(self, rid: str | None) -> str:
+        """Short on purpose (see engine.make): frequency + the operator's call, spelled phonetically.
+        Measured on W9XYZ-5: fixes 'This is a 79' -> 'This is W9XYZ' with no loops."""
+        r = self.radios.get(rid) or {}
+        parts = [f"Ham radio net on {r['freq_mhz']:.3f} MHz." if r.get("freq_mhz") else "Ham radio net."]
+        if self.me:
+            parts.append(f"This is {self.me}, {phonetic(self.me)}. Over.")
+        return " ".join(parts)
+
     # ---------- workers ----------
     @staticmethod
     def _warm(eng):
@@ -389,7 +438,7 @@ class Station:
             for rid, (tid, audio) in list(self.partial_slot.items()):
                 if self.partial_slot.get(rid, (None,))[0] != tid:
                     continue
-                text = eng.transcribe(audio[-30 * SR:])["text"]
+                text = eng.transcribe(audio[-30 * SR:], prompt=self.prompt_for(rid))["text"]
                 with self.lock:
                     tx = self._find(tid)
                     if tx and tx["status"] == "live":
@@ -414,7 +463,8 @@ class Station:
             except queue.Empty:
                 continue
             t = time.time()
-            res = eng.transcribe(audio)
+            tx = self._find(tid)
+            res = eng.transcribe(audio, prompt=self.prompt_for(tx and tx["radio"]))
             self.finish(tid, res, round(time.time() - t, 2))
 
     # ---------- enrichment ----------
