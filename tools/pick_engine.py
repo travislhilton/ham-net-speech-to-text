@@ -17,6 +17,9 @@ import soundfile as sf
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from hamkit.callsigns import initial_prompt, normalize  # noqa: E402  (same prompt + normalizer as live)
+PROMPT = initial_prompt()
 CLIP = ROOT / "install" / "windows" / "bench.wav"
 EXPECT = "W9XYZ"
 
@@ -27,13 +30,14 @@ def openvino_runner(model_dir: Path, device: str):
     cfg = pipe.get_generation_config(); cfg.max_new_tokens = 200
     if ".en-" not in model_dir.name:
         cfg.language = "<|en|>"; cfg.task = "transcribe"
+    cfg.initial_prompt = PROMPT
     return lambda a: str(pipe.generate(a, cfg))
 
 
 def cuda_runner(model: str):
     from faster_whisper import WhisperModel
     m = WhisperModel(model, device="cuda", compute_type="float16")
-    return lambda a: " ".join(s.text for s in m.transcribe(a, language="en", beam_size=1)[0])
+    return lambda a: " ".join(s.text for s in m.transcribe(a, language="en", beam_size=1, initial_prompt=PROMPT)[0])
 
 
 def has_nvidia() -> bool:
@@ -68,7 +72,7 @@ def measure(c, audio):
         t0 = time.time(); text = run(audio); times.append(time.time() - t0)
     rtf = min(times) / (len(audio) / 16000)
     return {"load_s": round(load, 1), "rtf": round(rtf, 3), "text": text.strip(),
-            "heard_call": EXPECT in text.upper().replace(" ", "")}
+            "heard_call": EXPECT in normalize(text)[1]}
 
 
 def main():
