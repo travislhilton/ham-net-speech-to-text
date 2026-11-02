@@ -47,7 +47,12 @@ After installing, the station starts by itself whenever you sign in to Windows. 
 or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale.
 
 The dashboard shows:
-- **Radios**: each radio's frequency and band, a level meter, and **RX** while a station is transmitting.
+- **Radios** (any number at once, each its own stream): frequency and band, **RX** while a station is
+  transmitting, a live **Signal** meter (green = level in bounds; yellow = low or hot; red = clipping or
+  almost no audio; the tick is the peak), an **SNR** meter while receiving (FM: noise quieting; SSB/AM:
+  voice over the noise floor; green 20 dB+, yellow 10–20, red under 10), and a **waterfall** of the
+  receiver's audio on the current frequency (the PC gets audio, not RF, so this is the audio passband,
+  like WSJT-X/fldigi). Bounds can be changed per radio in `station.yaml` (`meter:`).
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
   transmission after that is logged with it (kept across restarts in `data\\operator.json`).
 - **On the air**: every transmission as it happens. Grey words appear while the station is still
@@ -81,6 +86,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 
 | Piece | State |
 |---|---|
+| Live signal + SNR meters and waterfall per radio; several radios at once | working |
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |
 | Icom IC-705 over Wi-Fi | planned |

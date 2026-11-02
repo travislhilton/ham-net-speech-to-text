@@ -17,6 +17,7 @@ from hamkit import glossary
 from hamkit.bands import band
 from hamkit.callsigns import load_roster, normalize
 from hamkit.hints import Hinter
+from .meter import Meter
 from .segmenter import Segmenter
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -87,15 +88,19 @@ class Station:
         self.roster = load_roster() | {self.me} - {""}
         if callbook:
             callbook.roster |= self.roster
-        self.hinter = Hinter(self.me)
         self.lock = threading.RLock()
         self.tx: list[dict] = []
         self.heard: dict[str, dict] = {}
-        self.hints: dict = {"cards": [], "reminders": [], "net": self.hinter.classify()}
+        # each radio is its own stream: its own net, its own guidance (two nets never blend)
+        self.hinters = {r["id"]: Hinter(self.me) for r in config["radios"]}
+        self.hints: dict = {r["id"]: {"cards": [], "reminders": [], "net": self.hinters[r["id"]].classify()}
+                            for r in config["radios"]}
+        self.meters = {r["id"]: self.make_meter(r) for r in config["radios"]}
         self.radios = {r["id"]: {"id": r["id"], "name": r.get("name", r["id"]), "device": r.get("device"),
                                  "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode", "FM"),
                                  "band": band(r.get("freq_mhz")), "gate": r["gate"], "state": "starting",
-                                 "level_db": None, "carrier": False, "error": None}
+                                 "level_db": None, "carrier": False, "error": None,
+                                 "meter": self.meters[r["id"]].limits()}
                        for r in config["radios"]}
         self._apply_operator()
         self.final_q: queue.Queue = queue.Queue()
@@ -122,9 +127,12 @@ class Station:
             with self.lock:
                 radios = list(self.radios.values())
             self.bus.publish("radios", {"radios": radios, "net": self.schedule_now()})
-            rem = self.hinter.reminders(self.clock())
-            if rem != self.hints.get("reminders"):
-                self.hints["reminders"] = rem
+            changed = False
+            for rid, h in self.hinters.items():
+                rem = h.reminders(self.clock())
+                if rem != self.hints[rid].get("reminders"):
+                    self.hints[rid]["reminders"] = rem; changed = True
+            if changed:
                 self.bus.publish("hints", self.hints)
 
     # ---------- operator settings (set on the dashboard; the operator tunes the radio) ----------
@@ -197,7 +205,18 @@ class Station:
                     cur = cur or item
                 elif d > at and (nxt is None or d.isoformat() < nxt["start"]):
                     nxt = item
-        return {"current": cur, "next": nxt}
+        return {"current": cur, "next": nxt, "by_radio": self._current_by_radio(at)}
+
+    def _current_by_radio(self, at) -> dict:
+        out = {}
+        for n in self.cfg.get("schedule", []):
+            days = [DAYS.index(d[:3].title()) for d in n.get("days", DAYS)]
+            hh, mm = map(int, str(n.get("start", "00:00")).split(":"))
+            for add in (0, 1):
+                d = (at - timedelta(days=add)).replace(hour=hh, minute=mm, second=0, microsecond=0)
+                if d.weekday() in days and d <= at < d + timedelta(minutes=int(n.get("duration_min", 60))):
+                    out.setdefault(n.get("radio"), {"name": n.get("name"), "ncs": n.get("ncs")})
+        return out
 
     # ---------- radios ----------
     def _gate(self, r):
@@ -215,25 +234,74 @@ class Station:
         with self.lock:
             self.radios[rid].update(kw)
 
+    @staticmethod
+    def make_meter(r) -> Meter:
+        return Meter(r.get("meter"), SR, r.get("gate", "carrier"), r.get("waterfall_hz"))
+
+    def _source(self, r):
+        """Context manager yielding a frame queue: a Windows sound input, or `file:<wav>` (played in real
+        time and looped — demos, tests, and running several streams without radios)."""
+        import contextlib
+        dev = r.get("device") or ""
+
+        @contextlib.contextmanager
+        def from_file(path):
+            audio, sr = sf.read(path, dtype="float32")
+            audio = audio.mean(axis=1) if audio.ndim > 1 else audio
+            if sr != SR:
+                raise RuntimeError(f"{path}: needs {SR} Hz audio, got {sr}")
+            frames, stop = queue.Queue(maxsize=200), threading.Event()
+
+            def feed():
+                t0, i = time.monotonic(), 0
+                while not (stop.is_set() or self.stop.is_set()):
+                    k = (i * FRAME) % max(len(audio) - FRAME, 1)
+                    frames.put(audio[k:k + FRAME].copy()); i += 1
+                    time.sleep(max(0.0, t0 + i * FRAME / SR - time.monotonic()))
+            threading.Thread(target=feed, daemon=True).start()
+            try:
+                yield frames
+            finally:
+                stop.set()
+
+        @contextlib.contextmanager
+        def from_device(name):
+            import sounddevice as sd
+            idx = next((i for i, d in enumerate(sd.query_devices())
+                        if name.lower() in d["name"].lower() and d["max_input_channels"] > 0), None)
+            if idx is None:
+                raise RuntimeError(f"audio input containing '{name}' not found")
+            frames = queue.Queue(maxsize=400)
+
+            def cb(d, n, t, s):          # never raise in the audio callback: it would stop the stream
+                try:
+                    frames.put_nowait(d[:, 0].copy())
+                except queue.Full:
+                    pass
+            with sd.InputStream(device=idx, samplerate=SR, channels=1, dtype="float32", blocksize=FRAME,
+                                callback=cb):
+                yield frames
+        return from_file(dev[5:]) if dev.startswith("file:") else from_device(dev)
+
     def _listen(self, r):
-        import sounddevice as sd
         rid = r["id"]
         while not self.stop.is_set():
             try:
-                dev = next((i for i, d in enumerate(sd.query_devices())
-                            if r["device"].lower() in d["name"].lower() and d["max_input_channels"] > 0), None)
-                if dev is None:
-                    raise RuntimeError(f"audio input containing '{r['device']}' not found")
-                seg, frames = self.segmenter(r), queue.Queue()
-                with sd.InputStream(device=dev, samplerate=SR, channels=1, dtype="float32", blocksize=FRAME,
-                                    callback=lambda d, n, t, s: frames.put(d[:, 0].copy())):
+                seg, meter = self.segmenter(r), self.make_meter(r)
+                with self._source(r) as frames:
                     self._set_radio(rid, state="listening", error=None)
                     last = 0.0
                     while not self.stop.is_set():
-                        self.handle(rid, seg, frames.get(timeout=5))
+                        frame = frames.get(timeout=5)
+                        self.handle(rid, seg, frame)
+                        m = meter.feed(frame, seg.active, seg.gate)
+                        if m:
+                            m["id"] = rid
+                            self.bus.publish("m", m)
                         if time.time() - last > 0.25:
                             last = time.time()
-                            self._set_radio(rid, level_db=round(seg.level_db, 1), carrier=seg.active)
+                            self._set_radio(rid, level_db=round(seg.level_db, 1), carrier=seg.active,
+                                            snr_db=m["snr"] if m else self.radios[rid].get("snr_db"))
             except Exception as e:  # noqa: BLE001 — keep trying; a radio unplugged is not a crash
                 self._set_radio(rid, state="error", error=f"{type(e).__name__}: {e}", carrier=False)
                 self.stop.wait(10)
@@ -358,12 +426,15 @@ class Station:
             tx = self._find(tid)
             if tx is None:
                 return
-            net = self.schedule_now().get("current") or {}
+            rid = tx["radio"]
+            net = self._current_by_radio(self.clock()).get(rid) or {}
             at = datetime.fromisoformat(tx["start"])
-            h = self.hinter.on_transmission(text, calls, at=at, ncs=net.get("ncs"))
+            hinter = self.hinters.setdefault(rid, Hinter(self.me))
+            hs = self.hints.setdefault(rid, {"cards": [], "reminders": [], "net": {}})
+            h = hinter.on_transmission(text, calls, at=at, ncs=net.get("ncs"))
             if h["cards"]:
-                self.hints["cards"] = h["cards"]
-            self.hints.update(reminders=h["reminders"], net=h["net"])
+                hs["cards"] = h["cards"]
+            hs.update(reminders=h["reminders"], net=h["net"])
             tx.update(status="final", text=text, callsigns=calls, speaker=speaker_of(text, calls), terms=terms,
                       model=res.get("model"), looped=res.get("looped", False), took_s=took_s,
                       hint_keys=[c["key"] for c in h["cards"]], partial="")
@@ -416,11 +487,12 @@ class Station:
             for c in tx.get("callsigns", []):
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"], "card": None})
                 e["count"] += 1; e["last"] = tx["start"]
-            self.hinter.on_transmission(tx.get("text", ""), tx.get("callsigns", []),
-                                        at=datetime.fromisoformat(tx["start"]))
+            self.hinters.setdefault(tx.get("radio"), Hinter(self.me)).on_transmission(
+                tx.get("text", ""), tx.get("callsigns", []), at=datetime.fromisoformat(tx["start"]))
         for c, e in self.heard.items():
             e["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
-        self.hints["net"] = self.hinter.classify()
+        for rid, h in self.hinters.items():
+            self.hints.setdefault(rid, {"cards": [], "reminders": [], "net": {}})["net"] = h.classify()
         del self.tx[:-500]
         self.next_id = max([self.next_id] + [int(t["id"]) for t in self.tx if str(t["id"]).isdigit()])
 

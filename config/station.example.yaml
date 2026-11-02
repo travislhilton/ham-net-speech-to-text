@@ -12,9 +12,11 @@ radios:                     # one entry per radio; each needs its own sound inpu
     gate: carrier           # carrier = FM data jack (unsquelched hiss); voice = SSB/HF or squelched audio
     freq_mhz: 146.940       # starting value only: the operator sets it on the dashboard (Change) when retuning
     mode: FM
+    # meter: {low_dbfs: -45, high_dbfs: -6, clip_dbfs: -1, dead_dbfs: -60, snr_good_db: 20, snr_fair_db: 10}
+    # waterfall_hz: [0, 8000]   # default 0-8 kHz for FM (carrier gate), 0-4 kHz for voice gate
   # - id: ic705
   #   name: Icom IC-705
-  #   device: "IC-705"      # e.g. the virtual audio input wfview feeds
+  #   device: "IC-705"      # e.g. the virtual audio input wfview feeds; "file:C:\\path\\to.wav" plays a test file
   #   gate: voice
   #   freq_mhz: 7.185
   #   mode: LSB

@@ -105,7 +105,7 @@ def test_transmission_flow_enrichment_and_log(station, tmp_path):
     tx = station.tx[-1]
     assert tx["callsigns"] == ["K7ABC"] and tx["speaker"] == "K7ABC" and tx["model"] == "fake-final"
     assert {t["term"] for t in tx["terms"]} >= {"QTH", "BREAK BREAK"}
-    assert station.hints["net"]["type"] == "emergency" and station.hints["cards"][0]["key"] == "emergency"
+    assert station.hints["ftm"]["net"]["type"] == "emergency" and station.hints["ftm"]["cards"][0]["key"] == "emergency"
     assert station.heard["K7ABC"]["card"]["name"] == "Pat Example"
     kinds = set()
     while not q.empty():
@@ -117,7 +117,7 @@ def test_transmission_flow_enrichment_and_log(station, tmp_path):
     again = Station(CFG, lambda: engine.FakeEngine(), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
     again.load_today()
     assert again.tx[-1]["id"] == tx["id"] and again.heard["K7ABC"]["count"] == 1
-    assert again.hints["net"]["type"] == "emergency"
+    assert again.hints["ftm"]["net"]["type"] == "emergency"
 
 
 def test_schedule_current_and_retune(station):

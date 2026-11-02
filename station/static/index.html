@@ -6,9 +6,9 @@
 <title>HamNet Station</title>
 <style>
 :root{--bg:#f5f6f8;--panel:#fff;--ink:#16181d;--muted:#5d6472;--line:#dfe2e8;--accent:#1f6feb;--ok:#1a7f37;
---warn:#9a6700;--warnbg:#fff8c5;--bad:#cf222e;--badbg:#ffebe9;--chip:#eef2ff;--partial:#7d8590;--term:#0969da}
+--warn:#9a6700;--warnc:#d4a72c;--warnbg:#fff8c5;--bad:#cf222e;--badbg:#ffebe9;--chip:#eef2ff;--partial:#7d8590;--term:#0969da}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--panel:#161b22;--ink:#e6edf3;--muted:#8b949e;--line:#30363d;
---accent:#58a6ff;--ok:#3fb950;--warn:#d29922;--warnbg:#3a2f0b;--bad:#ff7b72;--badbg:#3c1618;--chip:#1c2a44;--partial:#8b949e;--term:#79c0ff}}
+--accent:#58a6ff;--ok:#3fb950;--warn:#d29922;--warnc:#d29922;--warnbg:#3a2f0b;--bad:#ff7b72;--badbg:#3c1618;--chip:#1c2a44;--partial:#8b949e;--term:#79c0ff}}
 *{box-sizing:border-box}html,body{overflow-x:hidden;margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,"Segoe UI",sans-serif}
 header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color:var(--muted)}
@@ -16,10 +16,20 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--chip)}
 .badge.emergency{background:var(--bad);color:#fff;border-color:var(--bad)}.badge.exercise{background:var(--warnbg);color:var(--warn)}
 #alert{display:none;padding:10px 16px;background:var(--bad);color:#fff;font-weight:700;font-size:17px}
-#radios{display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px}
-.radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-width:min(220px,100%);flex:1 1 220px}
-.radio .top{display:flex;justify-content:space-between;gap:8px}.rx{font-weight:700;color:var(--muted)}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
-.meter{height:6px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}.meter i{display:block;height:100%;background:var(--accent);width:0}
+#radios{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px;padding:10px 16px}
+.radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.radio .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.radio .top .nm{flex:1}
+.rx{font-weight:700;color:var(--muted);font-size:13px}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
+.mrow{display:grid;grid-template-columns:48px minmax(0,1fr) 74px;gap:8px;align-items:center;margin-top:7px;font-size:13px}
+.ml{color:var(--muted)}.mv{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.bar{position:relative;height:14px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar .z{position:absolute;top:0;bottom:0;opacity:.22}.bar .z.ok{background:var(--ok)}.bar .z.warn{background:var(--warnc)}.bar .z.bad{background:var(--bad)}
+.bar .fill{position:absolute;left:0;top:3px;bottom:3px;border-radius:3px;width:0;transition:width .08s linear;background:var(--muted)}
+.bar .fill.ok{background:var(--ok)}.bar .fill.warn{background:var(--warnc)}.bar .fill.bad{background:var(--bad)}.bar .fill.idle{background:var(--muted)}
+.bar .pk{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);left:0}
+.mv.ok{color:var(--ok)}.mv.warn{color:var(--warn)}.mv.bad{color:var(--bad)}.mv.idle{color:var(--muted)}
+.wf{display:block;width:100%;height:120px;margin-top:9px;border-radius:6px;background:#080c28;image-rendering:auto}
+.axis{position:relative;height:16px;font-size:11px;color:var(--muted)}.axis span{position:absolute;transform:translateX(-50%)}.axis span:first-child{transform:none}
 .err{color:var(--bad);font-size:13px}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;padding:0 16px 24px}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}#radios,main{padding-left:12px;padding-right:12px}}
@@ -67,7 +77,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 </main>
 <script>
 let editing=null;
-const S={tx:[],heard:[],radios:[],hints:{cards:[],reminders:[]},net:{},schedule:[]};
+const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[]};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hhmm=iso=>iso?iso.slice(11,16):"";
@@ -106,19 +116,72 @@ function upsertTx(t){
   const el=$("tx-"+t.id);
   if(el){el.outerHTML=txHtml(t)}else renderFeed();
 }
+// ---------- radio cards: built once, updated in place (the waterfall canvas must survive updates) ----------
+const LUT=(()=>{const st=[[0,[8,12,40]],[.35,[20,60,160]],[.55,[0,170,200]],[.72,[240,220,40]],[.88,[240,110,20]],[1,[255,255,255]]];
+  const a=new Uint8ClampedArray(256*3);for(let i=0;i<256;i++){const x=i/255;let k=0;while(k<st.length-2&&x>st[k+1][0])k++;
+  const [x0,c0]=st[k],[x1,c1]=st[k+1],f=(x-x0)/(x1-x0);for(let j=0;j<3;j++)a[i*3+j]=c0[j]+(c1[j]-c0[j])*f}return a})();
+const LV={lo:-70,hi:0},SN={lo:0,hi:50};
+const pc=(v,s)=>Math.max(0,Math.min(100,(v-s.lo)/(s.hi-s.lo)*100));
+function zones(m){ // background bands showing where the meter is in / out of bounds
+  const z=[[LV.lo,m.dead_dbfs,"bad"],[m.dead_dbfs,m.low_dbfs,"warn"],[m.low_dbfs,m.high_dbfs,"ok"],[m.high_dbfs,m.clip_dbfs,"warn"],[m.clip_dbfs,LV.hi,"bad"]];
+  return z.map(([a,b,c])=>`<i class="z ${c}" style="left:${pc(a,LV)}%;width:${pc(b,LV)-pc(a,LV)}%"></i>`).join("")}
+function snrZones(m){const z=[[0,m.snr_fair_db,"bad"],[m.snr_fair_db,m.snr_good_db,"warn"],[m.snr_good_db,SN.hi,"ok"]];
+  return z.map(([a,b,c])=>`<i class="z ${c}" style="left:${pc(a,SN)}%;width:${pc(b,SN)-pc(a,SN)}%"></i>`).join("")}
+function axis(r){const m=r.meter||{},sp=m.span_hz||[0,8000],ticks=[];const step=(sp[1]-sp[0])>4000?2000:1000;
+  for(let f=Math.ceil(sp[0]/step)*step;f<=sp[1];f+=step)ticks.push(`<span style="left:${(f-sp[0])/(sp[1]-sp[0])*100}%">${f/1000}k</span>`);
+  return ticks.join("")}
+function wfCaption(r){const m=r.meter||{},sp=m.span_hz||[0,8000];
+  const hint=r.gate==="carrier"?" · bright = open-squelch hiss; a station's carrier quiets it and its voice shows as traces":"";
+  return `Receiver audio, ${sp[0]/1000}–${sp[1]/1000} kHz${r.freq_mhz?` · ${Number(r.freq_mhz).toFixed(3)} MHz ${esc(r.mode||"")}`:""}${r.mode==="USB"?" · RF = frequency + audio":r.mode==="LSB"?" · RF = frequency − audio":""}${hint}`}
+function ensureCard(r){
+  let el=document.getElementById("r-"+r.id);if(el)return el;
+  el=document.createElement("div");el.className="radio";el.id="r-"+r.id;
+  const m=r.meter||{};
+  el.innerHTML=`<div class="top"><b class="nm"></b><span class="nb badge"></span><span class="rx">idle</span></div>
+   <div class="small fq"></div><div class="tunebox"></div>
+   <div class="mrow"><span class="ml">Signal</span><div class="bar">${zones(m)}<i class="fill"></i><i class="pk"></i></div><span class="mv lv">—</span></div>
+   <div class="mrow"><span class="ml">SNR</span><div class="bar">${snrZones(m)}<i class="fill"></i></div><span class="mv sv">—</span></div>
+   <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
+   <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>`;
+  const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
+  $("radios").appendChild(el);return el}
 function renderRadios(){
-  if(editing&&document.activeElement&&document.activeElement.closest(".tuneform"))return;  // don't redraw under the operator's typing
-  $("radios").innerHTML=S.radios.length?S.radios.map(r=>{
-    const pct=r.level_db==null?0:Math.max(0,Math.min(100,(r.level_db+60)*1.67));
-    return `<div class="radio"><div class="top"><b>${esc(r.name)}</b><span class="rx${r.carrier?" on":""}">${r.carrier?"RX":"idle"}</span></div>
-    <div class="small"><b>${r.freq_mhz?Number(r.freq_mhz).toFixed(3)+" MHz":"frequency not set"}</b> <span class="muted">${r.band&&r.band.band?esc(r.band.band):""} · ${esc(r.mode||"")} · ${r.gate==="carrier"?"carrier gate":"voice gate"}</span>
-      <button class="tune" data-tune="${esc(r.id)}" title="Set what this radio is tuned to">Change</button></div>
-    ${editing===r.id?`<form class="tuneform" data-rid="${esc(r.id)}"><input name="f" inputmode="decimal" value="${r.freq_mhz??""}" aria-label="Frequency in MHz"> MHz
-      <select name="m">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===r.mode?" selected":""}>${m}</option>`).join("")}</select>
-      <button type="submit">Save</button> <button type="button" data-cancel>Cancel</button> <span class="err" id="tuneerr"></span>
-      <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.</div></form>`:""}
-    <div class="meter"><i style="width:${pct}%"></i></div>${r.error?`<div class="err">${esc(r.error)}</div>`:""}</div>`}).join("")
-   :'<div class="radio">No radios set up yet. Add one to <code>config\\station.yaml</code> (see README, "Connecting a radio").</div>';
+  const box=$("radios");
+  if(!S.radios.length){box.innerHTML='<div class="radio">No radios set up yet. Add one to <code>config\\station.yaml</code> (see README, "Connecting a radio").</div>';return}
+  box.querySelectorAll(".radio:not([id])").forEach(x=>x.remove());
+  const ids=new Set(S.radios.map(r=>r.id));box.querySelectorAll(".radio[id]").forEach(x=>{if(!ids.has(x.id.slice(2)))x.remove()});
+  for(const r of S.radios){
+    const el=ensureCard(r),h=(S.hints||{})[r.id]||{},net=h.net||{};
+    el.querySelector(".nm").textContent=r.name;
+    const nb=el.querySelector(".nb");nb.textContent=net.type&&net.type!=="unknown"?net.label:"";nb.className="nb badge "+(net.type||"");nb.style.display=nb.textContent?"":"none";
+    if(!(document.activeElement&&document.activeElement.closest("#r-"+CSS.escape(r.id)+" .tuneform"))){
+      el.querySelector(".fq").innerHTML=`<b>${r.freq_mhz?Number(r.freq_mhz).toFixed(3)+" MHz":"frequency not set"}</b> <span class="muted">${r.band&&r.band.band?esc(r.band.band):""} · ${esc(r.mode||"")} · ${r.gate==="carrier"?"carrier gate":"voice gate"}</span>
+        <button class="tune" data-tune="${esc(r.id)}" title="Set what this radio is tuned to">Change</button>`;
+      el.querySelector(".tunebox").innerHTML=editing===r.id?`<form class="tuneform" data-rid="${esc(r.id)}"><input name="f" inputmode="decimal" value="${r.freq_mhz??""}" aria-label="Frequency in MHz"> MHz
+        <select name="m">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===r.mode?" selected":""}>${m}</option>`).join("")}</select>
+        <button type="submit">Save</button> <button type="button" data-cancel>Cancel</button> <span class="err tuneerr"></span>
+        <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.</div></form>`:"";
+    }
+    el.querySelector(".cap").textContent=wfCaption(r);
+    el.querySelector(".err").textContent=r.error||"";
+    if(r.state!=="listening"){el.querySelector(".rx").textContent=r.state==="error"?"no audio":r.state;el.querySelector(".rx").className="rx"}
+  }
+}
+function onMeter(d){
+  const el=document.getElementById("r-"+d.id);if(!el)return;
+  const rx=el.querySelector(".rx");rx.textContent=d.rx?"RX":"idle";rx.className="rx"+(d.rx?" on":"");
+  const bars=el.querySelectorAll(".bar");
+  const f=bars[0].querySelector(".fill");f.style.width=pc(d.rms,LV)+"%";f.className="fill "+d.ls;
+  bars[0].querySelector(".pk").style.left=pc(d.peak,LV)+"%";
+  el.querySelector(".lv").textContent=`${d.rms.toFixed(0)} dBFS`;el.querySelector(".lv").className="mv lv "+d.ls;
+  el.querySelector(".lv").title=d.ls==="ok"?"in bounds":d.peak>=-1?"clipping: turn the radio's data/audio level down":d.rms<-60?"almost no audio: check the cable and level":d.peak>=-6?"hot: close to clipping":"low: turn the level up";
+  const s=bars[1].querySelector(".fill");s.style.width=(d.snr==null?0:pc(d.snr,SN))+"%";s.className="fill "+d.ss;
+  el.querySelector(".sv").textContent=d.snr==null?"—":(d.rx?`${d.snr.toFixed(0)} dB`:"idle");el.querySelector(".sv").className="mv sv "+d.ss;
+  const cv=el.querySelector("canvas"),c=cv.getContext("2d"),w=cv.width,h=cv.height;
+  c.drawImage(cv,0,0,w,h-1,0,1,w,h-1);
+  const row=atob(d.s),img=c.createImageData(w,1);
+  for(let i=0;i<w;i++){const v=row.charCodeAt(i)*3;img.data[i*4]=LUT[v];img.data[i*4+1]=LUT[v+1];img.data[i*4+2]=LUT[v+2];img.data[i*4+3]=255}
+  c.putImageData(img,0,0);
 }
 function renderNet(){
   const n=S.net||{},c=n.current,x=n.next;
@@ -129,14 +192,20 @@ function renderNet(){
   $("net").innerHTML=h;
 }
 function renderHints(){
-  const h=S.hints||{},net=h.net||{};
-  const nt=$("nettype");nt.textContent=net.label||"Net type: listening…";nt.className="badge "+(net.type||"");
+  const H=S.hints||{},radios=S.radios.length?S.radios:[];
+  const name=id=>(radios.find(r=>r.id===id)||{}).name||id;
+  const emerg=Object.entries(H).filter(([id,h])=>h.net&&h.net.type==="emergency").map(([id])=>name(id));
   const al=$("alert");
-  if(net.type==="emergency"){al.style.display="block";al.textContent="Emergency traffic heard. Keep the frequency clear unless you can help or net control calls you."}else al.style.display="none";
-  $("rem").innerHTML=(h.reminders||[]).map(r=>`<div class="rem">${esc(r.text)}</div>`).join("");
-  const cards=h.cards||[];
-  $("hints").innerHTML=cards.length?cards.map(c=>`<div class="card ${c.priority==="high"?"high":""}"><h3>${esc(c.title)}</h3><ol>${(c.steps||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ol>${(c.say||[]).map(s=>`<div class="say"><span>${esc(s)}</span></div>`).join("")}</div>`).join("")
-   :'<p class="muted small">Guidance appears here when something calls for it: a relay request, emergency traffic, check-ins, formal messages.</p>';
+  if(emerg.length){al.style.display="block";al.textContent=`Emergency traffic heard on ${emerg.join(" and ")}. Keep the frequency clear unless you can help or net control calls you.`}else al.style.display="none";
+  const types=Object.values(H).map(h=>h.net).filter(n=>n&&n.type&&n.type!=="unknown");
+  const nt=$("nettype");nt.textContent=types.length===1?types[0].label:types.length>1?`${types.length} nets heard`:"Net type: listening…";
+  nt.className="badge "+(emerg.length?"emergency":types.length===1?types[0].type:"");
+  const multi=Object.keys(H).length>1;
+  $("rem").innerHTML=Object.values(H).flatMap(h=>h.reminders||[]).filter((r,i,a)=>a.findIndex(x=>x.text===r.text)===i).map(r=>`<div class="rem">${esc(r.text)}</div>`).join("");
+  const html=Object.entries(H).filter(([id,h])=>(h.cards||[]).length).map(([id,h])=>(multi?`<div class="small muted" style="margin:4px 0">${esc(name(id))}</div>`:"")+
+    h.cards.map(c=>`<div class="card ${c.priority==="high"?"high":""}"><h3>${esc(c.title)}</h3><ol>${(c.steps||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ol>${(c.say||[]).map(s=>`<div class="say"><span>${esc(s)}</span></div>`).join("")}</div>`).join("")).join("");
+  $("hints").innerHTML=html||'<p class="muted small">Guidance appears here when something calls for it: a relay request, emergency traffic, check-ins, formal messages.</p>';
+  renderRadios();
 }
 function cardHtml(c,e){
   const rows=[["Name",c.name],["Location",[c.city,c.state,c.country].filter(Boolean).join(", ")],["License",c.license_class?`${c.license_class}${c.license_status&&c.license_status!=="Active"?" ("+c.license_status+")":""}${c.expires?", expires "+c.expires:""}`:""],
@@ -163,12 +232,13 @@ document.addEventListener("click",e=>{
   if(e.target.closest("[data-cancel]")){editing=null;document.activeElement.blur();renderRadios()}
 });
 document.addEventListener("submit",async e=>{
+  const errEl=()=>e.target.querySelector(".tuneerr");
   const f=e.target.closest(".tuneform");if(!f)return;e.preventDefault();
   const freq=parseFloat(String(f.f.value).replace(",","."));
   try{const r=await fetch("/api/radios/"+encodeURIComponent(f.dataset.rid),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({freq_mhz:freq,mode:f.m.value})});
-    const d=await r.json();if(!r.ok){$("tuneerr").textContent=d.error||"not saved";return}
+    const d=await r.json();if(!r.ok){errEl().textContent=d.error||"not saved";return}
     const i=S.radios.findIndex(x=>x.id===d.id);if(i>=0)S.radios[i]=d;editing=null;document.activeElement.blur();renderRadios();renderNet()}
-  catch(err){$("tuneerr").textContent="not saved: station unreachable"}
+  catch(err){errEl().textContent="not saved: station unreachable"}
 });
 $("go").onclick=()=>lookup($("q").value);$("q").addEventListener("keydown",e=>{if(e.key==="Enter")lookup($("q").value)});
 function connect(){
@@ -181,6 +251,7 @@ function connect(){
   es.addEventListener("hints",e=>{S.hints=JSON.parse(e.data);renderHints()});
   es.addEventListener("heard",e=>{S.heard=JSON.parse(e.data).heard;renderHeard()});
   es.addEventListener("radios",e=>{const d=JSON.parse(e.data);S.radios=d.radios;S.net=d.net;renderRadios();renderNet()});
+  es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
 }
 connect();
