@@ -1,0 +1,62 @@
+FTM-150R + DRA-50M SETUP FOR NET RECORDING (W9XYZ-5)
+From the Yaesu FTM-150R Operating Manual and Advance Manual, 2026-11-02.
+The radio only listens. The recorder never transmits.
+
+
+0. CHECK THE CABLE FIRST
+   - The FTM-150R's rear DATA jack is a 10-PIN mini-DIN. The DRA-50M has a 6-PIN mini-DIN.
+     A plain 6-pin to 6-pin cable will not fit the radio. You need a 10-pin (Yaesu) to 6-pin cable.
+   - Turn the radio OFF before plugging or unplugging the DATA cable (the manual says so).
+   - On the DRA-50M, the receive audio should come from the radio's "RX 1200" pin.
+     (On the DRA-50 that is jumper JU7 in position A. Check the DRA-50M sheet for its jumper.)
+
+
+1. OPEN THE SETUP MENU
+   - PRESS AND HOLD the [F/BACK] key: the 5th key along the TOP of the control head,
+     between [V/M] and the power key. "SETUP MENU" appears.
+   - LEFT DIAL (or the mic [UP]/[DWN] keys): moves between categories
+       DISPLAY, TX, RX, MEMORY, CONFIG, AUDIO, SIGNALING, SCAN, DATA, SD CARD, OPTION, CLONE/RESET
+   - RIGHT DIAL: turn to pick an item, PRESS to open it, turn to change the value.
+   - [F/BACK] (short press): back one screen.
+   - To SAVE and EXIT: press any key or knob other than the Right DIAL or [F/BACK].
+     A short press of the mic PTT exits the setup menu too (the manual lists it).
+
+
+2. CATEGORY "DATA"
+   45 DATA BAND  ->  A-BAND FIX
+        Options: MAIN BAND / SUB BAND / A-BAND FIX / B-BAND FIX.
+        A-BAND FIX means the DATA jack always carries band A, whichever band is "main".
+   46 DATA SPEED ->  1200 bps   (factory default; 1200 gives voice-band audio)
+
+
+3. CATEGORY "SCAN"
+   41 DUAL RECEIVE MODE  ->  OFF
+        The other choice, PRIORITY SCAN, hops away from band A every few seconds and
+        would chop words out of the recording. With it OFF, band B is shown but not heard.
+
+
+4. PUT BAND A ON THE NET FREQUENCY (normal screen)
+   - Band A is the LEFT side of the display (the mic's [A] key selects the left band).
+   - Press the LEFT DIAL so the left side shows LARGE numbers.
+   - [V/M] switches between VFO and memory ("M-ALL 001" style = memory mode).
+     Memory: turn the left DIAL to the stored net channel.
+     VFO: press [BAND] until 144 MHz, then type the frequency on the mic keypad,
+          e.g. 1 4 6 9 4 0 = 146.940 MHz (the WA7XQZ repeater output), or turn the left DIAL.
+   - If band A shows TSQ or DCS, set it to TONE or OFF, so stations are not muted.
+   - Squelch: mic [C] key, set it so it just closes on background noise.
+   - PMG must be off: if the [PMG] key is lit amber, press it once to cancel.
+   - Do not leave the radio scanning.
+
+
+5. TEST IT
+   - On W9XYZ-5: Win+R, type mmsys.cpl, open the Recording tab.
+   - Watch the green level bar on NET-REC.
+     It should move when band A hears traffic, and stay still when band A is quiet.
+   - Turning the radio's volume knob should not change the bar much. The DATA jack has its own level.
+   - If the bar shows constant hiss between transmissions, tell Claude. The squelch line can be used.
+
+
+6. TELL CLAUDE
+   - The band A frequency or channel you set.
+   - What cable connects the radio to the DRA-50M.
+   - Whether the NET-REC bar moved with traffic.
