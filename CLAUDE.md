@@ -18,6 +18,8 @@
   more radios, works offline. The home server/LLM server are an optional accurate second pass.
 - **README + installer evolve with every change** (owner): update README "Status" and the install
   steps in the same commit as the feature; `install/windows/install.ps1` must stay idempotent.
+- OpenVINO on Windows: never create an `openvino.Core` in a process that runs a GPU WhisperPipeline — the
+  process hangs forever at exit (W9XYZ-5, 11-02). List devices in a child process (`tools/pick_engine.py`).
 - Windows over SSH: scp a script and run it with `-File` (piped stdin drops multi-line blocks).
 
 ## Resume here

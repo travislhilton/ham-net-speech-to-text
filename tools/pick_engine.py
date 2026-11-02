@@ -45,13 +45,18 @@ def has_nvidia() -> bool:
     return bool(exe) and subprocess.run([exe, "-L"], capture_output=True).returncode == 0
 
 
+def openvino_devices() -> list[str]:
+    """Ask in a child process. An openvino.Core that enumerated the GPU, plus a GPU WhisperPipeline in
+    the same process, hangs that process forever at exit (W9XYZ-5, Intel UHD, driver 32.0.101.7088,
+    OpenVINO 2026.4.1; either alone exits cleanly). The live service must never create a Core either."""
+    r = subprocess.run([sys.executable, "-c", "import openvino as o; print(','.join(o.Core().available_devices))"],
+                       capture_output=True, text=True, timeout=120)
+    return [d for d in r.stdout.strip().split(",") if d] if r.returncode == 0 else []
+
+
 def candidates(models: Path):
     out = []
-    try:
-        import openvino as ov
-        devs = ov.Core().available_devices
-    except Exception:  # noqa: BLE001
-        devs = []
+    devs = openvino_devices()
     for name, role in (("whisper-large-v3-turbo-int8-ov", "final"), ("whisper-small.en-int8-ov", "final"),
                        ("whisper-base.en-int8-ov", "partial")):
         if (models / name).exists():
