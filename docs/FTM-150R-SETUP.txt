@@ -26,13 +26,19 @@ The radio only listens. The recorder never transmits.
    45 DATA BAND  ->  A-BAND FIX
         Options: MAIN BAND / SUB BAND / A-BAND FIX / B-BAND FIX.
         A-BAND FIX means the DATA jack always carries band A, whichever band is "main".
-   46 DATA SPEED ->  1200 bps   (factory default; 1200 gives voice-band audio)
+   46 DATA SPEED ->  leave at 9600 if you use it that way for other things.
+        The DRA-50M jumper decides which radio pin is recorded (RX 1200 or RX 9600).
+        Either works: Claude measures a test recording and filters the audio in software if needed.
 
 
-3. CATEGORY "SCAN"
-   41 DUAL RECEIVE MODE  ->  OFF
-        The other choice, PRIORITY SCAN, hops away from band A every few seconds and
-        would chop words out of the recording. With it OFF, band B is shown but not heard.
+3. DUAL RECEIVE: KEEP IT ON
+   - The FTM-150R receives band A and band B AT THE SAME TIME (normal dual receive).
+     That is fine: with 45 = A-BAND FIX the DATA jack carries band A only.
+   - Menu 41 "DUAL RECEIVE MODE" is a DIFFERENT feature despite its name:
+     PRIORITY SCAN checks the HOME channel every ~5 seconds and switches to it when it hears
+     a signal. Leave 41 = OFF, so band A never jumps away during a net.
+   - Keep the normal two-band screen, not the band scope, on band A.
+     (Press-and-hold of the scope key toggles dual receive <-> scope.)
 
 
 4. PUT BAND A ON THE NET FREQUENCY (normal screen)
