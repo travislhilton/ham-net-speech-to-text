@@ -56,7 +56,7 @@ cd C:\ham-net-speech-to-text
 | Live transcription on the PC (OpenVINO Whisper; turbo 2–4 s per transmission on an Intel i5-12600H's graphics) | engine measured; live service next |
 | Words while someone is still talking (fast small model, replaced by the final text) | next |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
-| QRZ.com online lookups (photo, grid, international names) | needs a QRZ XML subscription; next |
+| QRZ.com online lookups (photo, grid, international names), cached for offline use | client built (`hamkit/qrz.py`); needs your QRZ login in `config/local.yaml` |
 | Q-code / proword / abbreviation explanations | working (`config/glossary.yaml`) |
 | Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |
 | Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
@@ -70,6 +70,14 @@ cd C:\ham-net-speech-to-text
 - `config/procedures.yaml`: the guidance cards (what triggers them, the steps, example phrases).
   `{me}` becomes your callsign, `{me_phonetic}` the phonetic spelling.
 - `config/vocab.yaml` (+ your private `config/local.yaml`): callsigns and names that help Whisper.
+- `config/local.yaml` also holds your QRZ.com login (an XML Logbook Data subscription is needed for
+  full records). It is never committed and survives updates:
+  ```yaml
+  qrz:
+    username: W9XYZ
+    password: your-qrz-password
+  ```
+  Check it: `.\.venv\Scripts\python.exe -m hamkit.qrz check`
 
 ## Home-network server (optional)
 
