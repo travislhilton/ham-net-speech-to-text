@@ -70,14 +70,12 @@ cd C:\ham-net-speech-to-text
 - `config/procedures.yaml`: the guidance cards (what triggers them, the steps, example phrases).
   `{me}` becomes your callsign, `{me_phonetic}` the phonetic spelling.
 - `config/vocab.yaml` (+ your private `config/local.yaml`): callsigns and names that help Whisper.
-- `config/local.yaml` also holds your QRZ.com login (an XML Logbook Data subscription is needed for
-  full records). It is never committed and survives updates:
-  ```yaml
-  qrz:
-    username: W9XYZ
-    password: your-qrz-password
+- QRZ.com login (needs an XML Logbook Data subscription for full records). QRZ has no API key
+  for lookups, so the password is stored in Windows Credential Manager / macOS Keychain, typed at a
+  hidden prompt:
+  ```powershell
+  .\.venv\Scripts\python.exe -m hamkit.qrz set-login     # asks for callsign + password, then tests
   ```
-  Check it: `.\.venv\Scripts\python.exe -m hamkit.qrz check`
 
 ## Home-network server (optional)
 

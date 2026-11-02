@@ -1,11 +1,14 @@
 """QRZ.com XML Logbook Data lookups with an offline cache.
 
-Credentials come from config/local.yaml (never committed):
-    qrz: {username: W9XYZ, password: ...}
-or the environment (QRZ_USERNAME / QRZ_PASSWORD). Every successful lookup is cached in
+QRZ has no API key for callsign lookups (the Logbook API's access key only reaches your own
+logbook): the XML service takes the account username + password and returns a session key, which
+is reused until it expires. The password is kept in the OS credential store (Windows Credential
+Manager / macOS Keychain) via `python -m hamkit.qrz set-login` (hidden prompt). Fallbacks, in
+order: QRZ_USERNAME / QRZ_PASSWORD in the environment, then config/local.yaml qrz.username/password. Every successful lookup is cached in
 <CALLBOOK_DIR>/qrz_cache.sqlite, so a call looked up once is available with no network.
 W9XYZ's account: QRZ Premium with XML Logbook Data enabled (checked 2026-11-02, ends 2027-01-24).
 
+    python -m hamkit.qrz set-login      # store username + password in the OS credential store
     python -m hamkit.qrz check          # session status: subscription expiry, lookups today
     python -m hamkit.qrz lookup EA8AB
 """
@@ -29,7 +32,27 @@ class QRZError(RuntimeError):
     pass
 
 
+KEYRING_SERVICE = "ham-net-speech-to-text/qrz"
+
+
+def _keyring():
+    try:
+        import keyring
+        return keyring
+    except Exception:  # noqa: BLE001 — no keyring backend: fall through to env / file
+        return None
+
+
 def credentials() -> tuple[str, str] | None:
+    kr = _keyring()
+    if kr:
+        try:
+            u = kr.get_password(KEYRING_SERVICE, "username")
+            p = u and kr.get_password(KEYRING_SERVICE, u)
+            if u and p:
+                return u, p
+        except Exception:  # noqa: BLE001
+            pass
     u, p = os.environ.get("QRZ_USERNAME"), os.environ.get("QRZ_PASSWORD")
     if u and p:
         return u, p
@@ -116,6 +139,16 @@ class Client:
 
 def main(argv=None):
     a = argv if argv is not None else sys.argv[1:]
+    if a[:1] == ["set-login"]:
+        import getpass
+        kr = _keyring()
+        if not kr:
+            print("no OS credential store available; use config/local.yaml"); return 1
+        u = input("QRZ username (your callsign): ").strip().upper()
+        p = getpass.getpass("QRZ password (hidden): ")
+        kr.set_password(KEYRING_SERVICE, "username", u); kr.set_password(KEYRING_SERVICE, u, p)
+        print(f"stored for {u}; testing...")
+        a = ["check"]
     c = Client()
     if a[:1] == ["check"]:
         s = c.login()
