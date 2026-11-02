@@ -102,9 +102,18 @@ def main():
     return 0 if final else 1
 
 
-if __name__ == "__main__":
-    rc = main()
+def hard_exit(rc: int):
+    """Leave without running library unload code. OpenVINO's GPU plugin deadlocks while unloading on
+    Windows (W9XYZ-5, 2026-11-02): normal exit AND os._exit both spun one core for 10+ minutes after
+    engine.yaml was written, because ExitProcess still calls every DLL's detach routine.
+    TerminateProcess skips them."""
     sys.stdout.flush(); sys.stderr.flush()
-    # OpenVINO's GPU pipeline can hang in interpreter teardown (seen on W9XYZ-5, 2026-11-02:
-    # one core spinning for 10+ minutes after engine.yaml was written). The work is done; leave.
+    if os.name == "nt":
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        k32.TerminateProcess(k32.GetCurrentProcess(), rc)
     os._exit(rc)
+
+
+if __name__ == "__main__":
+    hard_exit(main())
