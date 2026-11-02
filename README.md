@@ -1,93 +1,89 @@
 # ham-net-speech-to-text
 
-Speech-to-text capture, transcription and analysis of amateur-radio **voice nets** for
-EMCOMM documentation (Springfield County IL / Shelbyville County IN). Companion to the Winlink
-VARA FM station and the `winlink-forms` work.
+Live speech-to-text for amateur-radio voice nets and contacts, on a Windows 11 PC connected to one
+or more radios. It shows who said what as it happens, explains Q-codes and prowords, looks up each
+callsign, suggests what a newer operator can say next (check-in, relay, emergency traffic), and
+recognizes what kind of net is on the air. It works with **no network** (portable station), and
+when the home network is there it also hands recordings to a bigger machine for a more accurate
+second pass and net reports (ICS-309 / ICS-213).
 
-## Topology (follows example-infrastructure conventions)
+> **Status (2026-11-02): early build.** What works today is listed under "Status" below; this README
+> is updated as each piece lands. Private repository.
 
+## Install on a Windows 11 PC
+
+1. On GitHub (signed in; the repo is private): **Code → Download ZIP**, then extract it anywhere.
+2. Open the extracted folder → `install\windows` → double-click **`install.cmd`** and allow
+   administrator access.
+3. Type your callsign when asked. The first run downloads about 2.5 GB (Python packages, Whisper
+   models, the FCC license database) and takes 10–20 minutes. Re-run `install.cmd` after every update.
+
+What the installer does (`install/windows/install.ps1`, safe to re-run):
+- installs Python 3.12 for all users (winget) and a private environment in `C:\ham-net-speech-to-text\.venv`;
+- downloads three Whisper models in Intel OpenVINO format and **benchmarks this PC** to choose the
+  live engine (`tools/pick_engine.py` → `config/engine.yaml`): Intel graphics, NVIDIA (CUDA) or CPU;
+- downloads the FCC amateur license database and the world country file, and schedules a daily
+  update (task "HamNet Callbook Update", 04:15, only when online);
+- keeps your settings (`config/station.yaml`, `config/engine.yaml`, `config/local.yaml`) across updates;
+- lists the audio inputs it can record from.
+
+## Connecting a radio
+
+Each radio needs its receive audio on a PC sound input of its own (never the one a digital mode
+such as VARA FM uses). Give that input a clear name in Windows: `Win+R` → `mmsys.cpl` → Recording →
+the device → Properties → name, e.g. `NET-REC`.
+
+| Radio | Interface | Notes |
+|---|---|---|
+| Yaesu FTM-150R (VHF/UHF) | DATA jack (10-pin mini-DIN) → Masters DRA-50M (USB) | Set 45 DATA BAND = A-BAND FIX, tune band A to the net; leave 41 DUAL RECEIVE MODE (a priority scan) OFF. The DATA jack is unsquelched, so the recorder's **carrier gate** detects transmissions from the drop in hiss. Step by step: `docs/FTM-150R-SETUP.txt`. |
+| Icom IC-705 (HF/VHF/UHF, Wi-Fi) | planned | Over Wi-Fi via the radio's network remote (e.g. wfview → a virtual audio input, with frequency/mode read from the radio). SSB has no carrier to detect, so this radio will use the voice-activity gate. |
+
+## Using it (today)
+
+```powershell
+cd C:\ham-net-speech-to-text
+.\.venv\Scripts\python.exe capture\recorder.py --list-devices      # find your radio's input
+.\.venv\Scripts\python.exe capture\test_capture.py 30              # 30-second test: levels per second
+.\.venv\Scripts\python.exe -m hamkit.fcc lookup W9XYZ K7ABC         # FCC callbook
+.\.venv\Scripts\python.exe -m hamkit.dxcc lookup EA8AB JA1XYZ       # country of any callsign
 ```
-Radio (voice net freq) → 2nd USB audio interface → ACEMAGIC K1 puck (Win11)
-   capture/   VAD/COS-gated recorder → one WAV + JSON per transmission
-      │  HTTPS POST (LAN 192.168.1.0/24)
-      ▼
-home server (192.168.1.54)
-   transcribe/  FastAPI + mlx-whisper (large-v3-turbo) → text + word timings
-   db/          PostgreSQL schema: nets, transmissions, transcripts, callsigns
-      │  LiteLLM alias emcomm/structure, emcomm/summarize
-      ▼
-LLM server (192.168.1.57) via LiteLLM :4000
-   analyze/     roster extraction, ICS-213 traffic, ICS-309 comms log, AAR summary
-```
-
-Why the home server transcribes (not the LLM server): the LLM server is model-saturated and the
-`home-server-leverage-plan` already places Whisper on Apple silicon (`mlx_whisper` is in
-production for Manna). The puck keeps a CPU fallback (`faster-whisper` medium, int8) so
-transcription survives a LAN/Mac outage — the EMCOMM case.
-
-## Components
-
-| Dir | Runs on | What |
-|-----|---------|------|
-| `capture/` | puck (Windows) | `recorder.py` — continuous listen on a named input device, Silero VAD (or Digirig COS) gates each transmission into `YYYYmmdd/HHMMSS.wav` + sidecar JSON; `uploader.py` ships clips and queues on failure |
-| `transcribe/` | home server | `server.py` — `POST /transcribe` (WAV → segments, callsign normalization, auto `net_id`), `POST /nets/start`, `POST /nets/{id}/stop`, `GET /nets`, `POST /reload-vocab`, `GET /health`; `engine.py` (the one Whisper path); `nets.py` (which net a clip belongs to); launchd plist in `deploy/home-server` |
-| `analyze/` | home server (calls LLM server) | `structure.py` per-transmission JSON (speaker callsign, type, traffic), `net_report.py` → ICS-309 CSV/MD + summary, `retranscribe.py` re-runs stored WAVs (new roster/model) |
-| `db/` | home server | `schema.sql`, `models.py` (SQLAlchemy) |
-
-## Quick start (dev, this dev laptop)
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r transcribe/requirements.txt -r analyze/requirements.txt
-uvicorn transcribe.server:app --port 8090          # test on a WAV
-python -m analyze.net_report --net-id 1            # needs LiteLLM reachable
-```
-
-Puck (`W9XYZ-5`): enable SSH once with `deploy/windows/enable-ssh.ps1` (admin PowerShell), then `pip install -r capture/requirements.txt`, then `python recorder.py --list-devices`,
-set `config.yaml`, run as a Windows service via NSSM (`deploy/windows/`).
-
-Tests: `pip install -r requirements-dev.txt && python -m pytest -q` (the DB tests create and drop
-`emcomm_voice_test` on local Postgres 17 and stub Whisper; skipped when Postgres is absent).
-
-## Running a net
-
-One tap, from any checkout (standard library only; the key comes from `$EMCOMM_STT_KEY` or the
-home server env file; `--url`/`$EMCOMM_STT_URL` for another host, default `localhost:8090`):
-
-```bash
-python -m tools.net start "Springfield Valley ARES" --freq 146.94 --ncs W9XYZ
-python -m tools.net status          # open nets (--all for recent)
-python -m tools.net stop            # the one open net; prints the net_report command
-```
-
-The same with curl:
-
-```bash
-H="X-API-Key: $EMCOMM_STT_KEY"   # value from ~/.config/emcomm-stt/env on the home server
-curl -s -H "$H" -H 'content-type: application/json' \
-  -d '{"name":"Springfield Valley ARES","frequency_mhz":146.94,"net_control":"W9XYZ"}' home-server:8090/nets/start
-# ... every clip whose start falls inside the window (and on that frequency) gets the net's id ...
-curl -s -H "$H" -H 'content-type: application/json' -d '{}' home-server:8090/nets/1/stop
-python -m analyze.net_report --net-id 1
-```
-Both endpoints take an optional `started_utc` / `ended_utc` to log a net after the fact; stop
-back-fills `net_id` on unassigned rows in the window. Overlapping nets are split by frequency
-(±0.5 kHz); a net with no frequency takes any clip. After adding the roster:
-`curl -X POST -H "$H" home-server:8090/reload-vocab`, then
-`python -m analyze.retranscribe --since 2026-11-01 --dry-run` (drop `--dry-run` to write).
-
-## Deploy (home server)
-
-```bash
-ssh home-server 'cd ~/Projects/ham-net-speech-to-text && git pull && deploy/home-server/install.sh'
-```
-
-`install.sh` is idempotent: python3.11 venv, requirements, `~/.config/emcomm-stt/env` (mode 600,
-fresh `EMCOMM_STT_KEY` on first run — the puck needs the same value), `emcomm_voice` database and
-schema, launchd `com.example.emcomm-stt` (port 8090, logs in `~/Library/Logs/example/`). The
-plist in git holds no secrets; `run.sh` sources the env file. A private roster goes in
-`config/local.yaml` (git-ignored, merged over `config/vocab.yaml`).
 
 ## Status
-2026-11-01 — transcribe service deployed on the home server; `emcomm/*` aliases committed in
-llm-platform. Net start/stop API + `retranscribe.py` live; `tools/net.py` CLI (25 tests). Puck capture not yet run against a real net. See `docs/HANDOFF.md`.
+
+| Piece | State |
+|---|---|
+| Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
+| Live transcription on the PC (OpenVINO Whisper; turbo 2–4 s per transmission on an Intel i5-12600H's graphics) | engine measured; live service next |
+| Words while someone is still talking (fast small model, replaced by the final text) | next |
+| FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
+| QRZ.com online lookups (photo, grid, international names) | needs a QRZ XML subscription; next |
+| Q-code / proword / abbreviation explanations | working (`config/glossary.yaml`) |
+| Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |
+| Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
+| Live dashboard in the browser (on the station PC or any PC on the network) | designed (`docs/WEBAPP-DESIGN.md`) |
+| Net schedule with radio, frequency and band | designed |
+| Accurate second pass + ICS-309/213 reports (home network: home server + LLM server) | server side working |
+
+## Editing the knowledge
+
+- `config/glossary.yaml`: Q-codes, prowords, abbreviations and what they mean.
+- `config/procedures.yaml`: the guidance cards (what triggers them, the steps, example phrases).
+  `{me}` becomes your callsign, `{me_phonetic}` the phonetic spelling.
+- `config/vocab.yaml` (+ your private `config/local.yaml`): callsigns and names that help Whisper.
+
+## Home-network server (optional)
+
+When the station is on the home network it can upload each transmission to the home server
+(`transcribe/`, FastAPI + mlx-whisper) for the accurate pass, which stores nets and transmissions in
+PostgreSQL; `analyze/` uses LLMs on the LLM server for structuring and summaries, and falls back to
+rules when the LLM server is unreachable. `python -m tools.net start|stop|status` opens and closes a net.
+Details: `docs/ARCHITECTURE.md`, deploy: `deploy/home-server/`.
+
+## Development
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r transcribe/requirements.txt -r analyze/requirements.txt -r requirements-dev.txt
+.venv/bin/python -m pytest -q
+```
+Design and history: `docs/WEBAPP-DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/HANDOFF.md`,
+`continuation-prompt.md`.

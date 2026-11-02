@@ -1,0 +1,102 @@
+"""Benchmark the Whisper engines this PC can run and choose the live configuration.
+
+Windows stations differ (Intel iGPU, NVIDIA, AMD, CPU only), so the installer measures rather
+than assumes. Clip: install/windows/bench.wav (8.5 s, W9XYZ on the FTM-150R, 2026-11-02).
+
+Choice: FINAL = fastest engine running large-v3-turbo at <= 0.6x real time (accuracy matched the
+home server in testing); else small.en. PARTIAL (words while someone is still talking) = base.en if
+it runs at <= 0.15x real time, else none. Writes config/engine.yaml.
+
+    python tools/pick_engine.py [--models DIR] [--quick]
+"""
+import argparse, json, os, shutil, subprocess, sys, time
+from pathlib import Path
+
+import numpy as np
+import soundfile as sf
+import yaml
+
+ROOT = Path(__file__).resolve().parent.parent
+CLIP = ROOT / "install" / "windows" / "bench.wav"
+EXPECT = "W9XYZ"
+
+
+def openvino_runner(model_dir: Path, device: str):
+    import openvino_genai as ov
+    pipe = ov.WhisperPipeline(str(model_dir), device)
+    cfg = pipe.get_generation_config(); cfg.max_new_tokens = 200
+    if ".en-" not in model_dir.name:
+        cfg.language = "<|en|>"; cfg.task = "transcribe"
+    return lambda a: str(pipe.generate(a, cfg))
+
+
+def cuda_runner(model: str):
+    from faster_whisper import WhisperModel
+    m = WhisperModel(model, device="cuda", compute_type="float16")
+    return lambda a: " ".join(s.text for s in m.transcribe(a, language="en", beam_size=1)[0])
+
+
+def has_nvidia() -> bool:
+    exe = shutil.which("nvidia-smi")
+    return bool(exe) and subprocess.run([exe, "-L"], capture_output=True).returncode == 0
+
+
+def candidates(models: Path):
+    out = []
+    try:
+        import openvino as ov
+        devs = ov.Core().available_devices
+    except Exception:  # noqa: BLE001
+        devs = []
+    for name, role in (("whisper-large-v3-turbo-int8-ov", "final"), ("whisper-small.en-int8-ov", "final"),
+                       ("whisper-base.en-int8-ov", "partial")):
+        if (models / name).exists():
+            for d in [x for x in devs if x.startswith("GPU")] + (["CPU"] if "CPU" in devs else []):
+                out.append({"engine": "openvino", "device": d, "model": name, "role": role,
+                            "make": (lambda n=name, dv=d: openvino_runner(models / n, dv))})
+    if has_nvidia():
+        out.append({"engine": "faster-whisper", "device": "cuda", "model": "large-v3-turbo", "role": "final",
+                    "make": lambda: cuda_runner("large-v3-turbo")})
+    return out
+
+
+def measure(c, audio):
+    t0 = time.time(); run = c["make"](); load = time.time() - t0
+    run(audio)                                   # warm-up: GPU kernels compile on the first call
+    times, text = [], ""
+    for _ in range(2):
+        t0 = time.time(); text = run(audio); times.append(time.time() - t0)
+    rtf = min(times) / (len(audio) / 16000)
+    return {"load_s": round(load, 1), "rtf": round(rtf, 3), "text": text.strip(),
+            "heard_call": EXPECT in text.upper().replace(" ", "")}
+
+
+def main():
+    ap = argparse.ArgumentParser(); ap.add_argument("--models", default=str(ROOT / "models"))
+    ap.add_argument("--out", default=str(ROOT / "config" / "engine.yaml")); a = ap.parse_args()
+    audio = sf.read(CLIP, dtype="float32")[0]
+    results = []
+    for c in candidates(Path(a.models)):
+        try:
+            r = measure(c, audio)
+        except Exception as e:  # noqa: BLE001 — an engine this PC can't run is just skipped
+            r = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+        row = {k: c[k] for k in ("engine", "device", "model", "role")} | r
+        results.append(row); print(json.dumps(row), flush=True)
+    ok = [r for r in results if "rtf" in r]
+    turbo = [r for r in ok if "turbo" in r["model"] and r["rtf"] <= 0.6]
+    small = [r for r in ok if "small" in r["model"]]
+    final = min(turbo or small or [r for r in ok if r["role"] == "final"] or [None],
+                key=lambda r: r["rtf"] if r else 0)
+    part = [r for r in ok if r["role"] == "partial" and r["rtf"] <= 0.15]
+    partial = min(part, key=lambda r: r["rtf"]) if part else None
+    pick = lambda r: r and {k: r[k] for k in ("engine", "device", "model", "rtf")}
+    choice = {"final": pick(final), "partial": pick(partial), "measured": results,
+              "note": "written by tools/pick_engine.py; re-run after hardware or driver changes"}
+    Path(a.out).write_text(yaml.safe_dump(choice, sort_keys=False))
+    print("\nFINAL  :", pick(final)); print("PARTIAL:", pick(partial)); print("->", a.out)
+    return 0 if final else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

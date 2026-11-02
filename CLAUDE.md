@@ -7,12 +7,18 @@
 - Capture never shares the VARA FM audio device. Second interface only.
 - Every transcript row records `model` and `host` so puck-fallback transcripts can be re-run on
   the home server later (`analyze/retranscribe.py`). Whisper runs only through `transcribe/engine.py`.
-- Tests: `.venv/bin/python -m pytest -q` from the repo root (31 green 2026-11-02).
+- Tests: `.venv/bin/python -m pytest -q` from the repo root (43 green 2026-11-02).
 - Keep the raw WAV forever (NAS warm tier). Transcripts are derived data.
 - Callsign vocabulary: `config/vocab.yaml` (ITU phonetics, tacticals, EOC names, roster). Whisper
   `initial_prompt` is built from it; `callsigns.py` normalizes phonetic spellings back to callsigns.
 - Deploy like the rest of the house: edit here → commit → push → pull on home server; launchd plist
   copied from `deploy/home-server/`, never edited in `~/Library/LaunchAgents` directly.
+
+- **The product is a standalone Windows 11 station** (owner, 2026-11-02): any PC, any GPU/CPU, one or
+  more radios, works offline. The home server/LLM server are an optional accurate second pass.
+- **README + installer evolve with every change** (owner): update README "Status" and the install
+  steps in the same commit as the feature; `install/windows/install.ps1` must stay idempotent.
+- Windows over SSH: scp a script and run it with `-File` (piped stdin drops multi-line blocks).
 
 ## Resume here
 Read `continuation-prompt.md` first (current state, hosts, next steps), then `docs/HANDOFF.md`

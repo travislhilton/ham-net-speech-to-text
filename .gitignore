@@ -6,3 +6,4 @@ queue/
 *.wav
 config/local.yaml
 .env
+!install/windows/bench.wav

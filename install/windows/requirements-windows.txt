@@ -1,0 +1,13 @@
+# Standalone Windows station (W9XYZ-5 and any Windows 11 PC). Installed by install.ps1.
+numpy>=1.26
+sounddevice>=0.5
+soundfile>=0.12
+pyyaml>=6
+requests>=2.31
+openvino>=2025.0          # Whisper on the Intel GPU/CPU (measured 2026-11-02: turbo 2-4 s per transmission)
+openvino-genai>=2025.0
+huggingface_hub>=0.24     # model download, first run only
+torch>=2.2                # CPU wheel; silero-vad gate for HF/SSB radios (no carrier to detect)
+silero-vad>=5.1
+faster-whisper>=1.0       # previous offline fallback; kept until the OpenVINO engine replaces it
+pyserial>=3.5
