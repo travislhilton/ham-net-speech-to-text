@@ -166,18 +166,67 @@ class Client:
         return hit
 
 
+def describe(s: dict) -> tuple[bool, str]:
+    """A QRZ login answer in plain words -> (usable, message). QRZ answers every account, but full records (address,
+    grid, email) need the "XML Logbook Data" subscription; without it only the name and country come back."""
+    if s.get("Error") and not s.get("Key"):
+        return False, f"QRZ.com refused the login: {s['Error']}"
+    sub = (s.get("SubExp") or "").strip()
+    if not sub or sub.lower() == "non-subscriber":
+        return True, ("Logged in, but this QRZ account has no XML Logbook Data subscription: QRZ will give only names "
+                      "and countries. US callsigns are fully covered by the FCC database anyway.")
+    return True, f"Logged in. XML Logbook Data subscription until {sub}: full QRZ records (grid, address, photo)."
+
+
+def _forget(kr):
+    for name in ("username",):
+        u = kr.get_password(KEYRING_SERVICE, name)
+        for k in filter(None, (u, name)):
+            try:
+                kr.delete_password(KEYRING_SERVICE, k)
+            except Exception:  # noqa: BLE001 — nothing stored under that name
+                pass
+
+
 def main(argv=None):
     a = argv if argv is not None else sys.argv[1:]
+    if a[:1] == ["has-login"]:                          # exit 0 when a login is stored (the installer asks only once)
+        return 0 if credentials() else 1
+    if a[:1] == ["forget-login"]:
+        kr = _keyring()
+        if kr:
+            _forget(kr)
+        print("QRZ.com login removed; lookups use the FCC database, the country file and earlier QRZ answers.")
+        return 0
     if a[:1] == ["set-login"]:
+        # Optional. Enter on the username skips. A refused login is not kept; up to three tries.
         import getpass
         kr = _keyring()
         if not kr:
             print("no OS credential store available; use config/local.yaml"); return 1
-        u = input("QRZ username (your callsign): ").strip().upper()
-        p = getpass.getpass("QRZ password (hidden): ")
-        kr.set_password(KEYRING_SERVICE, "username", u); kr.set_password(KEYRING_SERVICE, u, p)
-        print(f"stored for {u}; testing...")
-        a = ["check"]
+        for _ in range(3):
+            u = input("QRZ.com username (usually your callsign; Enter to skip): ").strip().upper()
+            if not u:
+                print("Skipped: no QRZ.com lookups. Run 'python -m hamkit.qrz set-login' any time to add them.")
+                return 0
+            p = getpass.getpass("QRZ.com password (hidden): ")
+            kr.set_password(KEYRING_SERVICE, "username", u); kr.set_password(KEYRING_SERVICE, u, p)
+            print("Checking with QRZ.com...")
+            try:
+                ok, msg = describe(Client().login())
+            except (OSError, QRZError, ET.ParseError) as e:
+                if isinstance(e, QRZError):
+                    ok, msg = False, f"QRZ.com refused the login: {e}"
+                else:
+                    print(f"Could not reach QRZ.com ({type(e).__name__}); the login is kept and will be tried when "
+                          "the PC is online.")
+                    return 0
+            print(msg)
+            if ok:
+                return 0
+            _forget(kr)
+        print("Not set up. Run 'python -m hamkit.qrz set-login' any time to try again.")
+        return 0
     if a[:1] == ["export-env"]:
         # macOS: copy the Keychain login into the private env file so services and non-GUI
         # sessions can use it. Run from a desktop Terminal (it can read the Keychain).
@@ -197,6 +246,7 @@ def main(argv=None):
               file=sys.stderr)
     if a[:1] == ["check"]:
         s = c.login()
+        print(describe(s)[1])
         print(json.dumps({k: s.get(k) for k in ("SubExp", "Count", "GMTime", "Message", "Error")}))
     elif a[:1] == ["lookup"]:
         for call in a[1:]:

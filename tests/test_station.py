@@ -459,3 +459,13 @@ def test_accurate_available_flag(tmp_path, monkeypatch):
         assert not st.accurate.available() and st.snapshot()["accurate_available"] is False   # nothing to wait for
     finally:
         st.stop.set()
+
+
+def test_qrz_login_described_in_plain_words():
+    from hamkit.qrz import describe
+    ok, m = describe({"Key": "k", "SubExp": "Fri Jan 24 00:00:00 2027"})
+    assert ok and "until Fri Jan 24" in m
+    ok, m = describe({"Key": "k", "SubExp": "non-subscriber"})
+    assert ok and "no XML Logbook Data subscription" in m
+    ok, m = describe({"Error": "Username/password incorrect"})
+    assert not ok and "refused" in m

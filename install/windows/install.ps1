@@ -4,13 +4,14 @@ after every update. Needs administrator rights and internet the first time (~2.5
 Python packages, two Whisper models, the FCC license database).
 
   install.cmd                              (double-click; elevates and runs this)
-  install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook]
+  install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz]
 #>
 param(
   [string]$InstallDir = 'C:\ham-net-speech-to-text',
   [string]$Callsign = '',
   [switch]$SkipModels,
-  [switch]$SkipCallbook
+  [switch]$SkipCallbook,
+  [switch]$SkipQrz
 )
 $ErrorActionPreference = 'Stop'
 $Src = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -28,11 +29,51 @@ $env:HF_HUB_DISABLE_PROGRESS_BARS = '1'; $env:PIP_DISABLE_PIP_VERSION_CHECK = '1
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run as administrator (use install.cmd).' }
 
+Step "Checking this PC"
+if (-not [Environment]::Is64BitOperatingSystem) { throw 'This station needs 64-bit Windows 10 or 11.' }
+$os = Get-CimInstance Win32_OperatingSystem
+Write-Host "  $($os.Caption) $($os.Version), $([math]::Round($os.TotalVisibleMemorySize/1MB)) GB memory"
+$drive = (Split-Path -Qualifier $InstallDir)
+$freeGB = [math]::Round((Get-PSDrive ($drive.TrimEnd(':'))).Free / 1GB, 1)
+if (-not (Test-Path "$InstallDir\.venv") -and $freeGB -lt 6) {
+  throw "Only $freeGB GB free on $drive; the first install needs about 6 GB (Python packages, Whisper models, FCC database)."
+}
+Write-Host "  $freeGB GB free on $drive"
+$online = $false
+try { $online = (Invoke-WebRequest -UseBasicParsing -Method Head -TimeoutSec 15 'https://pypi.org/simple/pip/').StatusCode -eq 200 } catch {}
+if (-not $online -and -not (Test-Path "$InstallDir\.venv")) {
+  throw 'No internet: the first install downloads about 2.5 GB. Connect to the internet and run it again (after that the station works offline).'
+}
+Write-Host "  internet: $(if ($online) { 'yes' } else { 'no (update skipped where possible)' })"
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+function Download($url, $out) { Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $out -TimeoutSec 600 }
+
+Step "Microsoft Visual C++ runtime (OpenVINO, PyTorch and faster-whisper need it)"
+$vc = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64' -ErrorAction SilentlyContinue
+if ($vc -and $vc.Installed -eq 1 -and $vc.Major -ge 14 -and $vc.Minor -ge 40) {
+  Write-Host "  installed ($($vc.Version))"
+} else {
+  $exe = "$env:TEMP\vc_redist.x64.exe"
+  Download 'https://aka.ms/vs/17/release/vc_redist.x64.exe' $exe
+  $p = Start-Process $exe -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
+  if ($p.ExitCode -notin 0, 1638, 3010) { throw "Visual C++ runtime install failed (exit $($p.ExitCode))" }
+  Write-Host "  installed$(if ($p.ExitCode -eq 3010) { ' (Windows wants a restart; the station works before it)' })"
+}
+
 Step "Python 3.12"
 $py = 'C:\Program Files\Python312\python.exe'
 if (-not (Test-Path $py)) {
-  Run { & winget install --id Python.Python.3.12 -e --source winget --scope machine --silent `
-    --accept-source-agreements --accept-package-agreements --disable-interactivity }
+  if (Get-Command winget -ErrorAction SilentlyContinue) {
+    Run { & winget install --id Python.Python.3.12 -e --source winget --scope machine --silent `
+      --accept-source-agreements --accept-package-agreements --disable-interactivity }
+  }
+  if (-not (Test-Path $py)) {                        # no winget (some fresh or LTSC installs): python.org directly
+    $exe = "$env:TEMP\python-3.12.10-amd64.exe"
+    Download 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe' $exe
+    $p = Start-Process $exe -ArgumentList '/quiet', 'InstallAllUsers=1', 'PrependPath=0', 'Include_test=0', `
+      'TargetDir="C:\Program Files\Python312"' -Wait -PassThru
+    if ($p.ExitCode -ne 0) { throw "Python install failed (exit $($p.ExitCode))" }
+  }
   if (-not (Test-Path $py)) { throw "Python did not install to $py" }
 }
 Run { & $py --version }
@@ -97,6 +138,24 @@ if (-not $SkipCallbook) {
   Pop-Location
 }
 
+if (-not $SkipQrz) {
+  Step "QRZ.com lookups (optional)"
+  Push-Location $InstallDir
+  $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  & $vpy -m hamkit.qrz has-login 2>$null | Out-Null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host '  a QRZ.com login is already stored (change it: python -m hamkit.qrz set-login, remove: forget-login)'
+  } else {
+    Write-Host '  QRZ.com adds grid squares, photos and non-US callsigns to the callsign cards. Full records need a'
+    Write-Host '  QRZ "XML Logbook Data" subscription; without one QRZ gives only names and countries. US callsigns'
+    Write-Host '  are fully covered by the FCC database either way. The password is kept in Windows Credential Manager.'
+    $ans = Read-Host '  Set up a QRZ.com login now? (y/N)'
+    if ($ans -match '^[yY]') { & $vpy -m hamkit.qrz set-login } else { Write-Host '  skipped (add it later: python -m hamkit.qrz set-login)' }
+  }
+  $ErrorActionPreference = $old
+  Pop-Location
+}
+
 Step "Daily callbook update (scheduled task, 04:15)"
 $act = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.fcc update' -WorkingDirectory $InstallDir
 $act2 = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.dxcc update' -WorkingDirectory $InstallDir
@@ -133,5 +192,9 @@ Start-ScheduledTask -TaskName 'HamNet Station'
 Write-Host "  started; it also starts at every logon for $user. Open the 'HamNet Station' shortcut on the desktop."
 
 Step "Done"
+$gpu = (Get-CimInstance Win32_VideoController | ForEach-Object { "$($_.Name) (driver $($_.DriverVersion))" }) -join '; '
+Write-Host "  Graphics: $gpu"
+Write-Host '  (Intel or NVIDIA graphics are used only with a current driver: update it from Windows Update or the maker if'
+Write-Host '   config\engine.yaml chose the CPU; then run: .\.venv\Scripts\python.exe tools\pick_engine.py)'
 Write-Host "Installed in $InstallDir. Audio inputs this station can record from:"
 Run { & $vpy "$InstallDir\capture\recorder.py" --list-devices }
