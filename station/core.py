@@ -145,8 +145,11 @@ class Station:
                                  "meter": self.meters[r["id"]].limits()}
                        for r in config["radios"]}
         self._apply_operator()
-        from .schedule import NetSchedule      # schedule: dashboard-edited nets + listen only during nets
+        from .schedule import NetSchedule      # schedule: dashboard-edited nets + listen only during nets + alerts
         self.nets = NetSchedule(self)
+        from .history import History            # net history, search, analysis, minutes (data/history.db)
+        self.history = History(self.data, nets=lambda: self.cfg.get("schedule") or [], radios=lambda: self.radios,
+                               callbook=callbook, clock=clock, me=self.me, bus=self.bus)
         self.final_q: queue.Queue = queue.Queue()
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
@@ -158,6 +161,7 @@ class Station:
     # ---------- lifecycle ----------
     def start(self, listen=True):
         self.load_today()
+        threading.Thread(target=self._index_history, daemon=True, name="history").start()
         threading.Thread(target=self._final_worker, daemon=True, name="final").start()
         if self._partial_factory:
             threading.Thread(target=self._partial_worker, daemon=True, name="partial").start()
@@ -169,10 +173,26 @@ class Station:
         self.accurate = AccuratePass(self, self.cfg.get("accurate"), getattr(self, "_accurate_remote", None))
         threading.Thread(target=self.accurate.run, args=(self.stop,), daemon=True, name="accurate").start()
 
+    def _index_history(self):
+        """Bring the history index up to date with the day logs (the first run: all of them), in the background."""
+        try:
+            t = time.time()
+            n = self.history.catch_up(self.data / "logs")
+            if n:
+                print(f"history: {n} log lines indexed in {time.time() - t:.1f} s", flush=True)
+            self.history.flush()
+        except Exception as e:  # noqa: BLE001 — the history never stops the station
+            print(f"history: {type(e).__name__}: {e}", flush=True)
+
     def _ticker(self):
         n = 0
         while not self.stop.wait(1.0):
             n += 1
+            if n % 10 == 0:
+                try:
+                    self.history.flush()                 # participants, counts, minutes drafts of changed nets
+                except Exception as e:  # noqa: BLE001
+                    print(f"history: {type(e).__name__}: {e}", flush=True)
             if n % 60 == 0:
                 try:
                     self.refix_ended_nets()
@@ -278,7 +298,17 @@ class Station:
         people = ics.participants(span, me, self.heard)
         net = (self.hints.get(rid) or {}).get("net") or {}
         sched = self._current_by_radio(datetime.fromisoformat(start)).get(rid) or {}
-        d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), title or sched.get("name"))
+        key = self.history.instance_of(rid, start)
+        inst, notes = None, ""
+        if key:
+            try:
+                inst = self.history.instance(key)
+                notes = self.history.summary_for_213(key)
+            except LookupError:
+                pass
+        name = title or sched.get("name") or (inst or {}).get("name") if (inst or {}).get("kind") == "net" \
+            else title or sched.get("name")
+        d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), name, minutes=notes)
         acc = None
         if getattr(self, "accurate", None):
             jobs = [j for j in self.accurate.status() if j["radio"] == rid and start <= j["start"] <= end]
@@ -289,7 +319,7 @@ class Station:
             # waiting = not yet final (a provisional text is replaced when the net's final pass lands)
             waiting = sum(1 for t in ics.select(list(self.tx), rid, start, end, include_noise=True)
                           if t.get("wav") and stage_of(t) != "final")
-        return {"radio": rid, "start": start, "end": end, "count": len(span), "to": people, "drafts": d,
+        return {"radio": rid, "start": start, "end": end, "count": len(span), "to": people, "drafts": d, "inst": key,
                 "accurate": acc, "accurate_missing": waiting,
                 "operator": {k: op[k] for k in ("callsign", "name", "winlink_dir", "winlink_account", "express_running")}}
 
@@ -312,6 +342,11 @@ class Station:
         if not msgs:
             raise ValueError("no forms selected")
         res = winlink.put_in_outbox(install, account, msgs)
+        if body.get("radio") and body.get("start"):
+            try:
+                self.history.note_winlink(body["radio"], body["start"], [d.get("form") for d in body.get("drafts", [])], to)
+            except Exception as e:  # noqa: BLE001
+                print(f"history: {type(e).__name__}: {e}", flush=True)
         print(f"{datetime.now():%H:%M:%S} winlink: {len(msgs)} message(s) to {', '.join(to)} in {install}\\{account} Outbox",
               flush=True)
         return res
@@ -409,38 +444,38 @@ class Station:
 
     # ---------- schedule ----------
     def schedule_now(self, at: datetime | None = None) -> dict:
+        """The net on the air now (first to start) and the next one, any radio, for the header and the cards."""
+        from . import recur
+        from .schedule import item, running
         at = at or self.clock()
-        cur, nxt = None, None
-        for n in self.cfg.get("schedule", []):
-            days = [DAYS.index(d[:3].title()) for d in n.get("days", DAYS)]
-            hh, mm = map(int, str(n.get("start", "00:00")).split(":"))
-            for add in range(0, 8):
-                d = (at + timedelta(days=add - 1)).replace(hour=hh, minute=mm, second=0, microsecond=0)
-                if d.weekday() not in days:
-                    continue
-                end = d + timedelta(minutes=int(n.get("duration_min", 60)))
-                radio = self.radios.get(n.get("radio")) or {}
-                f = n.get("freq_mhz") or radio.get("freq_mhz")
-                item = {"name": n.get("name"), "radio": n.get("radio"), "radio_name": radio.get("name"),
-                        "freq_mhz": f, "band": band(f), "ncs": n.get("ncs"), "start": d.isoformat(timespec="minutes"),
-                        "end": end.isoformat(timespec="minutes"),
-                        "retune": bool(f and radio.get("freq_mhz") and abs(f - radio["freq_mhz"]) > 0.0005)}
-                if d <= at < end:
-                    cur = cur or item
-                elif d > at and (nxt is None or d.isoformat() < nxt["start"]):
-                    nxt = item
-        return {"current": cur, "next": nxt, "by_radio": self._current_by_radio(at)}
+        nets = self.cfg.get("schedule", [])
+
+        def deco(it):
+            radio = self.radios.get(it.get("radio")) or {}
+            f = it.get("freq_mhz") or radio.get("freq_mhz")
+            return it | {"radio_name": radio.get("name"), "freq_mhz": f, "band": band(f),
+                         "retune": bool(f and radio.get("freq_mhz") and abs(f - radio["freq_mhz"]) > 0.0005)}
+        run = running(nets, at)
+        nxt = None
+        for n in nets:
+            for o in recur.upcoming(n, at, 2):
+                if o["start"] > at and (nxt is None or o["start"] < nxt[0]):
+                    nxt = (o["start"], item(n, o))
+        return {"current": deco(run[0]) if run else None, "next": deco(nxt[1]) if nxt else None,
+                "running": [deco(r) for r in run], "by_radio": self._current_by_radio(at)}
 
     def _current_by_radio(self, at) -> dict:
+        from .schedule import running
         out = {}
-        for n in self.cfg.get("schedule", []):
-            days = [DAYS.index(d[:3].title()) for d in n.get("days", DAYS)]
-            hh, mm = map(int, str(n.get("start", "00:00")).split(":"))
-            for add in (0, 1):
-                d = (at - timedelta(days=add)).replace(hour=hh, minute=mm, second=0, microsecond=0)
-                if d.weekday() in days and d <= at < d + timedelta(minutes=int(n.get("duration_min", 60))):
-                    out.setdefault(n.get("radio"), {"name": n.get("name"), "ncs": n.get("ncs")})
+        for it in running(self.cfg.get("schedule", []), at):
+            out.setdefault(it["radio"], {"name": it["name"], "ncs": it.get("ncs"), "key": it["key"], "id": it["id"]})
         return out
+
+    def net_of(self, rid: str, at: datetime) -> dict | None:
+        """The scheduled occurrence a transmission on `rid` at `at` belongs to (its net's history), or None."""
+        from .schedule import occurrence_at
+        o = occurrence_at(self.cfg.get("schedule") or [], rid, at)
+        return {"key": o["key"], "id": o["id"], "date": o["date"], "name": o["name"]} if o else None
 
     # ---------- radios ----------
     def _gate(self, r):
@@ -767,9 +802,16 @@ class Station:
             tid = str(self.next_id)
             self.radios[rid]["live_tx"] = tid
             r = self.radios[rid]
+            start = datetime.fromtimestamp(t0)
             tx = {"id": tid, "radio": rid, "radio_name": r["name"], "freq_mhz": r["freq_mhz"],
-                  "start": datetime.fromtimestamp(t0).isoformat(timespec="seconds"), "status": "live",
+                  "start": start.isoformat(timespec="seconds"), "status": "live",
                   "partial": "", "text": "", "callsigns": [], "speaker": None, "terms": []}
+            try:
+                net = self.net_of(rid, start)               # which scheduled net (and occurrence) it belongs to
+            except Exception:  # noqa: BLE001
+                net = None
+            if net:
+                tx["net"] = net
             self.tx.append(tx)
             del self.tx[:-self.KEEP_TX]
         self.bus.publish("tx", tx)
@@ -919,6 +961,12 @@ class Station:
                     self.heard[c]["card"] = card
             self.bus.publish("heard", {"heard": self.heard_list()})
 
+    def _urgent(self):
+        try:
+            return self.history.urgent_open()
+        except Exception:  # noqa: BLE001
+            return []
+
     def heard_list(self):
         with self.lock:
             return sorted(self.heard.values(), key=lambda e: e.get("last", ""), reverse=True)
@@ -930,8 +978,14 @@ class Station:
     def _log(self, tx):
         p = self._log_path()
         p.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(tx)
         with p.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(tx) + "\n")
+            f.write(line + "\n")
+        try:                                                  # the history index follows the log
+            self.history.ingest(json.loads(line))
+            self.history.mark_logged(p)
+        except Exception as e:  # noqa: BLE001 — the log is the record; the index catches up at the next start
+            print(f"history: {type(e).__name__}: {e}", flush=True)
 
     def load_today(self):
         p = self._log_path()
@@ -972,6 +1026,7 @@ class Station:
         with self.lock:
             return {"callsign": self.me, "radios": list(self.radios.values()), "tx": self._recent_tx(),
                     "heard": self.heard_list(), "hints": self.hints, "net": self.schedule_now(),
-                    "schedule": self.cfg.get("schedule", []), "engines": self.engines,
+                    "schedule": self.nets.decorated(), "engines": self.engines,
+                    "alerts": self.nets.alerts.last, "urgent": self._urgent(), "history": self.history.status,
                     "accurate": self.accurate.status() if getattr(self, "accurate", None) else [],
                     "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False}

@@ -20,18 +20,20 @@ def fit(s: str, n: int) -> str:
 
 def sessions(tx: list[dict], rid: str, gap_min: int = 15) -> list[dict]:
     """The nets and conversations heard on `rid`, oldest first: a run of transmissions on one frequency with no
-    quiet gap longer than `gap_min` minutes. The dashboard groups its log the same way (static/index.html,
+    quiet gap longer than `gap_min` minutes; a scheduled net's first transmission starts a new one (the station
+    tags each transmission with its net: core.net_of). The dashboard groups its log the same way (static/index.html,
     groupSessions) and asks for Winlink messages by a session's first and last transmission times."""
     rows = sorted((t for t in tx if t.get("radio") == rid and t.get("status") == "final"), key=lambda t: t["start"])
     out = []
     for t in rows:
         at = datetime.fromisoformat(t["start"])
         cur = out[-1] if out else None
+        net = (t.get("net") or {}).get("key")
         if (cur and at - datetime.fromisoformat(cur["end"]) <= timedelta(minutes=gap_min)
-                and t.get("freq_mhz") == cur["freq_mhz"]):
+                and t.get("freq_mhz") == cur["freq_mhz"] and (net == cur["net"] or not net)):
             cur["end"] = t["start"]; cur["count"] += 1
         else:
-            out.append({"start": t["start"], "end": t["start"], "freq_mhz": t.get("freq_mhz"), "count": 1})
+            out.append({"start": t["start"], "end": t["start"], "freq_mhz": t.get("freq_mhz"), "count": 1, "net": net})
     return out
 
 
@@ -74,7 +76,8 @@ def participants(span, me_calls: set[str], heard: dict) -> list[dict]:
     return out
 
 
-def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | None, title: str | None) -> list[dict]:
+def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | None, title: str | None,
+           minutes: str = "") -> list[dict]:
     if not span:
         return []
     first, last = datetime.fromisoformat(span[0]["start"]), datetime.fromisoformat(span[-1]["start"])
@@ -111,6 +114,8 @@ def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | Non
     if traffic:
         msg += "\nTraffic / relays / emergency calls heard:\n" + "\n".join(
             f"  {datetime.fromisoformat(t['start']):%H:%M} {t.get('speaker') or '?'}: {t.get('text', '')[:160]}" for t in traffic)
+    if minutes:
+        msg += "\n\nMinutes (drafted from the transcript, reviewed by the operator):\n" + minutes
     msg += "\n\nThe full log is in the attached ICS-309. Machine transcription, reviewed by the operator before sending."
     now = datetime.now()
     out.append({"form": "ics213", "label": "ICS-213 General Message (summary)",

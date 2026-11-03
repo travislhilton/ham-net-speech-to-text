@@ -17,7 +17,7 @@ CFG = {"callsign": "W9XYZ",
        "radios": [{"id": "ftm", "name": "FTM-150R", "device": "NET-REC", "gate": "carrier", "freq_mhz": 146.94},
                   {"id": "ic705", "name": "IC-705", "device": "IC-705", "gate": "voice", "freq_mhz": 7.185, "mode": "LSB"}],
        "schedule": [{"name": "Example County ARES net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
-                     "start": "20:00", "duration_min": 60, "ncs": "WA7XQZ"}],
+                     "start": "20:00", "duration_min": 60, "ncs": "K7NET"}],
        "port": 0, "bind": "127.0.0.1", "qrz_online": False}
 TUE = datetime(2026, 11, 3)          # a Tuesday
 
@@ -39,7 +39,8 @@ def test_validate_normalizes_and_refuses():
     radios = {"ftm": {}, "ic705": {}}
     v = validate({"name": " HF net ", "radio": "ic705", "freq_mhz": "3,915", "mode": "lsb", "days": "thursday, mon",
                   "start": "7:05", "duration_min": "90", "ncs": "k7abc"}, radios)
-    assert v == {"name": "HF net", "radio": "ic705", "freq_mhz": 3.915, "mode": "LSB", "days": ["Mon", "Thu"],
+    assert v == {"name": "HF net", "radio": "ic705", "freq_mhz": 3.915, "mode": "LSB",       # old form, new rule
+                 "repeat": {"freq": "weekly", "weekdays": ["Mon", "Thu"]}, "alert_min": 5,
                  "start": "07:05", "duration_min": 90, "ncs": "K7ABC"}
     ok = {"name": "n", "radio": "ftm", "days": ["Tue"], "start": "20:00", "duration_min": 60}
     assert "freq_mhz" not in validate(ok, radios)                         # optional: the radio's own frequency
@@ -59,10 +60,12 @@ def test_seeded_from_station_yaml_then_stored_in_data(tmp_path):
                        "start": "19:30", "duration_min": 45})
     assert len(res["schedule"]) == 2 and res["edited"] and (tmp_path / "schedule.json").exists()
     kind, data = q.get(timeout=1)
+    while kind != "schedule":
+        kind, data = q.get(timeout=1)
     assert kind == "schedule" and len(data["schedule"]) == 2 and "net" in data         # every browser updates
     nid = res["id"]
     st.nets.update(nid, {"name": "HF net", "radio": "ic705", "days": ["Fri"], "start": "19:30", "duration_min": 45})
-    assert st.cfg["schedule"][1]["days"] == ["Fri"] and "freq_mhz" not in st.cfg["schedule"][1]
+    assert st.cfg["schedule"][1]["repeat"]["weekdays"] == ["Fri"] and "freq_mhz" not in st.cfg["schedule"][1]
     with pytest.raises(NoSuchNet):
         st.nets.update("nope", {"name": "x", "radio": "ftm", "start": "10:00"})
     with pytest.raises(ValueError):

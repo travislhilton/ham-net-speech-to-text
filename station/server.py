@@ -84,10 +84,13 @@ def make_handler(station):
                 return self._json(station.operator())
             if u.path == "/api/schedule":                        # schedule: the nets, for the editor
                 return self._json(station.nets.list())
+            if u.path.startswith(("/api/search", "/api/history", "/api/nets/", "/api/station/", "/api/alerts")):
+                return self._history_get(u)
             if u.path.startswith("/audio/"):
                 tid = u.path.rsplit("/", 1)[-1]
                 tx = station._find(tid)
-                p = (station.data / tx["wav"]).resolve() if tx and tx.get("wav") else None
+                wav = tx.get("wav") if tx else (station.history.tx_wav(tid) if re.fullmatch(r"\w+", tid) else None)
+                p = (station.data / wav).resolve() if wav else None
                 if not p or not p.is_file() or station.data.resolve() not in p.parents:
                     return self._json({"error": "no audio"}, 404)
                 return self._send(200, p.read_bytes(), "audio/wav")
@@ -95,20 +98,67 @@ def make_handler(station):
                 return self._events()
             self._json({"error": "not found"}, 404)
 
+        def _history_get(self, u):
+            """History, search, analysis, still open, alerts (all read-only)."""
+            q = {k: v[0] for k, v in parse_qs(u.query).items()}
+            h = station.history
+            try:
+                if u.path == "/api/search":
+                    return self._json(h.search(q.get("q", ""), q.get("net"), q.get("radio"), q.get("from"), q.get("to"),
+                                               q.get("call"), int(q.get("limit") or 50)))
+                if u.path == "/api/history":
+                    return self._json({"instances": h.instances(q.get("net"), q.get("radio"), q.get("kind"),
+                                                                int(q.get("limit") or 200), q.get("before")),
+                                       "status": h.status})
+                if u.path == "/api/history/instance":
+                    return self._json(h.instance(q.get("key", "")))
+                if u.path == "/api/history/minutes":            # export: Markdown or plain text, as a download
+                    md = q.get("format", "md") != "txt"
+                    body = h.minutes_text(q.get("key", ""), md).encode("utf-8")
+                    name = re.sub(r"[^\w.-]+", "_", q.get("key", "minutes")) + (".md" if md else ".txt")
+                    return self._send(200, body, "text/markdown; charset=utf-8" if md else "text/plain; charset=utf-8",
+                                      {"Content-Disposition": f'attachment; filename="minutes-{name}"'})
+                if u.path == "/api/nets/analysis":
+                    return self._json(h.analysis(q.get("net", "")))
+                if u.path == "/api/nets/open":
+                    return self._json(h.still_open(q.get("net") or None))
+                if u.path == "/api/station/nets":
+                    return self._json({"call": q.get("call", "").upper(), "nets": h.station_nets(q.get("call", ""))})
+                if u.path == "/api/alerts":
+                    return self._json({"alerts": station.nets.alerts.active()})
+            except LookupError:
+                return self._json({"error": "not found"}, 404)
+            except ValueError as e:
+                return self._json({"error": str(e) or "bad request"}, 400)
+            return self._json({"error": "not found"}, 404)
+
         def do_POST(self):
             u = urlparse(self.path)
             m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen))?", u.path)
             who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
-            routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test"}
-            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/delete)?)?", u.path)     # schedule: add / edit / delete
+            routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
+                      "/api/history/minutes"}
+            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore))?)?", u.path)   # schedule
+            alert = re.fullmatch(r"/api/alerts/([\w@.-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
+            item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or sched or who or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or who or alert or item or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json({"error": "not found"}, 404)
             try:
                 n = min(int(self.headers.get("Content-Length") or 0), 512 * 1024)
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if sched:
                     return self._json(station.nets.post(u.path, body))
+                if alert:
+                    return self._json(station.nets.alerts.act(alert.group(1), alert.group(2)))
+                if item:
+                    if not item.group(1):
+                        return self._json(station.history.add_item(body))
+                    if item.group(2):
+                        return self._json(station.history.delete_item(int(item.group(1))))
+                    return self._json(station.history.update_item(int(item.group(1)), body))
+                if u.path == "/api/history/minutes":            # notes, net control, attendance corrections
+                    return self._json(station.history.set_minutes(str(body.get("key") or ""), body))
                 if who:                                         # the operator's "Who?" ({"call": ""} = automatic)
                     try:
                         return self._json(with_who("tx", station.set_speaker(who.group(1), body.get("call"))))
@@ -139,6 +189,8 @@ def make_handler(station):
                 return self._json({"error": "no such net"}, 404)
             except KeyError:
                 return self._json({"error": "no such radio"}, 404)
+            except LookupError:
+                return self._json({"error": "not found"}, 404)
             except (ValueError, TypeError) as e:
                 return self._json({"error": str(e) or "bad request"}, 400)
 
