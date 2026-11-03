@@ -28,3 +28,16 @@ def collapse_repeats(text: str, min_repeats: int = 3) -> tuple[str, bool]:
             out.append(words[i]); i += 1
     s = " ".join(out)
     return (re.sub(r"\s+([.,!?])", r"\1", s), looped)
+
+
+def template_loop(text: str, min_clauses: int = 5, share: float = 0.6) -> bool:
+    """Whisper's other loop on weak audio: the same opening over and over with new endings ("I'm a lawyer, I'm a
+    tester, I'm a computer, I'm a computer..."). Exact repeats are caught by collapse_repeats; this is the rest."""
+    import re
+    clauses = [c.split() for c in re.split(r"[,.;!?]+", (text or "").lower()) if len(c.split()) >= 2]
+    if len(clauses) < min_clauses:
+        return False
+    heads = {}
+    for c in clauses:
+        heads[tuple(c[:2])] = heads.get(tuple(c[:2]), 0) + 1
+    return max(heads.values()) / len(clauses) >= share

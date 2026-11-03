@@ -437,3 +437,10 @@ def test_accurate_echo_of_the_prompt_keeps_the_live_text(tmp_path):
 def ics_view(t):
     from station.ics import view
     return view(t)
+
+
+def test_template_loop():
+    from station.textclean import template_loop
+    assert template_loop("I'm a lawyer, I'm a tester, I'm an exercise, I'm a speech-to-text, I'm a machine, I'm a computer, I'm a computer")
+    assert not template_loop("Net control, this is K7ABC in Springfield, no traffic, thank you, over.")
+    assert not template_loop("Good evening, good signal there. Got you now. KW7, Dale and Norma, thanks.")

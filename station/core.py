@@ -476,7 +476,9 @@ class Station:
         live text stays in use."""
         raw = (res.get("text") or "").strip()
         t0 = self._find(tid)
-        if self._is_echo(t0.get("radio") if t0 else None, raw):
+        from .textclean import collapse_repeats, template_loop
+        if self._is_echo(t0.get("radio") if t0 else None, raw) or collapse_repeats(raw)[1] or template_loop(raw):
+            # a prompt echo or a loop: worse than the live text, so the live text stays in use
             echo = {"text": raw, "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds")}
             with self.lock:
                 tx = self._find(tid)
