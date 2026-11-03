@@ -42,6 +42,18 @@ def load_config(path: Path = ROOT / "config" / "station.yaml") -> dict:
     return c
 
 
+# What Whisper says when it hears only noise (seen on the 145.900 net 2026-11-02: "So.", "The end of the day.",
+# "We'll be right back."). Such a transmission is kept and playable, but marked as probable noise.
+NOISE_PHRASES = {"so", "the end of the day", "the end of the day is a great day", "well be right back",
+                 "thanks for watching", "thank you for watching", "bye", "you", "okay", "oh", "uh", "um", "hmm",
+                 "see you later on in the morning", "please subscribe", ""}
+
+
+def probably_noise(text: str, calls: list[str]) -> bool:
+    words = re.sub(r"[^a-z ]", "", (text or "").lower().replace("'", "")).split()
+    return not calls and (" ".join(words) in NOISE_PHRASES or len(words) <= 1)
+
+
 def speaker_of(text: str, calls: list[str]) -> str | None:
     """Hams identify at the END ('…, this is W9XYZ') or with 'this is' / 'de'. Best guess, shown as such."""
     if not calls:
@@ -127,6 +139,7 @@ class Station:
         self.hints: dict = {r["id"]: {"cards": [], "reminders": [], "net": self.hinters[r["id"]].classify()}
                             for r in config["radios"]}
         self.meters = {r["id"]: self.make_meter(r) for r in config["radios"]}
+        self.radio_cfg = {r["id"]: r for r in config["radios"]}
         self.radios = {r["id"]: {"id": r["id"], "name": r.get("name", r["id"]), "device": r.get("device"),
                                  "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode", "FM"),
                                  "band": band(r.get("freq_mhz")), "gate": r["gate"], "state": "starting",
@@ -354,7 +367,24 @@ class Station:
 
     def segmenter(self, r) -> Segmenter:
         return Segmenter(self._gate(r), SR, 32, r.get("min_speech_ms", 400), r.get("hangover_ms", 900),
-                         r.get("max_tx_s", 180), r.get("preroll_ms", 250), r.get("partial_every_s", 1.0))
+                         r.get("max_tx_s", 180), r.get("preroll_ms", 250), r.get("partial_every_s", 1.0),
+                         split_pause_ms=r.get("split_pause_ms", 800 if r["gate"] == "carrier" else 0),
+                         min_split_s=r.get("min_split_s", 2.0))
+
+    def clean(self, rid, audio: np.ndarray) -> np.ndarray:
+        """What Whisper hears: the radio's audio with everything under `highpass_hz` removed. An FM data jack
+        passes the repeater's sub-audible tone (67-254 Hz) and any mains hum (60/120/180/240 Hz) along with the
+        voice; on the 145.900 net they were the strongest sounds in the recording."""
+        r = self.radio_cfg.get(rid) or {}
+        hz = r.get("highpass_hz", 300 if r.get("gate") == "carrier" else 0)
+        if not hz or len(audio) < 64:
+            return audio
+        # FFT high-pass with a 100 Hz cosine ramp (numpy only; segments are seconds to a few minutes long)
+        n = len(audio)
+        f = np.fft.rfftfreq(n, 1 / SR)
+        gain = np.clip((f - (hz - 100)) / 100, 0, 1)
+        gain = 0.5 - 0.5 * np.cos(np.pi * gain)
+        return np.fft.irfft(np.fft.rfft(audio.astype(np.float64)) * gain, n).astype(np.float32)
 
     def _set_radio(self, rid, **kw):
         with self.lock:
@@ -533,7 +563,7 @@ class Station:
             for rid, (tid, audio) in list(self.partial_slot.items()):
                 if self.partial_slot.get(rid, (None,))[0] != tid:
                     continue
-                text = eng.transcribe(audio[-30 * SR:], prompt=self.prompt_for(rid))["text"]
+                text = eng.transcribe(self.clean(rid, audio[-30 * SR:]), prompt=self.prompt_for(rid))["text"]
                 with self.lock:
                     tx = self._find(tid)
                     if tx and tx["status"] == "live":
@@ -559,7 +589,7 @@ class Station:
                 continue
             t = time.time()
             tx = self._find(tid)
-            res = eng.transcribe(audio, prompt=self.prompt_for(tx and tx["radio"]))
+            res = eng.transcribe(self.clean(tx and tx["radio"], audio), prompt=self.prompt_for(tx and tx["radio"]))
             self.finish(tid, res, round(time.time() - t, 2))
 
     # ---------- enrichment ----------
@@ -581,6 +611,7 @@ class Station:
                 hs["cards"] = h["cards"]
             hs.update(reminders=h["reminders"], net=h["net"])
             tx.update(status="final", text=text, callsigns=calls, speaker=speaker_of(text, calls), terms=terms,
+                      noise=probably_noise(text, calls),
                       model=res.get("model"), looped=res.get("looped", False), took_s=took_s,
                       hint_keys=[c["key"] for c in h["cards"]], partial="")
             new = []

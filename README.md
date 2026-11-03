@@ -112,6 +112,9 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live signal + SNR meters and waterfall per radio; several radios at once | working |
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |
+| Repeaters / carrier that stays up between speakers: split at speech pauses (>= 0.8 s) | working (`split_pause_ms`, carrier-gate radios) |
+| Sub-audible tone + mains hum removed before Whisper (high-pass 300 Hz on FM data-jack radios) | working (`highpass_hz`) |
+| Whisper's noise phrases ("So.", "We'll be right back.") shown greyed as probable noise, left out of the ICS-309 | working |
 | Icom IC-705 via Icom Remote Utility (voice gate) | working on W9XYZ-5; frequency read from the radio planned |
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |

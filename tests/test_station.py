@@ -44,6 +44,45 @@ def test_segmenter_start_partials_end_and_kerchunk():
     assert run(blip, 23)[-1][2]["kerchunk"]
 
 
+def test_segmenter_splits_a_long_carrier_at_speech_pauses():
+    """Repeater hang time: the gate never closes, so pieces are cut where the voice pauses (>= 0.8 s)."""
+    from station.segmenter import Segmenter
+
+    class Always:
+        def is_speech(self, f):
+            return True
+    rng = np.random.default_rng(1)
+    sr, n = 16000, 512
+    def speech(s):   # 1 kHz tone with syllable-like bursts over a hiss floor
+        t = np.arange(int(sr * s)) / sr
+        return (0.3 * np.sin(2 * np.pi * 1000 * t) * (np.sin(2 * np.pi * 3 * t) > -0.3) + 0.003 * rng.standard_normal(len(t)))
+    pause = lambda s: 0.003 * rng.standard_normal(int(sr * s))
+    audio = np.concatenate([pause(6), speech(4), pause(1.5), speech(5), pause(1.5), speech(3), pause(0.3)]).astype(np.float32)
+    seg = Segmenter(Always(), sr, 32, min_speech_ms=400, hangover_ms=900, split_pause_ms=800, min_split_s=2.0, clock=lambda: 0)
+    ends = [ev for i in range(0, len(audio) - n + 1, n) for ev in seg.feed(audio[i:i + n]) if ev[0] == "end"]
+    pieces = [e[2] for e in ends if not e[2]["kerchunk"]]
+    assert len(pieces) == 3 - 1 and all(p["split"] for p in pieces)          # the third is still open (carrier up)
+    assert 9 < pieces[0]["duration_s"] < 12 and 5 < pieces[1]["duration_s"] < 8   # 6 s quiet + 4 s, then 5 s + pause
+
+
+def test_highpass_removes_tone_and_hum(station):
+    t = np.arange(16000) / 16000
+    hum = (0.2 * np.sin(2 * np.pi * 100 * t) + 0.2 * np.sin(2 * np.pi * 180 * t)).astype(np.float32)
+    voice = (0.2 * np.sin(2 * np.pi * 1000 * t)).astype(np.float32)
+    rid = next(iter(station.radios))
+    station.radio_cfg[rid] = dict(station.radio_cfg[rid], gate="carrier")
+    out = station.clean(rid, hum + voice)[4000:]
+    assert np.sqrt(np.mean(out ** 2)) < 0.16 and np.sqrt(np.mean(out ** 2)) > 0.12      # ~voice only (rms 0.141)
+    station.radio_cfg[rid]["highpass_hz"] = 0
+    assert station.clean(rid, hum) is hum
+
+
+def test_probably_noise():
+    from station.core import probably_noise
+    assert probably_noise("So.", []) and probably_noise("We'll be right back.", []) and probably_noise(".", [])
+    assert not probably_noise("Thank you, KC7EZ, good evening.", ["KC7EZ"]) and not probably_noise("No traffic tonight.", [])
+
+
 def test_loop_guard():
     t, looped = collapse_repeats("Net control this is K7ABC. Thank you. Thank you. Thank you. Thank you. Over.")
     assert looped and t == "Net control this is K7ABC. Thank you. Over."

@@ -14,6 +14,8 @@ radios:                     # one entry per radio; each needs its own sound inpu
     mode: FM
     # meter: {low_dbfs: -45, high_dbfs: -6, clip_dbfs: -1, dead_dbfs: -60, snr_good_db: 20, snr_fair_db: 10}
     # waterfall_hz: [0, 8000]   # default 0-8 kHz for FM (carrier gate), 0-4 kHz for voice gate
+    # split_pause_ms: 800     # carrier gate: also cut at speech pauses this long (repeater hang time); 0 = off
+    # highpass_hz: 300        # carrier gate: remove the sub-audible tone and hum before Whisper; 0 = off
   # - id: ic705
   #   name: Icom IC-705
   #   device: "IC-705"      # Icom Remote Utility's "IC-705 (Icom Virtual Audio Driver)"; "file:C:\\path\\to.wav" plays a test file

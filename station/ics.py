@@ -41,7 +41,7 @@ def session_bounds(tx: list[dict], rid: str, gap_min: int = 15) -> tuple[str, st
 
 def select(tx, rid, start, end):
     s, e = datetime.fromisoformat(start), datetime.fromisoformat(end)
-    return [t for t in tx if t.get("radio") == rid and t.get("status") == "final"
+    return [t for t in tx if t.get("radio") == rid and t.get("status") == "final" and not t.get("noise")
             and s <= datetime.fromisoformat(t["start"]) <= e]
 
 

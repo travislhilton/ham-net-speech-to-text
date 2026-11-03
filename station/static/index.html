@@ -54,6 +54,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .stack>.guide,.stack>.heard{contain:size;overflow-y:auto;overscroll-behavior:contain}
 .stack>.radio{border:0;padding:0;background:none;border-radius:0}
 .tabs .sm{display:none}
+.text.noise{color:var(--muted);font-style:italic;font-size:14px}
 body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inherit}
 .sess{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
   background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:8px 0 2px}
@@ -167,6 +168,7 @@ function txHtml(t){
   let body;
   if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
   else if(t.status==="transcribing") body=`<div class="text partial">${esc(t.partial)} <span class="muted">transcribing…</span></div>`;
+  else if(t.noise) body=`<div class="text noise" title="Whisper's usual words for noise; press ▶ to listen">${esc(t.text||"")} <span class="small">· probably noise</span></div>`;
   else body=`<div class="text">${markTerms(t.text,t.terms)||'<span class="muted">(no words recognized)</span>'}</div>`+
     (t.terms&&t.terms.length?`<div class="terms gloss">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
     (t.looped?`<div class="terms">Weak signal: repeated words were removed.</div>`:"");
