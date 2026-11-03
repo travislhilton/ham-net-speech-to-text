@@ -393,3 +393,20 @@ def test_accurate_pass_follows_each_transmission(tmp_path):
         assert st._accurate_remote.calls == 2
     finally:
         st.stop.set()
+
+
+def test_accurate_pass_needs_a_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("EMCOMM_STT_KEY", raising=False)
+    st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(["Testing."]), callbook=FakeBook({}), data_dir=tmp_path)
+    st.root = tmp_path                                                   # no config/secrets.env here
+    st.start(listen=False)
+    try:
+        assert not st.accurate.enabled
+        st.inject("ftm", np.zeros(16000 * 2, np.float32))
+        assert wait_for(lambda: st.tx and st.tx[-1]["status"] == "final")
+        assert st.accurate.status() == []                                # nothing sent anywhere
+        st.accurate_now("ftm")
+        assert wait_for(lambda: st.accurate.status()[0]["state"] == "error")
+        assert "secrets.env" in st.accurate.status()[0]["error"]
+    finally:
+        st.stop.set()

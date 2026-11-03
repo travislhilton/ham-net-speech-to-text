@@ -155,7 +155,7 @@ def test_station_corrects_live_and_accurate_text(tmp_path):
         acc = st.tx[0]["accurate"]
         assert acc["callsigns"] == ["WB6DQW"] and acc["speaker"] == "WB6DQW" and acc["corrections"][0]["heard"] == "WB6BQW"
         p = st.winlink_preview("ftm")
-        assert [x["call"] for x in p["to"] if x["call"] != "W9XYZ"] == ["WB6DQW"]
+        assert [x["call"] for x in p["to"] if x["call"] != "W9XYZ"] == ["WB6DQW", "K7NET"]   # + net control (speaker rules)
         again = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), callbook=FakeBook({"WB6DQW": "Dale"}),
                         data_dir=tmp_path)
         again.load_today()

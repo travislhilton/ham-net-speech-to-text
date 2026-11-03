@@ -37,7 +37,7 @@ schedule:
     days: [Tue]             # any of Mon Tue Wed Thu Fri Sat Sun
     start: "20:00"
     duration_min: 60        # 1 to 1440
-    ncs: WA7XQZ             # net control station, used in suggested phrases
+    ncs: WA7XQZ             # net control station: suggested phrases, and the speaker of its acknowledgements
 
 accurate:                   # the accurate second pass on the home server (optional; home network only)
   urls: [http://192.168.1.54:8090, http://home-server:8090]   # tried in order

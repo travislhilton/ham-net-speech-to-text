@@ -3,6 +3,8 @@ ICS-309 Communications Log (always; 30 rows a page, so long nets make several pa
 General Message summarising it. The operator reviews and edits everything before it reaches the outbox."""
 from datetime import datetime, timedelta
 
+from . import speaker
+
 ROWS_309 = 30
 CALL_MAX, SUB_MAX = 13, 90          # Winlink's Form-309 viewer: From/To maxlength 13, Subject 90, Page 2
 
@@ -40,9 +42,12 @@ def session_bounds(tx: list[dict], rid: str, gap_min: int = 15) -> tuple[str, st
 
 
 def view(t: dict) -> dict:
-    """A transmission as the forms see it: the accurate pass's text, callsigns and speaker when there is one."""
+    """A transmission as the forms see it: the accurate pass's text and callsigns when there is one, and the best
+    speaker (station/speaker.py best: operator-set > stated > net control > voice)."""
     a = t.get("accurate")
-    return {**t, **{k: a[k] for k in ("text", "callsigns", "speaker", "noise") if k in a}} if a else t
+    v = {**t, **{k: a[k] for k in ("text", "callsigns", "noise") if k in a}} if a else dict(t)
+    v["speaker"], v["speaker_how"] = speaker.best(t)
+    return v
 
 
 def select(tx, rid, start, end, include_noise=False):
@@ -54,15 +59,16 @@ def select(tx, rid, start, end, include_noise=False):
 
 def participants(span, me_calls: set[str], heard: dict) -> list[dict]:
     seen = []
+    said = lambda t: list(t.get("callsigns", [])) + ([t["speaker"]] if t.get("speaker") and t["speaker"] not in t.get("callsigns", []) else [])
     for t in span:
-        for c in t.get("callsigns", []):
+        for c in said(t):                                # an operator-set speaker takes part even if never named
             if c not in seen and c.split("-")[0] not in me_calls:
                 seen.append(c)
     out = []
     for c in seen:
         card = (heard.get(c) or {}).get("card") or {}
         out.append({"call": c, "name": card.get("name"), "confirmed": bool(card.get("sources")),
-                    "count": sum(c in t.get("callsigns", []) for t in span)})
+                    "count": sum(c in said(t) for t in span)})
     return out
 
 

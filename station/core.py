@@ -18,6 +18,7 @@ from hamkit.bands import band
 from hamkit.callsigns import load_roster, normalize
 from hamkit.hints import Hinter, phonetic
 from . import callfix
+from . import speaker
 from .meter import Meter
 from .segmenter import Segmenter
 
@@ -56,13 +57,8 @@ def probably_noise(text: str, calls: list[str]) -> bool:
 
 
 def speaker_of(text: str, calls: list[str]) -> str | None:
-    """Hams identify at the END ('…, this is W9XYZ') or with 'this is' / 'de'. Best guess, shown as such."""
-    if not calls:
-        return None
-    for m in re.finditer(r"\b(?:this is|de|from)\s+([A-Z0-9/]{3,10})", text, re.I):
-        if m.group(1).upper() in calls:
-            return m.group(1).upper()
-    return calls[-1]
+    """The callsign the transmission identifies as its own (station/speaker.py), else None — never a guess."""
+    return speaker.stated(text, calls)
 
 
 class RawRing:
@@ -469,12 +465,13 @@ class Station:
         validate = self.callbook.validate if self.callbook else None
         text, calls = normalize(res.get("text", ""), roster=self.roster, validate=validate)
         text, calls, fix = callfix.apply(self, self._find(tid), text, calls, whole_net=True)   # near-miss calls
-        acc = {"text": text, "callsigns": calls, "speaker": speaker_of(text, calls), "noise": probably_noise(text, calls),
+        acc = {"text": text, "callsigns": calls, "noise": probably_noise(text, calls),
                "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds"), **fix}
         with self.lock:
             tx = self._find(tid)
             if not tx:
                 return
+            acc["speaker"], acc["speaker_how"] = speaker.from_text(text, calls, self._ncs_at(tx))
             tx["accurate"] = acc
             new = [c for c in calls if c not in self.heard]
             self._rebuild_heard()
@@ -485,6 +482,31 @@ class Station:
         self._log({"update": tid, "accurate": acc})
         self.bus.publish("tx", tx)
         self.bus.publish("heard", {"heard": self.heard_list()})
+
+    def _ncs_at(self, tx: dict) -> str | None:
+        """Net control of the scheduled net this transmission was heard in (at its own time: the accurate pass can
+        arrive after the net has ended)."""
+        try:
+            at = datetime.fromisoformat(tx["start"])
+        except (KeyError, TypeError, ValueError):
+            at = self.clock()
+        return (self._current_by_radio(at).get(tx.get("radio")) or {}).get("ncs")
+
+    def set_speaker(self, tid: str, call: str | None) -> dict:
+        """The operator says who was talking ("Who?" on the dashboard); empty = back to automatic. Always wins.
+        Kept like the accurate pass: an update line in the day's log, merged by load_today."""
+        call = (call or "").strip().upper()
+        if call and not re.fullmatch(r"[A-Z0-9][A-Z0-9/-]{2,11}", call):
+            raise ValueError("not a callsign")
+        with self.lock:
+            tx = self._find(tid)
+            if tx is None:
+                raise LookupError(tid)
+            tx["speaker_set"] = call or None
+            tx = dict(tx)
+        self._log({"update": tid, "speaker_set": call or None})
+        self.bus.publish("tx", tx)
+        return tx
 
     def accurate_now(self, rid: str, start: str | None = None, end: str | None = None, force=False) -> dict:
         from . import ics
@@ -787,7 +809,8 @@ class Station:
             if h["cards"]:
                 hs["cards"] = h["cards"]
             hs.update(reminders=h["reminders"], net=h["net"])
-            tx.update(status="final", text=text, callsigns=calls, speaker=speaker_of(text, calls), terms=terms,
+            who, how = speaker.from_text(text, calls, net.get("ncs"))
+            tx.update(status="final", text=text, callsigns=calls, speaker=who, speaker_how=how, terms=terms,
                       noise=probably_noise(text, calls),
                       model=res.get("model"), looped=res.get("looped", False), took_s=took_s,
                       hint_keys=[c["key"] for c in h["cards"]], partial="", **fix)
@@ -838,10 +861,10 @@ class Station:
                 tx = json.loads(line)
             except ValueError:
                 continue
-            if "update" in tx:                                # the accurate pass, added after the live text
+            if "update" in tx:                                # added after the live text: accurate pass, "Who?"
                 for t in self.tx:
                     if t.get("id") == tx["update"]:
-                        t["accurate"] = tx.get("accurate")
+                        t.update({k: v for k, v in tx.items() if k in ("accurate", "speaker_set")})
                 continue
             cut = (self.radios.get(tx.get("radio")) or {}).get("cleared_at")
             if cut and tx.get("start", "") < cut:

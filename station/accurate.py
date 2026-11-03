@@ -83,6 +83,7 @@ class AccuratePass:
         self.auto_after = timedelta(minutes=float(cfg.get("auto_after_min", 15)))
         self.live = bool(cfg.get("live", True))
         self.remote = remote or Remote(cfg.get("urls", DEFAULT_URLS), read_key(station.root))
+        self.enabled = remote is not None or bool(self.remote.key)      # no key, no uploads (tests, demos, new PCs)
         self.jobs: dict[str, dict] = {}          # key "radio|start" -> status
         self.q: queue.Queue = queue.Queue()
         self.rate = FIRST_GUESS_RATE
@@ -133,7 +134,7 @@ class AccuratePass:
 
     def on_final(self, tx: dict):
         """A transmission's live text is done: queue it under its net/conversation's job right away."""
-        if not self.live or not tx.get("wav"):
+        if not self.enabled or not self.live or not tx.get("wav"):
             return
         from . import ics
         with self.st.lock:
@@ -150,7 +151,7 @@ class AccuratePass:
 
     def tick(self, now: datetime | None = None):
         """Called every few seconds: queue each net/conversation that has gone quiet and still lacks the pass."""
-        if self.auto_after <= timedelta(0):
+        if not self.enabled or self.auto_after <= timedelta(0):
             return
         from . import ics
         now = now or datetime.now()
@@ -186,6 +187,12 @@ class AccuratePass:
             j = self.jobs[key]
             j.update(state="running", started_at=datetime.now().isoformat(timespec="seconds"), error=None)
         self._publish()
+        if not self.enabled:
+            with self.lock:
+                j.update(state="error", error="no upload key: put EMCOMM_STT_KEY=... in config\\secrets.env",
+                         finished_at=datetime.now().isoformat(timespec="seconds"))
+            self._publish()
+            return
         if not self.remote.reachable():
             with self.lock:
                 j.update(state="unreachable", error="home server not reachable", finished_at=datetime.now().isoformat(timespec="seconds"))

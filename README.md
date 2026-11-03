@@ -71,10 +71,20 @@ you chose is remembered. Each column shows:
   log file and the recordings stay on the station PC (`data\logs`, `data\recordings`); nothing is deleted.
 - **On the air** (under each radio's card, one transcript per radio): every transmission as it happens.
   Grey words appear while the station is still
-  talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons
-  (the outlined one is the likely speaker), Q-codes and prowords are underlined with their meaning
-  below (untick **Explain radio terms** at the top to hide the meanings; on by default, remembered per
-  browser), and ▶ plays the recording.
+  talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons, Q-codes
+  and prowords are underlined with their meaning below (untick **Explain radio terms** at the top to hide the
+  meanings; on by default, remembered per browser), and ▶ plays the recording.
+- **Who is talking** (first on each transmission): the speaker's callsign when it is known, in bold when the
+  station said it on the air ("this is K7ABC", "K7ABC here", "de K7ABC", "…K7ABC, over/clear", a check-in such as
+  "K7ABC, Springfield, no traffic", "W9XYZ, K7ABC, go ahead"). A callsign that is only being spoken TO is never taken
+  for the speaker ("K7ABC, thank you", "you're in the log", "roger K7ABC", "go ahead K7ABC", "number 12, K7ABC").
+  When nobody identified but the words are net control's (acknowledging, logging) and the schedule names net
+  control (`ncs:`), it shows **≈ K7NET (net control)** in grey. Otherwise it shows nothing rather than guess.
+  **Who?** lets you pick one of the callsigns in the transmission or type any callsign; your choice always
+  wins (marked ✎), is kept in the day's log (`data\logs\<date>.jsonl`, survives restarts and the accurate
+  pass) and goes into the ICS-309; **Automatic** forgets it. Measured on a fast HF check-in net (3.915 MHz,
+  189 transmissions): 22 state their own station, 37 more are net control's words (shown when `ncs:` is in
+  the schedule); the rest need a Who?.
 - **What you can do now** (per radio): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
@@ -97,7 +107,8 @@ you chose is remembered. Each column shows:
 - **Nets and conversations**: each radio's log is split into nets/conversations (a new one starts after 15
   quiet minutes or when the radio's frequency changes), each with a header: time span, frequency, how many
   transmissions and stations, and its own **Winlink messages…** button. That builds an **ICS-309**
-  Communications Log (every transmission: time, from, to, what was said; 30 rows a page) and an **ICS-213**
+  Communications Log (every transmission: time, from = who is talking as above — yours, then stated, then net
+  control, "?" when unknown —, to, what was said; 30 rows a page) and an **ICS-213**
   summary (stations heard, traffic and relays) for that net only, addressed to every callsign that took part
   (callsigns no callbook confirms start unticked; **Uncheck all / Check all / Only callbook-confirmed**, and add
   any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
@@ -157,6 +168,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Listen only during scheduled nets (auto resume 2 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml; 3.915 net: 42 → 59 callsigns found) |
 | Over-the-air transcription test with word-error score and history | working |
+| Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
+| Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). Code + `python -m tools.voice_eval` kept to re-measure on FM nets |
 
 ## Editing the knowledge
 

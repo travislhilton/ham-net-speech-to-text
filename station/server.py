@@ -9,8 +9,22 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .schedule import NoSuchNet
+from . import speaker
 
 STATIC = Path(__file__).parent / "static"
+
+
+def with_who(kind: str, data):
+    """Each transmission leaves with `who` = {call, how}: the best speaker (station/speaker.py best), so the page
+    shows exactly what the ICS-309 will say."""
+    def add(t):
+        call, how = speaker.best(t)
+        return {**t, "who": {"call": call, "how": how} if call else None}
+    if kind == "tx" and isinstance(data, dict):
+        return add(data)
+    if kind == "snapshot" and isinstance(data, dict) and isinstance(data.get("tx"), list):
+        return {**data, "tx": [add(t) for t in data["tx"]]}
+    return data
 
 
 def make_handler(station):
@@ -38,7 +52,7 @@ def make_handler(station):
             if u.path in ("/", "/index.html"):
                 return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
             if u.path == "/api/state":
-                return self._json(station.snapshot())
+                return self._json(with_who("snapshot", station.snapshot()))
             if u.path == "/api/lookup":
                 call = (parse_qs(u.query).get("call") or [""])[0].upper()
                 if not re.fullmatch(r"[A-Z0-9/]{3,12}", call) or not station.callbook:
@@ -65,16 +79,22 @@ def make_handler(station):
         def do_POST(self):
             u = urlparse(self.path)
             m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen))?", u.path)
+            who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
             routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/delete)?)?", u.path)     # schedule: add / edit / delete
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or sched or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or who or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json({"error": "not found"}, 404)
             try:
                 n = min(int(self.headers.get("Content-Length") or 0), 512 * 1024)
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if sched:
                     return self._json(station.nets.post(u.path, body))
+                if who:                                         # the operator's "Who?" ({"call": ""} = automatic)
+                    try:
+                        return self._json(with_who("tx", station.set_speaker(who.group(1), body.get("call"))))
+                    except LookupError:
+                        return self._json({"error": "no such transmission"}, 404)
                 if u.path == "/api/settings":
                     return self._json(station.set_operator(body))
                 if u.path == "/api/winlink/preview":
@@ -111,11 +131,11 @@ def make_handler(station):
             self.send_header("Connection", "keep-alive")
             self.end_headers()
             try:
-                self._emit("snapshot", station.snapshot())
+                self._emit("snapshot", with_who("snapshot", station.snapshot()))
                 while True:
                     try:
                         kind, data = q.get(timeout=15)
-                        self._emit(kind, data)
+                        self._emit(kind, with_who(kind, data))
                     except queue.Empty:
                         self.wfile.write(b": keepalive\n\n"); self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
