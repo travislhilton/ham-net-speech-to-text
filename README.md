@@ -55,7 +55,8 @@ The dashboard shows:
   like WSJT-X/fldigi). Bounds can be changed per radio in `station.yaml` (`meter:`).
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
   transmission after that is logged with it (kept across restarts in `data\\operator.json`).
-- **On the air** (under each radio's card, one transcript per radio): every transmission as it happens. Grey words appear while the station is still
+- **On the air** (under each radio's card, one transcript per radio): every transmission as it happens.
+  On a wide screen the radio cards stay in place; each transcript (and the right-hand panel) scrolls on its own. Grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons
   (the outlined one is the likely speaker), Q-codes and prowords are underlined with their meaning
   below, and ▶ plays the recording.

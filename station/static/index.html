@@ -19,6 +19,15 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 #radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:12px;align-items:start}
 .rcol{display:flex;flex-direction:column;gap:10px;min-width:0}.rcol>section{margin-bottom:0}
 .feed{max-height:calc(100dvh - 120px);overflow-y:auto;overscroll-behavior:contain}
+/* wide screens: the page itself never scrolls; radios stay put, each transcript and the side panel scroll on their own */
+@media (min-width:901px){
+  body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  main{flex:1;min-height:0;grid-template-rows:minmax(0,1fr)}
+  #radios{min-height:0;overflow-y:auto;align-items:stretch;grid-auto-rows:minmax(100%,auto)}
+  .rcol{min-height:0}.rcol>section{flex:1;min-height:0;display:flex;flex-direction:column}
+  .feed{flex:1;min-height:0;max-height:none}
+  main>div:last-child{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+}
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 .radio .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.radio .top .nm{flex:1}
 .rx{font-weight:700;color:var(--muted);font-size:13px}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
