@@ -28,6 +28,24 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   .feed{flex:1;min-height:0;max-height:none}
   .rcol>.guide{max-height:34vh;overflow-y:auto;overscroll-behavior:contain;flex:none}
 }
+#rtabs{display:none}
+/* phones / narrow windows: one radio at a time, picked with the tabs under the header */
+@media (max-width:900px){
+  body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  header{flex-wrap:wrap;gap:4px 10px}#engine,#nettype,#net{display:none}
+  #rtabs{display:flex;gap:6px;padding:6px 12px 0;overflow-x:auto;flex:none}
+  #rtabs button{flex:1 0 auto;padding:6px 10px;border-radius:8px 8px 0 0;border-bottom:0;font-weight:600;display:flex;gap:6px;align-items:center;justify-content:center}
+  #rtabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  #rtabs .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}#rtabs .dot.rx{background:var(--ok)}#rtabs .dot.em{background:var(--bad)}
+  main{flex:1;min-height:0;padding:8px 12px 10px;display:flex;flex-direction:column}
+  #radios{flex:1;min-height:0;display:flex;flex-direction:column}
+  .rcol{display:none;flex:1;min-height:0}.rcol.sel{display:flex}
+  .rcol>section{flex:1;min-height:0;display:flex;flex-direction:column}
+  .rcol>.guide{flex:none;max-height:17vh;overflow-y:auto;overscroll-behavior:contain}
+  .feed{flex:1;min-height:0;max-height:none}
+  .radio{flex:none}.radio .wf{height:64px;margin-top:6px}.radio .cap{display:none}.radio .axis{height:13px;font-size:10px}
+  .radio .sch{display:none}.radio .cardbtns{margin-top:4px}
+}
 .guide>h2,.logbox>.tabs{margin-bottom:6px}.guide .empty{margin:0}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
 .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}.pane[hidden]{display:none}
@@ -87,9 +105,10 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   <span id="nettype" class="badge">Net type: listening…</span>
   <span class="clock" id="clock"></span>
   <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
-  <span class="small"><input id="q" placeholder="look up a callsign" maxlength="12" aria-label="Callsign to look up"> <button id="go">Look up</button></span>
+  <span class="small"><input id="q" placeholder="callsign" maxlength="12" aria-label="Callsign to look up"> <button id="go">Look up</button></span>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
 </header>
+<nav id="rtabs" role="tablist" aria-label="Radios"></nav>
 <main>
   <div id="radios"></div>
 </main>
@@ -186,12 +205,25 @@ function ensureCard(r){
   sec.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="feed" data-rid="${id}" role="tab">On the air</button><button data-tab="heard" data-rid="${id}" role="tab">Stations heard <span class="hn"></span></button></div>
     <div class="feed pane" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>
     <div class="feed pane" id="heard-${id}" hidden><p class="muted small">None yet.</p></div>`;
-  col.append(el,guide,sec);$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+  col.append(el,guide,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+let SEL=null;try{SEL=localStorage.getItem("hamnet.radio")}catch(e){}
+function selectRadio(id){SEL=id;try{localStorage.setItem("hamnet.radio",id)}catch(e){}
+  document.querySelectorAll(".rcol").forEach(c=>c.classList.toggle("sel",c.id==="col-"+id));
+  document.querySelectorAll("#rtabs button").forEach(b=>{b.classList.toggle("on",b.dataset.r===id);b.setAttribute("aria-selected",b.dataset.r===id)})}
+function renderRtabs(){
+  const nav=$("rtabs");if(!S.radios.length){nav.innerHTML="";return}
+  if(!S.radios.some(r=>r.id===SEL))SEL=S.radios[0].id;
+  const have=[...nav.children].map(b=>b.dataset.r).join(),want=S.radios.map(r=>r.id).join();
+  if(have!==want)nav.innerHTML=S.radios.map(r=>`<button role="tab" data-r="${esc(r.id)}"><i class="dot" id="dot-${esc(r.id)}"></i>${esc(r.name)}</button>`).join("");
+  for(const r of S.radios){const h=(S.hints||{})[r.id]||{},d=$("dot-"+r.id);if(d)d.classList.toggle("em",(h.net||{}).type==="emergency")}
+  selectRadio(SEL);
+}
 function renderRadios(){
   const box=$("radios");
   if(!S.radios.length){box.innerHTML='<div class="radio">No radios set up yet. Add one to <code>config\\station.yaml</code> (see README, "Connecting a radio").</div>';return}
   box.querySelectorAll(":scope>.radio").forEach(x=>x.remove());
   const ids=new Set(S.radios.map(r=>r.id));box.querySelectorAll(".rcol").forEach(x=>{if(!ids.has(x.id.slice(4)))x.remove()});
+  renderRtabs();
   for(const r of S.radios){
     const el=ensureCard(r),h=(S.hints||{})[r.id]||{},net=h.net||{};
     el.querySelector(".nm").textContent=r.name;
@@ -213,6 +245,7 @@ function renderRadios(){
 }
 function onMeter(d){
   const el=document.getElementById("r-"+d.id);if(!el)return;
+  const dot=$("dot-"+d.id);if(dot)dot.classList.toggle("rx",!!d.rx);
   const rx=el.querySelector(".rx");rx.textContent=d.rx?"RX":"idle";rx.className="rx"+(d.rx?" on":"");
   const bars=el.querySelectorAll(".bar");
   const f=bars[0].querySelector(".fill");f.style.width=pc(d.rms,LV)+"%";f.className="fill "+d.ls;
@@ -342,6 +375,7 @@ async function lookup(call){
 }
 document.addEventListener("click",e=>{
   const c=e.target.closest("[data-call]");if(c){$("q").value=c.dataset.call;lookup(c.dataset.call)}
+  const rt=e.target.closest("#rtabs [data-r]");if(rt)selectRadio(rt.dataset.r);
   const w=e.target.closest("[data-wl]");if(w)wlPreview({radio:w.dataset.wl});
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
     col.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("on",b===tb));

@@ -48,7 +48,10 @@ or `http://<station-name>:8091/` from another PC or phone on your home network o
 
 The dashboard has one column per radio, with everything about that radio in it, top to bottom: the
 radio card, **What you can do now**, then **On the air** and **Stations heard** as tabs. On a wide
-screen the radio cards stay in place and the lower parts scroll on their own. Each column shows:
+screen the radio cards stay in place and the lower parts scroll on their own. On a phone (or any
+window under 900 px wide) the radios are tabs under the header, one radio at a time; a tab's dot turns
+green while that radio is receiving (red for emergency traffic), and the last tab you chose is remembered.
+Each column shows:
 - **Radios** (any number at once, each its own stream): frequency and band, **RX** while a station is
   transmitting, a live **Signal** meter (green = level in bounds; yellow = low or hot; red = clipping or
   almost no audio; the tick is the peak), an **SNR** meter while receiving (FM: noise quieting; SSB/AM:
