@@ -23,13 +23,18 @@ radios:                     # one entry per radio; each needs its own sound inpu
   #   freq_mhz: 7.185
   #   mode: LSB
 
-schedule:                   # nets: which radio, which frequency, when (local time)
+# Nets: which radio, which frequency, when (local time). These are the STARTING nets only: once a net is
+# added, changed or deleted on the dashboard (Nets...), the schedule lives in data\schedule.json and this
+# list is no longer read (delete data\schedule.json to start again from here). "Listen only during
+# scheduled nets" is a per-radio switch in that dialog (kept in data\operator.json).
+schedule:
   - name: Springfield Valley ARES net
-    radio: ftm150
-    freq_mhz: 146.940       # the dashboard warns when the radio is set to something else
-    days: [Tue]
+    radio: ftm150           # a radio id from radios: above
+    freq_mhz: 146.940       # optional; the dashboard warns when the radio is set to something else
+    # mode: FM              # optional; FM, USB, LSB, AM, CW or DIG (used by "log at the net's frequency")
+    days: [Tue]             # any of Mon Tue Wed Thu Fri Sat Sun
     start: "20:00"
-    duration_min: 60
+    duration_min: 60        # 1 to 1440
     ncs: WA7XQZ             # net control station, used in suggested phrases
 
 accurate:                   # the accurate second pass on the home server (optional; home network only)

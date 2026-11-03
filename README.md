@@ -84,6 +84,16 @@ you chose is remembered. Each column shows:
 - **Net type** (a badge on each radio card): the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
   with a red banner if it sounds like a real emergency.
 - **Nets** (on each radio card): the nets scheduled on that radio; the one running now is in green.
+- **Nets…** (top of the page, and on each radio card for that radio's nets): add, edit or delete scheduled
+  nets (name, radio, days, start time, minutes, frequency and mode, net control). Changes apply at once on
+  every open browser, no restart. The schedule starts as the `schedule:` list in `config\station.yaml`; the
+  first change made here is saved to `data\schedule.json`, which from then on is the schedule (station.yaml is
+  never rewritten; delete schedule.json to start again from station.yaml).
+  Per radio, **Listen only during scheduled nets**: the station resumes that radio 2 minutes before each of its
+  nets and pauses it 5 minutes after the net ends, so nothing between nets is recorded. The card says why it is
+  paused ("Paused until Springfield Valley ARES net at 20:00" or "Paused by you"). Pause and Resume still work; the next
+  net start or end takes over again. Optionally, **when a net starts, log the radio at the net's frequency and
+  mode** (you still tune the radio yourself; the retune warning stays). Kept across restarts in `data\operator.json`.
 - **Nets and conversations**: each radio's log is split into nets/conversations (a new one starts after 15
   quiet minutes or when the radio's frequency changes), each with a header: time span, frequency, how many
   transmissions and stations, and its own **Winlink messages…** button. That builds an **ICS-309**
@@ -108,7 +118,7 @@ you chose is remembered. Each column shows:
 - **Settings** (top right): your callsign, name and grid; which Winlink Express folder (found
   automatically: `C:\\RMS Express` and any other install) and which callsign account sends.
 
-Which radios exist (and their sound inputs) and the nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
+Which radios exist (and their sound inputs) and the first nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
 `config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HamNet Station** →
 End, then Run (or sign out and back in). Everything heard is kept in `data\logs\<date>.jsonl` and
 `data\recordings\<date>\`; problems are written to `data\station.log`.
@@ -142,7 +152,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
 | Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
 | Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; Outbox format matched against Winlink Express 1.8 messages (one and two recipients); first real write to be checked |
-| Net schedule with radio, frequency and band | working, edited in `config/station.yaml`; an editor in the dashboard is next |
+| Net schedule with radio, frequency and band; editor in the dashboard (Nets…) | working (`data/schedule.json`, seeded from `config/station.yaml`) |
+| Listen only during scheduled nets (auto resume 2 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml; 3.915 net: 42 → 59 callsigns found) |
 | Over-the-air transcription test with word-error score and history | working |
 

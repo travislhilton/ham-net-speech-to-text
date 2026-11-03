@@ -124,6 +124,13 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 .station{border-top:1px solid var(--line);padding:8px 0}.station:first-of-type{border-top:0}
 .station .hd{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
 .muted{color:var(--muted)}.small{font-size:13px}input{font:inherit;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);width:130px;text-transform:uppercase}
+/* schedule: the Nets dialog and the card's listening line */
+.why{margin-top:4px;font-size:13px;color:var(--muted)}.why b{color:var(--ink)}
+table.nets{width:100%;border-collapse:collapse;font-size:13px}table.nets td,table.nets th{border-top:1px solid var(--line);padding:4px;text-align:left;vertical-align:top}
+table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:2px 12px}
+.netform input,.netform select{width:100%;text-transform:none}.netform .days{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 12px}
+.netform .days label{display:flex;gap:4px;align-items:center;margin:0}.netform .days input{width:auto;display:inline}
+@media (max-width:900px){table.nets .wide{display:none}}
 #conn{font-size:12px}.ok{color:var(--ok)}.bad{color:var(--bad)}
 </style>
 </head>
@@ -137,6 +144,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
   <span class="small"><input id="q" placeholder="callsign" maxlength="12" aria-label="Callsign to look up"> <button id="go">Look up</button></span>
   <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> Explain radio terms</label>
+  <button id="openNets" title="Scheduled nets, and listening only while they are on">Nets…</button>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
 </header>
 <nav id="rtabs" role="tablist" aria-label="Radios"></nav>
@@ -156,6 +164,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
 <dialog id="testDlg"><div id="testBody"></div></dialog>
+<dialog id="netsDlg"><div id="netsBody"></div></dialog>
 <script>
 let editing=null;
 const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[]};
@@ -331,8 +340,8 @@ function ensureCard(r){
    <div class="mrow"><span class="ml">SNR</span><div class="bar">${snrZones(m)}<i class="fill"></i></div><span class="mv sv">—</span></div>
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
    <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>
-   <div class="sch"></div>
-   <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button></div>`;
+   <div class="why"></div><div class="sch"></div>
+   <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-nets="${esc(r.id)}" title="This radio's nets, and listening only while they are on">Nets…</button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
   top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button></div>
@@ -413,6 +422,7 @@ function renderRadios(){
     pz.classList.toggle("primary",!!r.paused);
     if(r.paused){const rx=el.querySelector(".rx");rx.textContent="PAUSED";rx.className="rx paused"}
     if(!r.paused&&r.state!=="listening"){el.querySelector(".rx").textContent=r.state==="error"?"no audio":r.state;el.querySelector(".rx").className="rx"}
+    renderWhy(el,r);   // schedule
   }
 }
 function onMeter(d){
@@ -599,8 +609,77 @@ function connect(){
   es.addEventListener("radios",e=>{const d=JSON.parse(e.data);S.radios=d.radios;S.net=d.net;renderRadios();renderNet()});
   es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
+  es.addEventListener("schedule",e=>{const d=JSON.parse(e.data);S.schedule=d.schedule;S.net=d.net;renderRadios();renderNet();if($("netsDlg").open)renderNets(false)});
   es.addEventListener("accurate",e=>{S.accurate=JSON.parse(e.data).sessions;renderFeed();wlAccNote()});
 }
+// ---------- schedule: the Nets dialog (data/schedule.json) + listen only during scheduled nets ----------
+const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+let NETS={edit:null,radio:null};
+const whenNet=iso=>{const d=new Date(iso),t=new Date();
+  return (d.toDateString()===t.toDateString()?"at ":"on "+DAYS[(d.getDay()+6)%7]+" at ")+hhmm(iso)};
+function renderWhy(el,r){
+  const L=r.listen||{},w=el.querySelector(".why");if(!w)return;let h="";
+  if(r.paused)h=r.paused_by==="schedule"&&L.next?`Paused until <b>${esc(L.next.name)}</b> ${esc(whenNet(L.next.start))}`
+    :r.paused_by==="schedule"?"Paused by the schedule (no net coming up on this radio)":"Paused by you";
+  else if(L.scheduled)h=L.now?`Listening for <b>${esc(L.now)}</b> (pauses when it ends)`:"Listening only during scheduled nets";
+  w.innerHTML=h;w.style.display=h?"":"none"}
+const post=(url,body)=>fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||"not saved");return d});
+function openNets(rid){NETS={edit:null,radio:rid||null};renderNets(true);if(!$("netsDlg").open)$("netsDlg").showModal()}
+function netForm(n){
+  const rs=S.radios,rid=n.radio||NETS.radio||(rs[0]||{}).id,days=n.days||[];
+  return `<form class="netform" id="netForm">
+   <label>Name <input name="name" maxlength="80" required value="${esc(n.name||"")}"></label>
+   <label>Radio <select name="radio">${rs.map(r=>`<option value="${esc(r.id)}"${r.id===rid?" selected":""}>${esc(r.name)}</option>`).join("")}</select></label>
+   <label>Starts (local time) <input name="start" type="time" required value="${esc(n.start||"20:00")}"></label>
+   <label>Lasts (minutes) <input name="duration_min" type="number" min="1" max="1440" required value="${esc(n.duration_min||60)}"></label>
+   <label>Frequency (MHz) <input name="freq_mhz" inputmode="decimal" placeholder="the radio's" value="${esc(n.freq_mhz??"")}"></label>
+   <label>Mode <select name="mode"><option value="">the radio's</option>${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===n.mode?" selected":""}>${m}</option>`).join("")}</select></label>
+   <label>Net control (callsign) <input name="ncs" maxlength="11" value="${esc(n.ncs||"")}" style="text-transform:uppercase"></label>
+   <div class="days">Days: ${DAYS.map(d=>`<label><input type="checkbox" name="days" value="${d}"${days.includes(d)?" checked":""}> ${d}</label>`).join("")}</div>
+   <div class="row" style="grid-column:1/-1"><button class="primary" type="submit">${NETS.edit?"Save changes":"Add net"}</button>${NETS.edit?' <button type="button" id="netNew">Cancel edit</button>':""} <span class="err" id="netErr"></span></div></form>`}
+function renderNets(full){
+  const box=$("netsBody"),list=(S.schedule||[]).filter(n=>!NETS.radio||n.radio===NETS.radio);
+  const rname=id=>(S.radios.find(r=>r.id===id)||{}).name||id;
+  const cur=(S.net||{}).current;
+  const rows=list.map(n=>`<tr><td><b>${esc(n.name)}</b>${cur&&cur.name===n.name?' <span class="ok small">now</span>':""}${n.ncs?`<div class="muted">NCS ${esc(n.ncs)}</div>`:""}</td>
+    <td class="wide">${esc(rname(n.radio))}</td><td>${esc((n.days||[]).join(", "))} ${esc(n.start)}<div class="muted">${esc(n.duration_min)} min</div></td>
+    <td class="wide">${n.freq_mhz?esc(Number(n.freq_mhz).toFixed(3))+" MHz":'<span class="muted">radio\'s</span>'} ${esc(n.mode||"")}</td>
+    <td class="b"><button data-netedit="${esc(n.id)}">Edit</button> <button data-netdel="${esc(n.id)}">Delete</button></td></tr>`).join("");
+  const radios=S.radios.filter(r=>!NETS.radio||r.id===NETS.radio);
+  const listen=radios.map(r=>{const L=r.listen||{};return `<div style="margin:4px 0"><b>${esc(r.name)}</b>
+    <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="scheduled"${L.scheduled?" checked":""}> Listen only during scheduled nets</label>
+    <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="tune"${L.tune?" checked":""}> When a net starts, log the radio at the net's frequency and mode</label></div>`}).join("");
+  const edit=NETS.edit&&(S.schedule||[]).find(n=>n.id===NETS.edit);
+  const head=`<h3>Nets${NETS.radio?" on "+esc(rname(NETS.radio)):""}</h3>`;
+  const table=list.length?`<table class="nets"><tr><th>Net</th><th class="wide">Radio</th><th>When</th><th class="wide">Frequency</th><th></th></tr>${rows}</table>`:'<p class="muted">No nets scheduled'+(NETS.radio?" on this radio":"")+".</p>";
+  if(!full&&$("netsList")){$("netsList").innerHTML=head+table;$("netsListen").innerHTML=listen;return}   // an update from the station: keep what is being typed
+  box.innerHTML=`<div id="netsList">${head+table}</div>
+   <h4>${edit?"Edit "+esc(edit.name):"Add a net"}</h4>${netForm(edit||{})}
+   <h4>Listening</h4><div id="netsListen">${listen}</div>
+   <p class="small muted">A radio set to listen only during nets is resumed 2 minutes before each of its nets and paused 5 minutes after it ends. Pause and Resume on the card still work; the next net start or end takes over again. You still tune the radio yourself.</p>
+   <div class="row">${NETS.radio?'<button id="netAll">Show all radios</button> ':""}<button onclick="$('netsDlg').close()">Close</button></div>`;
+  const f=$("netForm");
+  f.onsubmit=async e=>{e.preventDefault();
+    const body={name:f.name.value,radio:f.radio.value,start:f.start.value,duration_min:f.duration_min.value,freq_mhz:f.freq_mhz.value,
+      mode:f.mode.value,ncs:f.ncs.value,days:[...f.querySelectorAll("input[name=days]:checked")].map(x=>x.value)};
+    try{const d=await post(NETS.edit?`/api/schedule/${encodeURIComponent(NETS.edit)}`:"/api/schedule",body);S.schedule=d.schedule;NETS.edit=null;renderNets(true);renderRadios()}
+    catch(err){$("netErr").textContent=err.message}};
+  const nn=$("netNew");if(nn)nn.onclick=()=>{NETS.edit=null;renderNets(true)};
+  const na=$("netAll");if(na)na.onclick=()=>{NETS.radio=null;renderNets(true)};
+}
+$("openNets").onclick=()=>openNets(null);
+document.addEventListener("click",async e=>{
+  const o=e.target.closest("[data-nets]");if(o)openNets(o.dataset.nets);
+  const ed=e.target.closest("[data-netedit]");if(ed){NETS.edit=ed.dataset.netedit;renderNets(true);const i=$("netForm")&&$("netForm").name;if(i)i.focus()}
+  const del=e.target.closest("[data-netdel]");if(del){const n=(S.schedule||[]).find(x=>x.id===del.dataset.netdel)||{};
+    if(confirm(`Delete the net "${n.name}"?`)){try{const d=await post(`/api/schedule/${encodeURIComponent(del.dataset.netdel)}/delete`,{});S.schedule=d.schedule;const was=NETS.edit===n.id;if(was)NETS.edit=null;renderNets(was);renderRadios()}catch(err){alert(err.message)}}}
+});
+document.addEventListener("change",async e=>{
+  const c=e.target.closest("[data-listen]");if(!c)return;
+  try{const r=await post(`/api/radios/${encodeURIComponent(c.dataset.listen)}/listen`,{[c.dataset.k]:c.checked});
+    const i=S.radios.findIndex(x=>x.id===r.id);if(i>=0)S.radios[i]=r;renderRadios()}
+  catch(err){c.checked=!c.checked;alert(err.message)}
+});
 connect();
 </script>
 </body>

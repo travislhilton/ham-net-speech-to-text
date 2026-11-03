@@ -8,6 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .schedule import NoSuchNet
+
 STATIC = Path(__file__).parent / "static"
 
 
@@ -47,6 +49,8 @@ def make_handler(station):
                 return self._json({"text": TEST_TEXT, "history": station.test_history()})
             if u.path == "/api/settings":
                 return self._json(station.operator())
+            if u.path == "/api/schedule":                        # schedule: the nets, for the editor
+                return self._json(station.nets.list())
             if u.path.startswith("/audio/"):
                 tid = u.path.rsplit("/", 1)[-1]
                 tx = station._find(tid)
@@ -60,14 +64,17 @@ def make_handler(station):
 
         def do_POST(self):
             u = urlparse(self.path)
-            m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear))?", u.path)
+            m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen))?", u.path)
             routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test"}
+            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/delete)?)?", u.path)     # schedule: add / edit / delete
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json({"error": "not found"}, 404)
             try:
                 n = min(int(self.headers.get("Content-Length") or 0), 512 * 1024)
                 body = json.loads(self.rfile.read(n) or b"{}")
+                if sched:
+                    return self._json(station.nets.post(u.path, body))
                 if u.path == "/api/settings":
                     return self._json(station.set_operator(body))
                 if u.path == "/api/winlink/preview":
@@ -82,11 +89,15 @@ def make_handler(station):
                                                            bool(body.get("force"))))
                 if m.group(2) == "pause":
                     return self._json(station.set_paused(m.group(1), bool(body.get("paused", True))))
+                if m.group(2) == "listen":                       # schedule: listen only during nets
+                    return self._json(station.nets.set_listen(m.group(1), body))
                 if m.group(2) == "clear":
                     return self._json(station.clear_radio(m.group(1)))
                 return self._json(station.set_radio(m.group(1), body.get("freq_mhz"), body.get("mode")))
             except (RuntimeError, FileNotFoundError) as e:
                 return self._json({"error": str(e)}, 409)
+            except NoSuchNet:
+                return self._json({"error": "no such net"}, 404)
             except KeyError:
                 return self._json({"error": "no such radio"}, 404)
             except (ValueError, TypeError) as e:

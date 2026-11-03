@@ -148,6 +148,8 @@ class Station:
                                  "meter": self.meters[r["id"]].limits()}
                        for r in config["radios"]}
         self._apply_operator()
+        from .schedule import NetSchedule      # schedule: dashboard-edited nets + listen only during nets
+        self.nets = NetSchedule(self)
         self.final_q: queue.Queue = queue.Queue()
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
@@ -179,6 +181,10 @@ class Station:
                     self.accurate.tick()
                 except Exception as e:  # noqa: BLE001 — never let the pass stop the station
                     print(f"accurate tick: {type(e).__name__}: {e}", flush=True)
+            try:                               # schedule: resume/pause radios at their nets
+                self.nets.tick()
+            except Exception as e:  # noqa: BLE001 — never let the schedule stop the station
+                print(f"schedule tick: {type(e).__name__}: {e}", flush=True)
             with self.lock:
                 radios = list(self.radios.values())
             self.bus.publish("radios", {"radios": radios, "net": self.schedule_now()})
@@ -302,20 +308,22 @@ class Station:
               flush=True)
         return res
 
-    def set_paused(self, rid: str, paused: bool) -> dict:
+    def set_paused(self, rid: str, paused: bool, by: str = "operator") -> dict:
         """Stop (or resume) listening to a radio: the sound input is closed, nothing is recorded or
-        transcribed until resumed. Kept across restarts."""
+        transcribed until resumed. Kept across restarts. `by`: "operator" or "schedule" (shown on the card)."""
         if rid not in self.radios:
             raise KeyError(rid)
         with self.lock:
             self.radios[rid]["paused"] = bool(paused)
+            self.radios[rid]["paused_by"] = by if paused else None
             if not paused and self.radios[rid].get("state") == "paused":
                 self.radios[rid]["state"] = "starting"
             saved = self._saved()
-            saved.setdefault("radios", {}).setdefault(rid, {})["paused"] = bool(paused)
+            saved.setdefault("radios", {}).setdefault(rid, {}).update(paused=bool(paused),
+                                                                     paused_by=by if paused else None)
             self._save(saved)
             radio = dict(self.radios[rid])
-        print(f"{datetime.now():%H:%M:%S} {rid} {'PAUSED' if paused else 'RESUMED'} by the operator", flush=True)
+        print(f"{datetime.now():%H:%M:%S} {rid} {'PAUSED' if paused else 'RESUMED'} by the {by}", flush=True)
         self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
         return radio
 
