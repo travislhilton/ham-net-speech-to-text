@@ -138,8 +138,8 @@ def test_session_bounds_and_drafts():
     tx = [{"radio": "a", "status": "final", "start": s, "speaker": sp, "callsigns": cs, "text": tx_, "hint_keys": hk}
           for s, sp, cs, tx_, hk in [
               ("2026-11-02T15:00:00", "K1AA", ["K1AA"], "old chat", []),
-              ("2026-11-02T16:30:00", "WA7XQZ", ["WA7XQZ"], "net opens", []),
-              ("2026-11-02T16:31:00", "W9XYZ", ["W9XYZ", "WA7XQZ"], "W9XYZ no traffic", []),
+              ("2026-11-02T16:30:00", "K7NET", ["K7NET"], "net opens", []),
+              ("2026-11-02T16:31:00", "W9XYZ", ["W9XYZ", "K7NET"], "W9XYZ no traffic", []),
               ("2026-11-02T16:33:00", "K7ABC", ["K7ABC"], "relay for N0XYZ please", ["relay"])]]
     start, end = ics.session_bounds(tx, "a")
     assert start == "2026-11-02T16:30:00" and end == "2026-11-02T16:33:00"
@@ -148,12 +148,12 @@ def test_session_bounds_and_drafts():
     assert [(s["count"], s["freq_mhz"]) for s in ics.sessions(retuned, "a")][-1] == (1, 146.94)   # new frequency splits
     span = ics.select(tx, "a", start, end)
     people = ics.participants(span, {"W9XYZ"}, {"K7ABC": {"card": {"name": "Pat", "sources": ["FCC"]}}})
-    assert [p["call"] for p in people] == ["WA7XQZ", "K7ABC"] and people[1]["confirmed"] and not people[0]["confirmed"]
+    assert [p["call"] for p in people] == ["K7NET", "K7ABC"] and people[1]["confirmed"] and not people[0]["confirmed"]
     d = ics.drafts(span, {"freq_mhz": 145.9, "mode": "FM"}, {"callsign": "W9XYZ", "name": "Pat", "winlink_account": "W9XYZ-5"},
                    people, "check_in", "Example County net")
     assert [x["form"] for x in d] == ["ics309", "ics213"]
     v = d[0]["values"]
-    assert v["Time2"] == "2026-11-02 16:31" and v["From2"] == "W9XYZ" and v["To2"] == "WA7XQZ" and v["Time30"] == ""
+    assert v["Time2"] == "2026-11-02 16:31" and v["From2"] == "W9XYZ" and v["To2"] == "K7NET" and v["Time30"] == ""
     assert "K7ABC — Pat" in d[1]["values"]["Message"] and "relay for N0XYZ" in d[1]["values"]["Message"]
     long = ics.drafts([dict(span[0], speaker=None, callsigns=["K7ABC", "N0XYZ"], text="word " * 60)], {}, {}, [], None, "T")
     r = long[0]["rows"][0]

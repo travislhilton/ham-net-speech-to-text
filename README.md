@@ -107,27 +107,78 @@ you chose is remembered. Each column shows:
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
 - **Stations heard** (per radio, a tab beside On the air): one line per callsign (city, state, country · name, how
-  often and when last heard); tap a line for the license, grid, zones and address (FCC, QRZ.com and the country file). Click any callsign for its card; the box
-  at the top of the page looks up any callsign.
+  often and when last heard); tap a line for the license, grid, zones and address (FCC, QRZ.com and the country file). Click any callsign for its card (with
+  the nets that station takes part in: how many times and when last).
 - **Net type** (a badge on each radio card): the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
   with a red banner if it sounds like a real emergency.
-- **Nets** (on each radio card): the nets scheduled on that radio; the one running now is in green.
-- **Nets…** (top of the page, and on each radio card for that radio's nets): add, edit or delete scheduled
-  nets (name, radio, days, start time, minutes, frequency and mode, net control). Changes apply at once on
-  every open browser, no restart. The schedule starts as the `schedule:` list in `config\station.yaml`; the
-  first change made here is saved to `data\schedule.json`, which from then on is the schedule (station.yaml is
-  never rewritten; delete schedule.json to start again from station.yaml).
-  Per radio, **Listen only during scheduled nets**: the station resumes that radio 1 minute before each of its
+- **Search everything** (the box at the top): every transmission ever heard (live and accurate text), callsigns and
+  callbook names, nets, and the minutes, in one list grouped as **Stations**, **Nets**, **Minutes** and
+  **Transmissions**, with the words highlighted, ▶ to play and **Show in context ›** (today's log, or the net's
+  minutes with the transmission lit up). Several words must all match; "quotes" for an exact phrase. Narrow it by net,
+  radio, dates or callsign. Searching 100,000 transmissions takes about a tenth of a second.
+- **Nets** (on each radio card): the nets scheduled on that radio, the one running now in green, the next date of the
+  others.
+- **Nets** (top of the page; **Nets…** on a radio card opens it for that radio). One window, full screen on a phone, with
+  five tabs and a **Net** picker:
+  - **Schedule**: each net as a card in plain words ("Every 1st and 3rd Sunday at 19:00, 146.940 MHz FM, 60 min"),
+    its next date, net control and alert. **Add a net** / **Edit**: name, radio, start time, minutes, frequency and
+    mode, net control, **Alert, minutes before** (5 by default, 0 = none), **Emergency or priority net** (keeps an
+    Urgent board), and **Repeats** like Outlook: **Once**, **Daily**, **Weekly** (every N weeks on chosen days),
+    **Monthly** (on day 1–31 or the last day, or on the 1st/2nd/3rd/4th/5th/last chosen weekday, any mix such as
+    1st and 3rd Sunday), **Yearly** (a month plus a day or an nth weekday), every N, starting on a date, ending never,
+    on a date or after N times. A day a month lacks (the 31st, the 5th Sunday) means its last day / is skipped. While
+    you type, the rule is said in words with its **next 5 dates**; on a saved net each date has **Skip** (cancelled,
+    **Restore** brings it back) and **Move…** (another day, time or frequency for that one date only). Changes apply
+    at once on every open browser. The schedule starts as the `schedule:` list in `config\station.yaml`; the first
+    change made here is saved to `data\schedule.json`, which from then on is the schedule (station.yaml is never
+    rewritten; delete schedule.json to start again from station.yaml). Old entries with `days: [Tue, Thu]` keep
+    working: they are read as a weekly rule and saved in the new form the next time they are edited.
+  - **History**: every time each net met, newest first by month: date, time, stations, transmissions, accurate pass
+    done, minute items, urgent issues and whether its Winlink messages went out. Tick **Include conversations** for
+    what was heard outside any net. Tap one for its minutes. Kept in `data\history.db`, built from `data\logs` the
+    first time the station starts (older logs included) and kept up to date as transmissions are logged.
+  - **Analysis** (per net): times met, stations on average, the **stations each time** chart (a table too), last
+    time's **newcomers** and **regulars not heard**, the **regulars** with the rule written under them (took part in
+    at least half of the last 8 times, and at least twice), the **net control** rota, and every station that ever took
+    part: times, of the last 8, first and last time, and streak. Taking part = spoke, checked in, or was
+    acknowledged by net control; a callsign only mentioned does not count.
+  - **Minutes** (per time the net met; also **Minutes** on each net's header in the log): drafted from the
+    transcript by rules as the net runs, offline: **attendance** in check-in order with net control, **urgent**
+    issues, **announcements** (with the date or place they are about), **schedule** (events), **action items**
+    (who, due), **decisions** and **traffic**, each linked to the transmission it came from. Items the station drafted
+    say *suggested*: tick **done**, **Edit**, or **Not right** (hidden, and not drafted again). Add items, add or remove
+    a station from the attendance, set net control, write **Notes**. Your changes are a layer of their own and never
+    overwritten when the net is drafted again. Open action items and traffic carry forward to the next time. **‹ ›**
+    step to the time before/after. **Download .md** or **Copy as text**; **Winlink messages…** puts the minutes in
+    the ICS-213.
+  - **Still open** (per net or for all): what net control may read out: urgent issues not handled, announcements still
+    valid (until their date passes, or 4 weeks when undated), coming events, open action items and traffic not yet
+    handled. Shown again with the pre-net alert and when the net starts.
+- **Pre-net alert**: 5 minutes before each net (per net, **Alert, minutes before**), a banner on that radio's column
+  and a strip under the header on every open dashboard: "Tuesday Net starts in 5 min (19:00): set FTM-150R to
+  146.940 MHz FM", with what is still open for that net. **Radio is set** (also logs the radio at that frequency and
+  mode, like Change), **Remind me in 1 min**, **Skip this net** (a radio that listens only during nets then stays
+  paused for it). If the radio is already logged on that frequency it says **Radio already on 146.940 — ready**. It
+  stays up until 10 minutes after the start. A chime plays (🔔 on the banner or Settings mutes it, remembered per
+  browser) and the tab title blinks. On the station PC itself (`http://localhost:8091`) **Settings → Allow
+  notifications** also shows it as a Windows notification; browsers allow that only on localhost or https, so on a
+  phone the banner shows while the page is open (and the chime needs one tap on the page first).
+- **Urgent board** (emergency nets, and anything clearly urgent on any net: injury, fire, flood, missing person,
+  medical, shelter, power, roads, resources): a red box pinned above the log of the radio it was heard on, one line
+  each with its category, who reported it, when and where, and the people named. **Handled** clears it; **Show ›**
+  jumps to the transmission. It never covers the log (**Hide** folds it).
+- **Listening** (Nets → Schedule): per radio, **Listen only during scheduled nets**: the station resumes that radio 1 minute before each of its
   nets and pauses it 5 minutes after the net ends, so nothing between nets is recorded. The card says why it is
-  paused ("Paused until Example County ARES net at 20:00" or "Paused by you"). Pause and Resume still work; the next
+  paused ("Paused until Example County ARES Net at 20:00" or "Paused by you"). Pause and Resume still work; the next
   net start or end takes over again. Optionally, **when a net starts, log the radio at the net's frequency and
   mode** (you still tune the radio yourself; the retune warning stays). Kept across restarts in `data\operator.json`.
 - **Nets and conversations**: each radio's log is split into nets/conversations (a new one starts after 15
-  quiet minutes or when the radio's frequency changes), each with a header: time span, frequency, how many
-  transmissions and stations, and its own **Winlink messages…** button. That builds an **ICS-309**
+  quiet minutes, when the radio's frequency changes, or when a scheduled net starts), each with a header: the net's
+  name from the schedule (or the kind of net heard), time span, frequency, how many transmissions and stations, and
+  its own **Minutes** and **Winlink messages…** buttons. That builds an **ICS-309**
   Communications Log (every transmission: time, from = who is talking as above — yours, then stated, then net
   control, "?" when unknown —, to, what was said; 30 rows a page) and an **ICS-213**
-  summary (stations heard, traffic and relays) for that net only, addressed to every callsign that took part
+  summary (stations heard, traffic and relays, and the net's minutes) for that net only, addressed to every callsign that took part
   (callsigns no callbook confirms start unticked; **Uncheck all / Check all / Only callbook-confirmed**, and add
   any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
   connect. Close Winlink Express first; the station refuses while it is open and backs up Winlink's message
@@ -150,12 +201,14 @@ you chose is remembered. Each column shows:
 - **Help** (top right): opens the two-sided reference card (`/help`, from `station/static/card.html`) in a new tab.
   Print it double-sided on letter paper (flip on the long edge) and keep it by the radio.
 - **Settings** (top right): your callsign, name and grid; which Winlink Express folder (found
-  automatically: `C:\\RMS Express` and any other install) and which callsign account sends.
+  automatically: `C:\\RMS Express` and any other install) and which callsign account sends; **Net alerts**: the chime, and
+  notifications on the station PC.
 
 Which radios exist (and their sound inputs) and the first nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
 `config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HamNet Station** →
 End, then Run (or sign out and back in). Everything heard is kept in `data\logs\<date>.jsonl` and
-`data\recordings\<date>\`; problems are written to `data\station.log`.
+`data\recordings\<date>\`; the nets' history, minutes and search index in `data\history.db` (rebuilt from the logs if
+deleted, except your edits to the minutes); problems are written to `data\station.log`.
 
 Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 ```powershell
@@ -180,14 +233,21 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
-| Near-miss callsign correction ('WB6BQW' -> WB6DQW heard in this net, 'K7XDG Waverly' -> K7XVG of Waverly); only when one reading clearly wins, what was heard kept (dotted underline + tooltip), live and accurate text, stations heard and Winlink use the corrected call; 15 min after a net ends it runs once more with the whole net known; uncertain ones show as "WV78? KV7RMV KB7XT" to click; expired licences are not ticked in the Winlink To: list | working (`hamkit/callfix.py`, `callfix: false` turns it off); 3.915 net: 8 corrections, none contradicted, most garbles left as heard |
+| Near-miss callsign correction ('W9XVZ' -> W9XYZ heard in this net, 'K7ABD Springfield' -> K7ABC of Springfield); only when one reading clearly wins, what was heard kept (dotted underline + tooltip), live and accurate text, stations heard and Winlink use the corrected call; 15 min after a net ends it runs once more with the whole net known; uncertain ones show as "WV78? KV7RMV KB7XT" to click; expired licences are not ticked in the Winlink To: list | working (`hamkit/callfix.py`, `callfix: false` turns it off); 3.915 net: 8 corrections, none contradicted, most garbles left as heard |
 | QRZ.com online lookups (grid, international names), cached for offline use | working (`hamkit.qrz set-login`) |
 | Q-code / proword / abbreviation explanations | working (`config/glossary.yaml`) |
 | Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |
 | Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
 | Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
 | Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; Outbox format matched against Winlink Express 1.8 messages (one and two recipients); first real write to be checked |
-| Net schedule with radio, frequency and band; editor in the dashboard (Nets…) | working (`data/schedule.json`, seeded from `config/station.yaml`) |
+| Net schedule with radio, frequency and band; editor in the dashboard (Nets) | working (`data/schedule.json`, seeded from `config/station.yaml`) |
+| Repeating nets like Outlook: once, daily, every N weeks on days, monthly by day or nth weekday (1st and 3rd Sunday, last Friday), yearly; ends never / on / after N; skip or move one date; said in plain words with the next 5 dates | working (`station/recur.py`); used for listening, the net running now / next, naming nets in the log and the alert; DST, month ends, 5th weekdays and leap years tested |
+| Pre-net alert (5 min before, per net): banner + header strip on every dashboard, Radio is set / Remind me / Skip, chime, title, notification on localhost | working (`station/alerts.py`) |
+| Net history: each time a net met, with attendance, net control, transmissions, accurate pass, Winlink sent, minutes; backfilled from the logs | working (`station/history.py`, `data/history.db`, SQLite) |
+| Search everything (transmissions, stations, nets, minutes) with filters | working (SQLite FTS5, plain LIKE where FTS5 is missing); 100,000 transmissions: ~0.1 s |
+| Net analysis: attendance chart, regulars (stated rule), newcomers, regulars missing, net-control rota, every station's times/first/last/streak | working |
+| Minutes drafted by rules (attendance, announcements, schedule, action items, decisions, traffic, urgent), editable with a layer that is never overwritten; Still open; .md / text; in the ICS-213 | working (`station/minutes.py`); on the test nets: 100 % of items found, none wrong; on a held-out net written afterwards: 7 of 9 right, 7 of 8 found before tuning. An LLM tidy-up is stubbed (`minutes: {llm: …}`), not wired yet |
+| Urgent board for emergency nets (category, reporter, place, people; Handled) | working |
 | Listen only during scheduled nets (auto resume 1 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
 | Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | built + measured, not deployed yet (synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |

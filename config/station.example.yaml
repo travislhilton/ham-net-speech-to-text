@@ -26,18 +26,34 @@ radios:                     # one entry per radio; each needs its own sound inpu
   #   mode: LSB
 
 # Nets: which radio, which frequency, when (local time). These are the STARTING nets only: once a net is
-# added, changed or deleted on the dashboard (Nets...), the schedule lives in data\schedule.json and this
+# added, changed or deleted on the dashboard (Nets), the schedule lives in data\schedule.json and this
 # list is no longer read (delete data\schedule.json to start again from here). "Listen only during
-# scheduled nets" is a per-radio switch in that dialog (kept in data\operator.json).
+# scheduled nets" is a per-radio switch in that window (kept in data\operator.json).
 schedule:
-  - name: Example County ARES net
+  - name: Example County ARES Net
     radio: ftm150           # a radio id from radios: above
-    freq_mhz: 146.940       # optional; the dashboard warns when the radio is set to something else
-    # mode: FM              # optional; FM, USB, LSB, AM, CW or DIG (used by "log at the net's frequency")
-    days: [Tue]             # any of Mon Tue Wed Thu Fri Sat Sun
+    freq_mhz: 146.940       # optional; the alert says "set it to 146.940 MHz", and the dashboard warns when it differs
+    mode: FM                # optional; FM, USB, LSB, AM, CW or DIG
     start: "20:00"
     duration_min: 60        # 1 to 1440
-    ncs: WA7XQZ             # net control station: suggested phrases, and the speaker of its acknowledgements
+    ncs: K7NET              # net control station: suggested phrases, the speaker of its acknowledgements, the minutes
+    repeat: {freq: weekly, weekdays: [Tue]}
+    # alert_min: 5          # the pre-net alert, minutes before (default 5; 0 = none)
+    # emergency: true       # an emergency / priority net: keeps an Urgent board for it
+  # More repeat rules (the dashboard's Repeats editor writes these; all optional keys shown):
+  #   repeat: {freq: once, starts: "2026-12-05"}                            # one time only
+  #   repeat: {freq: daily}                                                 # every day
+  #   repeat: {freq: weekly, weekdays: [Mon, Tue, Wed, Thu, Fri]}           # every weekday
+  #   repeat: {freq: weekly, interval: 2, weekdays: [Tue, Thu], starts: "2026-11-03"}   # every 2 weeks (needs starts)
+  #   repeat: {freq: monthly, monthday: 15}                                 # the 15th of every month
+  #   repeat: {freq: monthly, monthday: -1}                                 # the last day of every month
+  #   repeat: {freq: monthly, nth: [1, 3], weekdays: [Sun]}                 # the 1st and 3rd Sunday
+  #   repeat: {freq: monthly, nth: [-1], weekdays: [Fri]}                   # the last Friday
+  #   repeat: {freq: yearly, month: 6, nth: [4], weekdays: [Sat]}           # Field Day: 4th Saturday of June
+  #   ... until: "2027-06-30"   or   count: 10 (with starts)                # when it ends (default: never)
+  # One date changed (the dashboard's Skip / Move... write these), keyed by the date it would have met:
+  #   exceptions: {"2026-12-01": {cancel: true, note: Hamfest}, "2026-12-15": {date: "2026-12-16", start: "19:30"}}
+  # Older lists like `days: [Tue, Thu]` still work (read as a weekly rule).
 
 accurate:                   # the accurate second pass on the home server (optional; home network only)
   urls: [http://192.168.1.20:8090, http://my-server:8090]   # your accurate-pass server(s), tried in order

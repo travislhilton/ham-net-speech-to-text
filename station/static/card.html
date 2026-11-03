@@ -145,7 +145,7 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
           <div class="tabsrow"><span>Radio</span><span>What you can do now ●</span><span>Stations heard 12</span><span>▴ Hide</span></div>
           <div class="panel">meters · waterfall · frequency · Pause · Nets… · Clear log… · Test transcription…</div>
           <div class="log">
-            <div class="hdr"><b>▾ Tuesday Net</b> 19:00–19:42 · 3.915 MHz · 96 tx · 31 stations <span class="btn">Winlink messages…</span></div>
+            <div class="hdr"><b>▾ Tuesday Net</b> 19:00–19:42 · 3.915 MHz · 96 tx · 31 stations <span class="btn">Minutes</span> <span class="btn">Winlink messages…</span></div>
             <div class="row"><span>19:04</span><span><b>K7ABC</b> <span class="btn">Who?</span> <span class="btn">▶ 4 s</span> <span class="call">K7ABC</span>, Springfield, no traffic.</span></div>
             <div class="row pend"><span>19:05</span><span><b>≈ K7NET (net control)</b> <i class="small">improving…</i> Roger, you're in the log.</span></div>
           </div>
@@ -184,9 +184,9 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
         <table>
           <tr><th>Grey words</th><td>Rough text while the station is still talking.</td></tr>
           <tr><th>Black text</th><td>The text, 2–3 seconds after they unkey.</td></tr>
-          <tr><th><span class="pend">Blue edge</span><br><i>improving…</i></th><td>Better text is on its way. Wait a little and the line updates by itself. Only on stations with an accurate pass set up.</td></tr>
+          <tr><th><span class="pend">Blue edge</span><br><i>improving…</i></th><td>Better text is on its way; the line updates by itself (accurate pass).</td></tr>
           <tr><th><span class="call">K7ABC</span></th><td>A callsign: tap it for the station's card. <b>Underlined</b>: corrected from a near miss. A dotted <b>maybe</b>: a guess to check.</td></tr>
-          <tr><th>Underlined word</th><td>A Q-code or proword, with its meaning below. Untick <b>Explain radio terms</b> to hide meanings.</td></tr>
+          <tr><th>Underlined word</th><td>A Q-code or proword, meaning below (untick <b>Explain radio terms</b> to hide).</td></tr>
           <tr><th><span class="btn">▶ 4 s</span></th><td>Play that transmission.</td></tr>
           <tr><th><i>probably noise</i></th><td>No speech in it. Ignore it.</td></tr>
         </table>
@@ -206,19 +206,29 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
         <h2>Before the net</h2>
         <ol>
           <li>Tune the radio. If the frequency changed, press <span class="btn">Change</span> and enter it.</li>
-          <li>Schedule the net once with <span class="btn">Nets…</span>: name, days, start time, length, frequency and <b>net control</b>'s callsign.</li>
-          <li>Optional: <b>Listen only during scheduled nets</b>. The radio starts 1 minute before each net and stops 5 minutes after.</li>
+          <li>Schedule it once: <span class="btn">Nets</span> → <span class="btn">+ Add a net</span>: name, radio, start, length, frequency, <b>net control</b> and how it <b>Repeats</b> (every Tuesday, 1st and 3rd Sunday, last Friday…). <b>Skip</b> or <b>Move…</b> one date without changing the rest.</li>
+          <li><b>5 minutes before</b>, a yellow alert: “set FTM-150R to 146.940 MHz FM”. Tune, then <span class="btn">Radio is set</span> (or <span class="btn">Remind me in 1 min</span>, <span class="btn">Skip this net</span>). 🔔 mutes the chime.</li>
+          <li>Optional: <b>Listen only during scheduled nets</b>: on 1 minute before, off 5 minutes after.</li>
         </ol>
       </section>
 
       <section>
         <h2>During the net</h2>
         <ul>
-          <li>Each net gets its own header in the log: time, frequency, how many stations.</li>
-          <li>Fix a missing or wrong speaker with <span class="btn">Who?</span>.</li>
-          <li>Red dot on <b>What you can do now</b>: emergency or priority traffic. Open it for the steps.</li>
-          <li>Identify every 10 minutes and at the end of a contact (FCC §97.119). The tab reminds you.</li>
+          <li>Each net gets its own header, named after the net: time, frequency, stations.</li>
+          <li>A red <b>Urgent</b> box (emergency nets): injury, fire, flood, missing person… Press <span class="btn">Handled</span> when it is dealt with.</li>
+          <li>Red dot on <b>What you can do now</b>: open it for the steps.</li>
+          <li>Identify every 10 minutes and at the end (FCC §97.119); the tab reminds you.</li>
         </ul>
+      </section>
+
+      <section>
+        <h2>Buttons on each radio</h2>
+        <table>
+          <tr><th><span class="btn">⏸ Pause</span></th><td>Stop listening until <span class="btn">▶ Resume</span>.</td></tr>
+          <tr><th><span class="btn">Clear log…</span></th><td>Clear the screen. Files stay on the PC.</td></tr>
+          <tr><th><span class="btn">Test transcription…</span></th><td>Read a text on the air; <b>Score</b> = % of words wrong.</td></tr>
+        </table>
       </section>
     </div>
 
@@ -237,11 +247,12 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
       </section>
 
       <section>
-        <h2>Buttons on each radio</h2>
+        <h2>Nets, minutes and search</h2>
         <table>
-          <tr><th><span class="btn">⏸ Pause</span></th><td>Stop listening until <span class="btn">▶ Resume</span>.</td></tr>
-          <tr><th><span class="btn">Clear log…</span></th><td>Clear the screen. Files stay on the PC.</td></tr>
-          <tr><th><span class="btn">Test transcription…</span></th><td>Someone reads a printed text on the air; <b>Score</b> shows the share of words wrong. Re-test after changing cable or levels.</td></tr>
+          <tr><th><span class="btn">Minutes</span></th><td>Drafted from what was said: attendance, announcements, actions, decisions, traffic, urgent. Edit; <b>Not right</b> hides one.</td></tr>
+          <tr><th>Still open</th><td>Read out at the start: what is still valid or open.</td></tr>
+          <tr><th>History · Analysis</th><td>Every time the net met; regulars, newcomers, who ran it.</td></tr>
+          <tr><th>Search box</th><td>Anything ever said, any callsign, net or minute item.</td></tr>
         </table>
       </section>
 
@@ -249,7 +260,7 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
         <h2>When something looks wrong</h2>
         <table>
           <tr><th>No text</th><td>Is the radio <b>Paused</b>? Does <b>Signal</b> move? Is the squelch opening on traffic?</td></tr>
-          <tr><th>Signal red</th><td>Clipping: turn the radio's data level down. No audio: check the cable and the <span class="mono">device</span> name in station.yaml.</td></tr>
+          <tr><th>Signal red</th><td>Too loud: turn the data level down. None: check the cable and <span class="mono">device</span> in station.yaml.</td></tr>
           <tr><th>Lots of <i>noise</i></th><td>Raise the squelch a little.</td></tr>
           <tr><th>Wrong calls</th><td>Use <span class="btn">Who?</span>. Low SNR means more mistakes.</td></tr>
           <tr><th>Outbox refused</th><td>Winlink Express is still open. Close it.</td></tr>

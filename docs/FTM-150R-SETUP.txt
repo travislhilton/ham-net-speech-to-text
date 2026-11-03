@@ -47,7 +47,7 @@ The radio only listens. The recorder never transmits.
    - [V/M] switches between VFO and memory ("M-ALL 001" style = memory mode).
      Memory: turn the left DIAL to the stored net channel.
      VFO: press [BAND] until 144 MHz, then type the frequency on the mic keypad,
-          e.g. 1 4 6 9 4 0 = 146.940 MHz (the WA7XQZ repeater output), or turn the left DIAL.
+          e.g. 1 4 6 9 4 0 = 146.940 MHz (a repeater output), or turn the left DIAL.
    - If band A shows TSQ or DCS, set it to TONE or OFF, so stations are not muted.
    - Squelch: mic [C] key, set it so it just closes on background noise.
    - PMG must be off: if the [PMG] key is lit amber, press it once to cancel.
