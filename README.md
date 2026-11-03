@@ -139,6 +139,8 @@ you chose is remembered. Each column shows:
 - **Test transcription…** (on each radio card): someone reads a fixed text over the air; **Score** shows how
   many words the live text and the accurate pass got wrong (0% = all right) and keeps a history, so a change
   to the radio, the cable or the settings can be judged by a number (`data\tests.jsonl`).
+- **Help** (top right): opens the two-sided reference card (`/help`, from `station/static/card.html`) in a new tab.
+  Print it double-sided on letter paper (flip on the long edge) and keep it by the radio.
 - **Settings** (top right): your callsign, name and grid; which Winlink Express folder (found
   automatically: `C:\\RMS Express` and any other install) and which callsign account sends.
 

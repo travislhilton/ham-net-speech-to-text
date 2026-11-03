@@ -49,6 +49,11 @@ def make_handler(station):
 
         def do_GET(self):
             u = urlparse(self.path)
+            if u.path in ("/help", "/card"):         # the printable two-sided reference card (station/static/card.html)
+                page = b'<!doctype html><html lang="en"><head><meta charset="utf-8">' \
+                       b'<meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + \
+                       (STATIC / "card.html").read_bytes() + b"</body></html>"
+                return self._send(200, page, "text/html; charset=utf-8")
             if u.path in ("/", "/index.html"):
                 return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
             if u.path == "/api/state":

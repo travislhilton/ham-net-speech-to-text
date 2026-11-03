@@ -469,3 +469,11 @@ def test_qrz_login_described_in_plain_words():
     assert ok and "no XML Logbook Data subscription" in m
     ok, m = describe({"Error": "Username/password incorrect"})
     assert not ok and "refused" in m
+
+
+def test_help_card_is_served():
+    import urllib.request
+    from station.server import STATIC
+    html = (STATIC / "card.html").read_text()
+    assert "Side 1" in html and "Side 2" in html and "<title>" in html
+    assert 'href="/help"' in (STATIC / "index.html").read_text()

@@ -72,6 +72,8 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .sess+.tx{border-top:0}
 /* a transmission the accurate pass is still working on: a thin pulsing bar + "improving…" */
 .tx.pending,.feed .tx.pending{padding-left:8px;box-shadow:inset 3px 0 0 var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 7%,transparent),transparent 45%);animation:accpulse 1.6s ease-in-out infinite}
+.helpbtn{display:inline-block;padding:4px 10px;border:1px solid var(--line,#ccc);border-radius:6px;text-decoration:none;color:inherit;font-size:13px}
+.helpbtn:hover{background:rgba(0,0,0,.05)}
 .tx.pending .who::after{content:"improving…";font-size:11px;color:var(--muted);margin-left:4px}
 @keyframes accpulse{50%{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 35%,transparent)}}
 @media (prefers-reduced-motion:reduce){.tx.pending{animation:none}}
@@ -180,6 +182,7 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
   <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> <span class="xl">Explain radio terms</span><span class="xs">Explain terms</span></label>
   <button id="openNets" title="Scheduled nets, and listening only while they are on">Nets…</button>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
+  <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the two-sided reference card (printable)">Help</a>
 </header>
 <nav id="rtabs" role="tablist" aria-label="Radios"></nav>
 <main>
