@@ -4,6 +4,16 @@ General Message summarising it. The operator reviews and edits everything before
 from datetime import datetime, timedelta
 
 ROWS_309 = 30
+CALL_MAX, SUB_MAX = 13, 90          # Winlink's Form-309 viewer: From/To maxlength 13, Subject 90, Page 2
+
+
+def fit(s: str, n: int) -> str:
+    """Shorten to the form's box, at a word boundary, marked with '...'."""
+    s = " ".join(str(s or "").split())
+    if len(s) <= n:
+        return s
+    cut = s[:n - 3].rsplit(" ", 1)[0] if " " in s[:n - 3] else s[:n - 3]
+    return cut.rstrip(" ,;:") + "..."
 
 
 def sessions(tx: list[dict], rid: str, gap_min: int = 15) -> list[dict]:
@@ -63,12 +73,13 @@ def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | Non
     for t in span:
         others = [c for c in t.get("callsigns", []) if c != t.get("speaker")]
         rows.append({"time": datetime.fromisoformat(t["start"]).strftime("%Y-%m-%d %H:%M"),
-                     "from": t.get("speaker") or "(unidentified)", "to": ", ".join(others) or "NET",
-                     "sub": (t.get("text") or "")[:200]})
+                     "from": fit(t.get("speaker") or "?", CALL_MAX),
+                     "to": fit(others[0] if len(others) == 1 else "NET", CALL_MAX),
+                     "sub": fit(t.get("text") or "", SUB_MAX)})
     out = []
     pages = [rows[i:i + ROWS_309] for i in range(0, len(rows), ROWS_309)]
     for n, page in enumerate(pages, 1):
-        v = {"Title": title, "Task": "", "TaskName": freq, "OpPer": "1", "Page": str(n) if len(pages) == 1 else f"{n} of {len(pages)}",
+        v = {"Title": title, "Task": "", "TaskName": freq, "OpPer": "1", "Page": str(n),
              "ActivityDateTime1": first.strftime("%Y-%m-%d %H:%M"), "OpName": name, "OperId": sender,
              "MsgSender": sender, "name": name}
         for i in range(1, ROWS_309 + 1):

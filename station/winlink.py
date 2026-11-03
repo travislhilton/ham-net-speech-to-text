@@ -111,6 +111,17 @@ def load_template(install: str, form: str) -> dict:
     forms = [x.strip() for x in t.get("form", "").split(",")]
     t["initial"], t["viewer"] = forms[0], (forms[1] if len(forms) > 1 else forms[0])
     t["vars"] = sorted(set(re.findall(r"<var (\w+)>", text)))
+    # the viewer's box sizes: a value longer than its box overflows Express's form view (smaller-looking text)
+    t["limits"] = {}
+    try:
+        page = (Path(install) / "Standard Templates" / d / t["viewer"]).read_text(encoding="latin-1")
+        for tag in re.findall(r"<input\b[^>]*>", page, re.I):
+            name = re.search(r'\{var (\w+)\}', tag) or re.search(r'name="(\w+)"', tag)
+            size = re.search(r'maxlength="(\d+)"', tag)
+            if name and size:
+                t["limits"][name.group(1).lower()] = int(size.group(1))
+    except OSError:
+        pass
     return t
 
 
@@ -143,6 +154,9 @@ def build(form: str, template: dict, values: dict, sender: str, to: list[str], g
           now: datetime | None = None, mid: str | None = None) -> dict:
     """One message: {'mid','subject','to','mime' (bytes),'size','date'}."""
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    from .ics import fit
+    lim = template.get("limits") or {}
+    values = {k: fit(v, lim[k.lower()]) if k.lower() in lim and len(str(v)) > lim[k.lower()] else v for k, v in values.items()}
     mid = mid or new_mid()
     subject = fill(template.get("subject", ""), values, sender)
     body = fill(template["msg"], values, sender).replace("\r\n", "\n").replace("\n", "\r\n")

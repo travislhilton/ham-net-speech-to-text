@@ -86,6 +86,19 @@ def test_build_213_matches_express_shape(install):
     assert "<grid_square>EM59ET</grid_square>" in xml and "<reply_template>ICS213_SendReply.0</reply_template>" in xml
 
 
+def test_values_fit_the_viewer_boxes(install, tmp_path):
+    import pathlib
+    v = pathlib.Path(install) / "Standard Templates" / "ICS USA Forms" / "Form-309_Viewer.html"
+    v.write_text('<input readonly="readonly" value="{var Sub1}" maxlength="90" size="108" name="Sub1" />'
+                 '<input value="{var Page}" maxlength="2" name="Page" />', encoding="latin-1")
+    t = winlink.load_template(install, "ics309")
+    assert t["limits"] == {"sub1": 90, "page": 2}
+    m = winlink.build("ics309", t, {"Sub1": "x" * 150, "Page": "12"}, "W9XYZ-5", ["W9XYZ"])
+    import re as _re
+    xml = [p for p in email.message_from_bytes(m["mime"], policy=policy.compat32).walk() if not p.is_multipart()][1].get_payload(decode=True).decode()
+    assert len(_re.search(r"<sub1>(.*?)</sub1>", xml).group(1)) == 90 and "<page>12</page>" in xml
+
+
 def test_registry_line_has_express_fields(install):
     t = winlink.load_template(install, "ics309")
     m = winlink.build("ics309", t, {"Title": "Net"}, "W9XYZ-5", ["W9XYZ"], now=datetime(2026, 11, 2, 23, 37, 26, tzinfo=timezone.utc))
@@ -142,6 +155,10 @@ def test_session_bounds_and_drafts():
     v = d[0]["values"]
     assert v["Time2"] == "2026-11-02 16:31" and v["From2"] == "W9XYZ" and v["To2"] == "WA7XQZ" and v["Time30"] == ""
     assert "K7ABC — Pat" in d[1]["values"]["Message"] and "relay for N0XYZ" in d[1]["values"]["Message"]
+    long = ics.drafts([dict(span[0], speaker=None, callsigns=["K7ABC", "N0XYZ"], text="word " * 60)], {}, {}, [], None, "T")
+    r = long[0]["rows"][0]
+    assert r["from"] == "?" and r["to"] == "NET" and len(r["sub"]) <= 90 and r["sub"].endswith("...")
+    assert ics.fit("WB7XNI-12-EXTRA", 13) == "WB7XNI-12-..." and ics.fit("short", 13) == "short"
     old = ics.drafts([dict(span[0], freq_mhz=3.915)], {"freq_mhz": 3.985, "mode": "LSB"}, {}, [], None, None)
     assert old[0]["values"]["Title"] == "Net on 3.915 MHz"                             # the net's frequency, not today's
     many = [dict(tx[1], start=f"2026-11-02T16:{i:02d}:00") for i in range(40)]
