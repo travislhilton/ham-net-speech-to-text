@@ -26,7 +26,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   #radios{min-height:0;overflow-y:auto;align-items:stretch;grid-auto-rows:minmax(100%,auto)}
   .rcol{min-height:0}.rcol>section{flex:1;min-height:0;display:flex;flex-direction:column}
   .feed{flex:1;min-height:0;max-height:none}
-  .rcol>.guide{max-height:34vh;overflow-y:auto;overscroll-behavior:contain;flex:none}
+  .top2>.guide{max-height:34vh}
 }
 #rtabs{display:none}
 /* phones / narrow windows: one radio at a time, picked with the tabs under the header */
@@ -38,15 +38,22 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   #rtabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   #rtabs .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}#rtabs .dot.rx{background:var(--ok)}#rtabs .dot.em{background:var(--bad)}
   main{flex:1;min-height:0;padding:8px 12px 10px;display:flex;flex-direction:column}
-  #radios{flex:1;min-height:0;display:flex;flex-direction:column}
+  #radios{flex:1;min-height:0;display:flex;flex-direction:column;align-items:stretch}
   .rcol{display:none;flex:1;min-height:0}.rcol.sel{display:flex}
   .rcol>section{flex:1;min-height:0;display:flex;flex-direction:column}
-  .rcol>.guide{flex:none;max-height:17vh;overflow-y:auto;overscroll-behavior:contain}
+  .top2>.guide{max-height:17vh}
   .feed{flex:1;min-height:0;max-height:none}
   .radio{flex:none}.radio .wf{height:64px;margin-top:6px}.radio .cap{display:none}.radio .axis{height:13px;font-size:10px}
   .radio .sch{display:none}.radio .cardbtns{margin-top:4px}
 }
 .guide>h2,.logbox>.tabs{margin-bottom:6px}.guide .empty{margin:0}
+.rcol{container-type:inline-size}.top2{display:flex;flex-direction:column;gap:10px;flex:none;min-width:0}
+.top2>.guide{margin:0;overflow-y:auto;overscroll-behavior:contain}
+/* a column wide enough (a landscape monitor): guidance sits to the right of the radio's meters, as tall as the card */
+@container (min-width:620px){
+  .top2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch}
+  .top2>.guide{contain:size;max-height:none}
+}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
 .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}.pane[hidden]{display:none}
 .sch{margin-top:4px;font-size:13px}.sch .now{font-weight:700;color:var(--ok)}.cardbtns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
@@ -205,7 +212,8 @@ function ensureCard(r){
   sec.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="feed" data-rid="${id}" role="tab">On the air</button><button data-tab="heard" data-rid="${id}" role="tab">Stations heard <span class="hn"></span></button></div>
     <div class="feed pane" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>
     <div class="feed pane" id="heard-${id}" hidden><p class="muted small">None yet.</p></div>`;
-  col.append(el,guide,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+  const top2=document.createElement("div");top2.className="top2";top2.append(el,guide);
+  col.append(top2,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
 let SEL=null;try{SEL=localStorage.getItem("hamnet.radio")}catch(e){}
 function selectRadio(id){SEL=id;try{localStorage.setItem("hamnet.radio",id)}catch(e){}
   document.querySelectorAll(".rcol").forEach(c=>c.classList.toggle("sel",c.id==="col-"+id));

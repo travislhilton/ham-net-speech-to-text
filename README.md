@@ -47,7 +47,8 @@ After installing, the station starts by itself whenever you sign in to Windows. 
 or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale.
 
 The dashboard has one column per radio, with everything about that radio in it, top to bottom: the
-radio card, **What you can do now**, then **On the air** and **Stations heard** as tabs. On a wide
+radio card with **What you can do now** to its right (stacked under it when the column is narrow), then
+**On the air** and **Stations heard** as tabs. On a wide
 screen the radio cards stay in place and the lower parts scroll on their own. On a phone (or any
 window under 900 px wide) the radios are tabs under the header, one radio at a time; a tab's dot turns
 green while that radio is receiving (red for emergency traffic), and the last tab you chose is remembered.
