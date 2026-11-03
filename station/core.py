@@ -194,6 +194,8 @@ class Station:
                 self.bus.publish("hints", self.hints)
 
     # ---------- operator settings (set on the dashboard; the operator tunes the radio) ----------
+    KEEP_TX = 6000      # in memory (the day's log keeps all): a busy day on two radios is ~1000; the Winlink span,
+                        # the accurate pass and the dashboard all need a net's FIRST transmission
     MODES = ("FM", "USB", "LSB", "AM", "CW", "DIG")
 
     def _operator_path(self) -> Path:
@@ -690,7 +692,7 @@ class Station:
                   "start": datetime.fromtimestamp(t0).isoformat(timespec="seconds"), "status": "live",
                   "partial": "", "text": "", "callsigns": [], "speaker": None, "terms": []}
             self.tx.append(tx)
-            del self.tx[:-500]
+            del self.tx[:-self.KEEP_TX]
         self.bus.publish("tx", tx)
 
     def _tx_end(self, rid, audio, info):
@@ -880,7 +882,7 @@ class Station:
             e["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
         for rid, h in self.hinters.items():
             self.hints.setdefault(rid, {"cards": [], "reminders": [], "net": {}})["net"] = h.classify()
-        del self.tx[:-500]
+        del self.tx[:-self.KEEP_TX]
         self.next_id = max([self.next_id] + [int(t["id"]) for t in self.tx if str(t["id"]).isdigit()])
 
     def snapshot(self) -> dict:
