@@ -24,8 +24,15 @@ _cs = re.compile(r"^[AKNW][A-Z]?\d[A-Z]{1,3}$")
 # Any amateur callsign shape (US and international): 1-3 prefix chars ending before a digit,
 # the digit, then 1-4 letters. Validated by roster / FCC / country file, never trusted alone.
 _ANY = re.compile(r"^(?=[A-Z0-9]{3,8}$)[A-Z0-9]{0,2}[A-Z]\d{1,2}[A-Z]{1,4}$|^\d[A-Z]\d[A-Z]{1,4}$")
+# Whisper often writes the prefix and spells the rest: "WA7 X-ray Hotel Echo", "K0 X-ray Echo Tango", "K-Zero Mike…".
+_LET = [w for w, v in PHON.items() if v.isalpha()]
+_DIGW = [w for w, v in PHON.items() if v.isdigit()]
+_MIX = re.compile(r"\b([AKNW][A-Z]?)[- ]?(\d|(?i:" + "|".join(_DIGW) + r"))((?:[\s,-]+(?i:" + "|".join(_LET) + r")){1,3})\b")
 # Whisper splits written calls: "W9-XYZ", "W9 XYZ", "W-9-T-L-H", "W9-T-L-H".
 _SPLIT = re.compile(r"\b([A-Z0-9]{1,3}(?:[-. ][A-Z0-9]{1,3}){1,5})\b")
+# large-v3 hearing a whole turn writes the call as it is spoken, prefix and suffix apart: "KK7, XKG, Eli",
+# "KB7, XLG Marvin", "KK-7, XKE" (11-02 442.100 net). Joined only when the joined call is known.
+_COMMA = re.compile(r"\b([AKNW][A-Z]?)-?(\d),\s*([A-Z]{1,3})\b")
 
 
 def load_vocab(config_dir: Path = CONFIG_DIR) -> dict:
@@ -58,7 +65,7 @@ def normalize(text: str, roster=None, validate=None):
     found = []
     ok = lambda c: bool((roster and c in roster) or (validate and validate(c)))
     def rep(m):
-        toks = re.split(r"[\s,-]+", m.group(1).lower())
+        toks = re.split(r"[\s,-]+", re.sub(r"x-ray", "xray", m.group(1).lower()))   # "X-ray" crashed this (KeyError 'x')
         cs = "".join(t if t.isdigit() else PHON[t] for t in toks)
         if _cs.match(cs):
             found.append(cs)
@@ -66,13 +73,27 @@ def normalize(text: str, roster=None, validate=None):
         return m.group(0)
     out = _pat.sub(rep, text)
 
+    def mix(m):
+        d = m.group(2) if m.group(2).isdigit() else PHON[m.group(2).lower()]
+        letters = [PHON[t] for t in re.split(r"[\s,-]+", re.sub(r"x-ray", "xray", m.group(3).lower())) if t]
+        cs = m.group(1) + d + "".join(letters)
+        if _cs.match(cs) and (len(letters) >= 2 or ok(cs)):
+            found.append(cs)
+            return cs
+        return m.group(0)
+    out = _MIX.sub(mix, out)
+
     def join(m):
         s = m.group(1)
         if not any(ch.isdigit() for ch in s) or not re.search(r"[A-Z]", s):
             return s
         cs = re.sub(r"[-. ]", "", s)
         return cs if _ANY.match(cs) and ok(cs) else s
+    def comma(m):
+        cs = m.group(1) + m.group(2) + m.group(3)
+        return cs if _ANY.match(cs) and ok(cs) else m.group(0)
     if roster or validate:
+        out = _COMMA.sub(comma, out)
         out = _SPLIT.sub(join, out)
         for cs in re.findall(r"\b[A-Z0-9]{3,8}\b", out):
             if _ANY.match(cs) and cs not in found and ok(cs):

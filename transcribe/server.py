@@ -12,7 +12,7 @@ import json, os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 
 from . import nets as netlogic
 from .engine import MODEL, Engine
@@ -85,22 +85,112 @@ ACCURATE_MODEL = os.environ.get("STT_ACCURATE_MODEL", "mlx-community/whisper-lar
 _accurate_lock = __import__("threading").Lock()
 
 
+def _wav16k(data: bytes):
+    import io, wave
+    import numpy as np
+    try:
+        with wave.open(io.BytesIO(data)) as w:
+            if w.getnchannels() != 1 or w.getframerate() != 16000 or w.getsampwidth() != 2:
+                raise HTTPException(415, "send 16 kHz mono 16-bit WAV")
+            return np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+    except (wave.Error, EOFError) as e:
+        raise HTTPException(400, f"not a WAV: {e}")
+
+
+def _highpass(x, highpass_hz: int):
+    """Sub-audible tone + mains hum off an FM data jack."""
+    import numpy as np
+    if highpass_hz and len(x) > 64:
+        f = np.fft.rfftfreq(len(x), 1 / 16000)
+        g = 0.5 - 0.5 * np.cos(np.pi * np.clip((f - (highpass_hz - 100)) / 100, 0, 1))
+        x = np.fft.irfft(np.fft.rfft(x.astype(np.float64)) * g, len(x)).astype(np.float32)
+    return x
+
+
+TEMPERATURES = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)     # Whisper's fallback when a window comes out repetitive
+
+
+def _whisper_decode(model: str):
+    """context.py's recogniser: audio in (a block of a net, any length), mlx_whisper's segments with word times and
+    probabilities out. No prompt and no conditioning on the previous window's text: with the previous text as a
+    prompt large-v3 copied earlier callsigns into later transmissions (call precision 52 -> 42 % on the synthetic
+    nets) and echoed prompts on the real ones (58 of 531).
+    no_speech_threshold=None: FM data-jack hiss puts Whisper's no-speech probability at ~0.6 for whole 30 s windows,
+    and its default skips such a window outright: on the 11-02 442.100 net a 294 s block lost 60 s of check-ins
+    (89-150 s), 146 of 392 transmissions came back empty. Without the skip: 121 (mostly hiss the live text had read
+    as "The wind is blowing up."), FCC-valid calls 82 -> 85. Loops, echoes and noise are caught in context.py."""
+    import mlx_whisper
+
+    def decode(x, prompt=""):
+        r = mlx_whisper.transcribe(x, path_or_hf_repo=model, language="en", initial_prompt=prompt or None,
+                                   condition_on_previous_text=False, temperature=TEMPERATURES, word_timestamps=True,
+                                   no_speech_threshold=None)
+        return r.get("segments") or []
+    return decode
+
+
+MAX_CONTEXT_AUDIO_S = 900        # one request: 15 min of audio (~29 MB); the station sends a net in blocks
+
+
+@app.post("/accurate/context", dependencies=[Depends(auth)])
+async def accurate_context(request: Request):
+    """The accurate pass with context (transcribe/context.py). multipart: `manifest` (JSON) + one WAV per clip.
+    manifest = {"clips": [{"id", "start" (epoch s or ISO), "file" (form field name), "target": bool}],
+                "highpass_hz": 300, "stage": "provisional" | "final", "method": optional "long" | "windows" | "both"}
+    The clips are put back on one timeline (pause-split pieces joined, real gaps marked by a short silence), decoded
+    (final: Whisper's own sequential 30 s decode AND our windows cut at breaks, merged word by word by confidence;
+    provisional: one decode), and each word goes back to the clip it was spoken in.
+    The station decides the context: provisional = the transmission + the ~25 s before it; final = a block of the
+    net + 30 s each side. -> {"results": {id: {"text", "conf", "flags", "words"}}, ...}
+    Only target clips are returned; context clips are heard, not reported. Nothing is stored here."""
+    import asyncio, time
+    from . import context as cx
+    form = await request.form()
+    try:
+        man = json.loads(form.get("manifest") or "{}")
+    except ValueError:
+        raise HTTPException(422, "manifest is not JSON")
+    hp = int(man.get("highpass_hz", 300) or 0)
+    stage = man.get("stage", "final")
+    clips, audio_s = [], 0.0
+    for c in man.get("clips", []):
+        f = form.get(c.get("file") or "")
+        if f is None or not hasattr(f, "read") or "id" not in c:
+            raise HTTPException(422, f"clip {c.get('id')!r}: no audio part {c.get('file')!r}")
+        start = c.get("start")
+        if isinstance(start, str):
+            start = datetime.fromisoformat(start).timestamp()
+        x = _highpass(_wav16k(await f.read()), hp)
+        audio_s += len(x) / 16000
+        clips.append(cx.Clip(str(c["id"]), float(start), x, bool(c.get("target", True))))
+    if not clips:
+        raise HTTPException(422, "no clips")
+    if audio_s > MAX_CONTEXT_AUDIO_S:
+        raise HTTPException(413, f"{audio_s:.0f} s of audio in one request (max {MAX_CONTEXT_AUDIO_S})")
+    # provisional: one decode of the transmission in its context (<= ~30 s: Whisper's long and window decodes are the
+    # same thing there); final: Whisper's long decode + our break-cut windows, merged (transcribe/context.py)
+    method = man.get("method") or ("both" if stage == "final" else "long")
+    if method not in ("long", "windows", "both"):
+        raise HTTPException(422, "method is long, windows or both")
+
+    def run():
+        t0 = time.time()
+        with _accurate_lock:
+            res = cx.transcribe_clips(clips, _whisper_decode(ACCURATE_MODEL), mode=method)
+        return res, time.time() - t0
+    res, took = await asyncio.get_running_loop().run_in_executor(None, run)
+    return {"results": res, "model": ACCURATE_MODEL.split("/")[-1], "stage": stage, "audio_s": round(audio_s, 2),
+            "elapsed_s": round(took, 2), "method": f"context-{method}"}
+
+
 @app.post("/accurate", dependencies=[Depends(auth)])
 def accurate(audio: UploadFile = File(...), prompt: str = Form(""), highpass_hz: int = Form(300)):
     """The station's accurate second pass: one transmission in (16 kHz mono 16-bit WAV), text out. Nothing is
     stored here; the station keeps the result beside its live text. A plain def: FastAPI runs it in a worker
-    thread, and the lock keeps one Whisper on the GPU at a time."""
-    import io, time, wave
-    import numpy as np
+    thread, and the lock keeps one Whisper on the GPU at a time. Kept for stations that predate /accurate/context."""
+    import time
     import mlx_whisper
-    with wave.open(io.BytesIO(audio.file.read())) as w:
-        if w.getnchannels() != 1 or w.getframerate() != 16000 or w.getsampwidth() != 2:
-            raise HTTPException(415, "send 16 kHz mono 16-bit WAV")
-        x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
-    if highpass_hz and len(x) > 64:                       # sub-audible tone + mains hum off an FM data jack
-        f = np.fft.rfftfreq(len(x), 1 / 16000)
-        g = 0.5 - 0.5 * np.cos(np.pi * np.clip((f - (highpass_hz - 100)) / 100, 0, 1))
-        x = np.fft.irfft(np.fft.rfft(x.astype(np.float64)) * g, len(x)).astype(np.float32)
+    x = _highpass(_wav16k(audio.file.read()), highpass_hz)
     t0 = time.time()
     with _accurate_lock:
         r = mlx_whisper.transcribe(x, path_or_hf_repo=ACCURATE_MODEL, language="en", initial_prompt=prompt or None,

@@ -281,10 +281,14 @@ class Station:
         d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), title or sched.get("name"))
         acc = None
         if getattr(self, "accurate", None):
-            acc = next((j for j in self.accurate.status() if j["radio"] == rid and start <= j["start"] <= end), None)
+            jobs = [j for j in self.accurate.status() if j["radio"] == rid and start <= j["start"] <= end]
+            acc = next((j for j in jobs if j["state"] in ("queued", "running")), None) or \
+                next((j for j in jobs if j.get("stage") == "final"), None) or (jobs[0] if jobs else None)
+        from .accurate import stage_of
         with self.lock:
+            # waiting = not yet final (a provisional text is replaced when the net's final pass lands)
             waiting = sum(1 for t in ics.select(list(self.tx), rid, start, end, include_noise=True)
-                          if t.get("wav") and not t.get("accurate") and not t.get("accurate_echo"))
+                          if t.get("wav") and stage_of(t) != "final")
         return {"radio": rid, "start": start, "end": end, "count": len(span), "to": people, "drafts": d,
                 "accurate": acc, "accurate_missing": waiting,
                 "operator": {k: op[k] for k in ("callsign", "name", "winlink_dir", "winlink_account", "express_running")}}
@@ -481,10 +485,18 @@ class Station:
         live text stays in use."""
         raw = (res.get("text") or "").strip()
         t0 = self._find(tid)
+        stage = res.get("stage") or "final"
+        cur = t0 and (t0.get("accurate") or t0.get("accurate_echo"))
+        if stage == "provisional" and cur and cur.get("stage", "final") == "final":
+            return                                               # a late provisional never undoes the final text
+        extra = {k: res[k] for k in ("conf", "flags") if res.get(k) not in (None, [])}   # context pass: confidence
         from .textclean import collapse_repeats, template_loop
-        if self._is_echo(t0.get("radio") if t0 else None, raw) or collapse_repeats(raw)[1] or template_loop(raw):
-            # a prompt echo or a loop: worse than the live text, so the live text stays in use
-            echo = {"text": raw, "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds")}
+        if (self._is_echo(t0.get("radio") if t0 else None, raw) or collapse_repeats(raw)[1] or template_loop(raw)
+                or "low_conf" in (res.get("flags") or [])):
+            # a prompt echo, a loop, or nothing heard (the context pass returns "" for a clip it set aside: a
+            # courtesy beep read as "Thank you."): worse than the live text, so the live text stays in use
+            echo = {"text": raw, "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds"),
+                    "stage": stage, **extra}
             with self.lock:
                 tx = self._find(tid)
                 if not tx:
@@ -499,7 +511,8 @@ class Station:
         text, calls = normalize(res.get("text", ""), roster=self.roster, validate=validate)
         text, calls, fix = callfix.apply(self, self._find(tid), text, calls, whole_net=True)   # near-miss calls
         acc = {"text": text, "callsigns": calls, "noise": probably_noise(text, calls),
-               "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds"), **fix}
+               "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds"), "stage": stage,
+               **extra, **fix}
         with self.lock:
             tx = self._find(tid)
             if not tx:

@@ -265,9 +265,9 @@ function txHtml(t0){
     (t.terms&&t.terms.length?`<div class="terms gloss">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
     (t.looped?`<div class="terms">Weak signal: repeated words were removed.</div>`:"");
   const radio="";
-  if(a&&t0.status==="final")body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span> · live text</summary>${esc(t0.text||"")}</details>`;
+  if(a&&t0.status==="final")body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">${a.stage==="provisional"?"≈ accurate<span class=\"lt\"> (provisional: the final pass runs when the net ends)</span>":`✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span>`} · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
-  const pend=S.accurate_available&&t0.status==="final"&&t0.wav&&!t0.accurate&&!t0.accurate_echo;   // waiting may improve it
+  const pend=S.accurate_available&&t0.status==="final"&&t0.wav&&accStage(t0)!=="final";   // waiting may improve it (a provisional text too)
   return `<div class="tx${pend?" pending":""}" id="tx-${esc(t.id)}"${pend?' title="Improving: the accurate pass on the home server is working on this. Wait a moment for a better transcript."':""}><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
 }
 // A net or conversation = a run of transmissions on one frequency with no quiet gap over 15 minutes
@@ -302,12 +302,13 @@ function sessHtml(rid,s,latest){
 // ---------- the accurate pass (home server) ----------
 const dur=s=>s<60?`about ${Math.max(5,Math.round(s/5)*5)} s`:`about ${Math.round(s/60)} min`;
 const GUESS_RATE=8;   // audio seconds per second on the home server, until the station has measured it
+const accStage=t=>{const r=t.accurate||t.accurate_echo;return r?(r.stage||"final"):null};   // as station/accurate.py stage_of
 function accState(rid,fin){ // what the pass has done for these transmissions
   if(!fin.length)return null;
   const a=Date.parse(fin[0].start),b=Date.parse(fin[fin.length-1].start);
   const jobs=(S.accurate||[]).filter(j=>j.radio===rid&&Date.parse(j.start)<=b+1000&&Date.parse(j.end)>=a-1000);   // overlaps
   const active=jobs.find(j=>j.state==="queued"||j.state==="running");
-  const missing=fin.filter(t=>t.wav&&!t.accurate&&!t.accurate_echo);   // an echo of the prompt = done, live text kept
+  const missing=fin.filter(t=>t.wav&&accStage(t)!=="final");   // an echo of the prompt = done, live text kept; provisional = not yet
   const last=jobs.sort((x,y)=>(x.queued_at||"").localeCompare(y.queued_at||"")).pop();
   return {active,missing,last,est:missing.reduce((n,t)=>n+(t.duration_s||0),0)/GUESS_RATE+missing.length*0.4};
 }
@@ -320,7 +321,8 @@ function accHtml(rid,fin,latest){
   if(st.last&&st.last.state==="unreachable")return `<div class="acc"><span class="bad">Accurate pass waiting: the home server is not reachable</span> <span class="muted">(tries again every 2 min)</span> ${run("Try now")}</div>`;
   if(st.last&&st.last.state==="error")return `<div class="acc"><span class="bad">Accurate pass failed: ${esc(st.last.error||"")}</span> ${run("Try again")}</div>`;
   const n=st.missing.length;
-  return `<div class="acc"><span class="muted">${n} of ${fin.length} with live text only. ${latest?"The accurate pass follows each transmission":"Accurate pass"}: ${dur(st.est)}.</span> ${run(latest?"Run now":"Run accurate pass")}</div>`;
+  const prov=st.missing.filter(t=>accStage(t)==="provisional").length;
+  return `<div class="acc"><span class="muted">${n} of ${fin.length} waiting for the final accurate text${prov?` (${prov} have a provisional one)`:""}. ${latest?"The accurate pass follows each transmission":"Accurate pass"}: ${dur(st.est)}.</span> ${run(latest?"Run now":"Run accurate pass")}</div>`;
 }
 function wlAccNote(){
   const box=$("wlAcc");if(!box||!WL)return;
@@ -333,7 +335,7 @@ function wlAccNote(){
   else if(!st.missing.length&&WL.accurate_missing>0){box.className="wlacc ok";box.innerHTML=`<b>✓ The accurate pass is done.</b> ${reload}`}
   else if(!st.missing.length){box.className="wlacc ok";box.innerHTML="✓ These forms use the accurate text from the home server."}
   else {box.className="wlacc";const un=st.last&&st.last.state==="unreachable";
-    box.innerHTML=`${st.missing.length} of ${fin.length} transmissions have only the live text${un?"; the home server is not reachable right now":""}. Send now, or <button id="wlAccRun">Run the accurate pass</button> (${dur(st.est)}) and wait for it.`}
+    box.innerHTML=`${st.missing.length} of ${fin.length} transmissions do not have the final accurate text yet${un?"; the home server is not reachable right now":""}. Send now, or <button id="wlAccRun">Run the accurate pass</button> (${dur(st.est)}) and wait for it.`}
   const l=$("wlAccLoad");if(l)l.onclick=()=>wlPreview({radio:WL.radio,start:WL.start,end:WL.end});
   const r=$("wlAccRun");if(r)r.onclick=()=>runAcc(WL.radio,WL.start,WL.end);
 }

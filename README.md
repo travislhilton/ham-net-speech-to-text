@@ -117,9 +117,12 @@ you chose is remembered. Each column shows:
   any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
   connect. Close Winlink Express first; the station refuses while it is open and backs up Winlink's message
   list before each write.
-- **Accurate pass** (home network, optional): as soon as each transmission's live text is done, the station
-  sends its recording to the home server (Whisper large-v3, about 1 s per transmission) and puts the result beside
-  the live text, so a net's accurate text is ready seconds after its last transmission. Anything missed (home server
+- **Accurate pass** (home network, optional), in two stages. As soon as each transmission's live text is done,
+  the station sends its recording **with the ~25 s of the net before it** to the home server (Whisper large-v3) and
+  puts a *provisional* accurate text beside the live text, a few seconds later. When the net has been quiet for
+  5 minutes (`final_after_min`) it sends the **whole net** in 4-minute blocks (30 s of context each side) for the
+  *final* accurate text, which replaces the provisional one. Whisper hears whole turns instead of 1–3 s pieces, so
+  the final text gets far more right (see "How the accurate pass works" below). Anything missed (home server
   unreachable) is caught up 15 quiet minutes after the net; **Run now** on a net's header starts that at once. The header shows what it is doing: how many are done, a progress bar
   and about how long is left, then **✓ Accurate text for all N**. Corrected transmissions show the new text,
   with the live text a click away. The Winlink window says the same thing: send now with the live text, or
@@ -169,10 +172,57 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; Outbox format matched against Winlink Express 1.8 messages (one and two recipients); first real write to be checked |
 | Net schedule with radio, frequency and band; editor in the dashboard (Nets…) | working (`data/schedule.json`, seeded from `config/station.yaml`) |
 | Listen only during scheduled nets (auto resume 1 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
-| Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml; 3.915 net: 42 → 59 callsigns found) |
+| Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
+| Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | built + measured, not deployed yet (synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
 | Over-the-air transcription test with word-error score and history | working |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
 | Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). Code + `python -m tools.voice_eval` kept to re-measure on FM nets |
+
+## How the accurate pass works
+
+The station cuts a repeater net at every 0.8 s pause, so one "transmission" is often half a sentence, or one
+speaker's tail and the next speaker's start, 1–3 s long. Whisper given such a piece on its own reads courtesy beeps
+as "Thank you." and garbles callsigns it gets right inside a sentence. So the home server hears transmissions in
+their place in the net (`transcribe/context.py`, `POST /accurate/context`):
+
+1. **Stitch**: the transmissions go back on one timeline; pieces the station split at a pause are joined end to
+   end, transmissions that were apart get 0.5 s of silence between them.
+2. **Decode twice**: Whisper large-v3's own long-form decode walks the block 30 s at a time; separately, the block
+   is cut into 22–29 s windows **only at real breaks or the longest pause**. No prompt and no "previous text"
+   (both made Whisper copy earlier callsigns into later transmissions); temperature fallback on; Whisper's
+   no-speech skip OFF (FM hiss made it drop whole 30 s windows of check-ins).
+3. **Guards** per segment: loops, prompt echoes, and runs of "! ! !" are dropped.
+4. **Merge** the two decodes word by word by confidence (their window edges fall in different places) and give
+   each word back to the transmission it was spoken in (by time; at a pause split the boundary sits 0.4 s early
+   because Whisper's word times run early).
+5. Per transmission: text, word times, mean word confidence and flags. Empty, a lone "Thank you."-style phrase
+   with low confidence, or confidence under 0.3 → the station keeps the live text (`accurate_echo`).
+
+Stages: **provisional** = each transmission with the ~25 s before it, sent as it ends (median 0.8 s on the Mac
+Studio, ~3 s for a silent clip); **final** = the whole net in 240 s blocks + 30 s of context each side, when the net
+has been quiet 5 minutes (~11x real time: a 1-hour net in ~6 minutes). A late provisional never overwrites a final.
+
+Measured 2026-11-03 (`tools/accbench`: synthetic nets with known text — macOS voices reading real regional
+callsigns phonetically, through a simulated FM repeater/data jack or SSB channel matched to the 11-02 recordings,
+cut by the station's own segmenter; word error rate, lower is better):
+
+| | FM (4 nets) | SSB moderate (2) | SSB hard (2) | callsigns found (all 8) |
+|---|---|---|---|---|
+| live text (turbo + prompt) | 55.0 % | 50.7 % | 90.2 % | 12.8 % |
+| one clip at a time (the accurate pass until now) | 53.2 % | 51.8 % | 94.2 % | 10.6 % |
+| provisional (25 s before) | 43.4 % | 34.5 % | 93.9 % | 19.0 % |
+| **final (long + windows, merged)** | **38.2 %** | **29.0 %** | 93.0 % | **25.6 %** |
+
+Real 11-02 nets (no reference text; FCC-valid callsigns found, live text kept where set aside): 3.915 LSB 40
+(live) / 39 (old accurate) / **62** (final); 442.100 FM 81 / 73 / **86**; 3.985 0 / 1 / 0. What did not help:
+a second or third shifted tiling (55.4 % vs 55.3 %), the previous text as a prompt or as conditioning (fewer
+errors overall but callsigns copied from earlier turns), temperature fallback on short clips, dropping segments on
+Whisper's no-speech / log-probability numbers, large-v3-turbo (53.4 % vs 52.7 % long-form), Parakeet TDT 0.6B
+(fast, but left out much of the speech on the real FM recordings; not scored on the synthetic set). Hard SSB (−4…4 dB) stays unreadable for every method. The real test is the
+over-the-air **Test transcription** score.
+
+Re-run: `python tools/accbench/gen.py OUT fm 1` makes a net; `python -m tools.accbench.run final OUT` decodes it;
+`python -m tools.accbench.score OUT --methods=live,clip,prov,final` scores it.
 
 ## Editing the knowledge
 
