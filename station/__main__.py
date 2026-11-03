@@ -53,6 +53,8 @@ def main(argv=None):
     except Exception as e:  # noqa: BLE001
         print("QRZ unavailable:", e)
     st = Station(cfg, final, partial, callbook=Callbook(qrz=qrz))
+    if a.engine != "fake":
+        st.accurate_spec = choice.get("accurate")         # the accurate pass on this PC (tools/pick_accurate.py)
     st.start(listen=not (a.no_listen or a.simulate))
     port = a.port or cfg["port"]
     srv = serve(st, cfg["bind"], port)

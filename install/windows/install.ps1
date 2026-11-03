@@ -81,7 +81,7 @@ Run { & $py --version }
 Step "Program files -> $InstallDir"
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 if ($Src -ne (Resolve-Path $InstallDir).Path) {
-  foreach ($d in 'capture','hamkit','station','config','tools','install','docs') {
+  foreach ($d in 'capture','hamkit','station','transcribe','config','tools','install','docs') {
     if (Test-Path "$Src\$d") { robocopy "$Src\$d" "$InstallDir\$d" /MIR /XD __pycache__ .venv /XF local.yaml station.yaml engine.yaml secrets.env config.yaml ssh-keys.txt /NFL /NDL /NJH /NJS /NP | Out-Null }
   }
   Copy-Item "$Src\README.md" $InstallDir -Force
@@ -116,8 +116,10 @@ radios: []
 }
 
 if (-not $SkipModels) {
-  Step "Whisper models (OpenVINO, Intel GPU/CPU)"
-  foreach ($m in 'whisper-large-v3-turbo-int8-ov', 'whisper-small.en-int8-ov', 'whisper-base.en-int8-ov') {
+  Step "Whisper models (OpenVINO, Intel GPU/NPU/CPU; first run ~3 GB)"
+  # live: turbo (final text), small.en (fallback), base.en (words while talking); accurate pass on this PC: large-v3
+  foreach ($m in 'whisper-large-v3-turbo-int8-ov', 'whisper-small.en-int8-ov', 'whisper-base.en-int8-ov',
+                 'whisper-large-v3-int8-ov') {
     Run { & $vpy -c "from huggingface_hub import snapshot_download as s; s('OpenVINO/$m', local_dir=r'$InstallDir\models\$m')" }
     Write-Host "  $m ok"
   }
@@ -125,9 +127,15 @@ if (-not $SkipModels) {
   if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
     Write-Host '  NVIDIA GPU found: adding CUDA libraries for faster-whisper'
     Run { & $vpy -m pip install -q nvidia-cublas-cu12 nvidia-cudnn-cu12 }
+    Run { & $vpy -c "from huggingface_hub import snapshot_download as s; s('Systran/faster-whisper-large-v3', local_dir=r'$InstallDir\models\faster-whisper-large-v3')" }
+    Write-Host '  faster-whisper-large-v3 ok (accurate pass on the NVIDIA card)'
   }
   Step "Choosing the transcription engine for this PC (benchmark, ~1-3 min)"
   Run { & $vpy "$InstallDir\tools\pick_engine.py" --models "$InstallDir\models" --out "$InstallDir\config\engine.yaml" }
+  # The accurate second pass on this PC's spare compute (when the home server is not there): what can it
+  # sustain? Both stages / the final text after each net only / none. Written to engine.yaml `accurate:`.
+  Step "Measuring the accurate pass on this PC (benchmark, ~2-6 min)"
+  Run { & $vpy "$InstallDir\tools\pick_accurate.py" --models "$InstallDir\models" --out "$InstallDir\config\engine.yaml" }
 }
 
 if (-not $SkipCallbook) {

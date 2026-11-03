@@ -123,7 +123,7 @@ def main():
         for net in nets:
             if not os.path.exists(os.path.join(hyp_dir(net), m + ".json")):
                 continue
-            if ":" in net:
+            if ":" in net and not os.path.isdir(net):
                 print(f"{m:8s} {net}: {score_real(net, m, fb)}")
             else:
                 syn.append((net, score_syn(net, m, fb)))

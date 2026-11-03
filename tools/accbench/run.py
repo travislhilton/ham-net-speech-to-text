@@ -3,6 +3,9 @@
     python -m tools.accbench.run METHOD NETDIR...          a synthetic net from gen.py (log.jsonl + WAVs + truth)
     python -m tools.accbench.run METHOD STATION_DATA:FREQ  a real net: the station's data dir (logs/ + recordings/)
                                                            and a frequency in MHz, e.g. ~/hamnet-copy:442.1
+    --backend=ENGINE:MODEL@DEVICE   prov/final/long on another recogniser (transcribe/decoders.py), e.g. on a station
+                                    PC: --backend=openvino:C:/models/whisper-large-v3-int8-ov@GPU
+                                    or --backend=faster-whisper:large-v3@cpu; saved as METHOD-TAG.json (--tag=NAME)
 
 METHODs (all on the home server, mlx_whisper):
   live    large-v3-turbo per transmission with the station's short prompt (approximates the W9XYZ-5 live text)
@@ -25,16 +28,15 @@ TURBO = "mlx-community/whisper-large-v3-turbo"
 FB = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
 
-def highpass(x, hz):
-    if not hz or len(x) < 64:
-        return x
-    f = np.fft.rfftfreq(len(x), 1 / 16000)
-    g = 0.5 - 0.5 * np.cos(np.pi * np.clip((f - (hz - 100)) / 100, 0, 1))
-    return np.fft.irfft(np.fft.rfft(x.astype(np.float64)) * g, len(x)).astype(np.float32)
+highpass = cx.highpass
+
+
+def _real(net):
+    return ":" in net and not os.path.isdir(net)        # STATION_DATA:FREQ (a Windows path has a colon too)
 
 
 def hyp_dir(net):
-    if ":" in net:
+    if _real(net):
         root, freq = net.rsplit(":", 1)
         return os.path.join(os.path.expanduser(root), "accbench", freq)
     return os.path.join(net, "hyp")
@@ -42,7 +44,7 @@ def hyp_dir(net):
 
 def load_net(net):
     """-> rows [{id, t (epoch s), duration_s, radio, freq_mhz, audio}] in log order."""
-    if ":" in net:
+    if _real(net):
         root, freq = net.rsplit(":", 1)
         root = os.path.expanduser(root)
         rows = []
@@ -106,7 +108,15 @@ def final(rows, dec, block=240.0, margin=30.0):
     return out
 
 
-def run(method, rows):
+def backend(spec):
+    """'openvino:DIR@GPU' / 'faster-whisper:MODEL@cuda' / 'mlx:REPO' -> decode (transcribe/decoders.py)."""
+    from transcribe import decoders
+    eng, _, rest = spec.partition(":")
+    model, _, dev = rest.rpartition("@") if "@" in rest else (rest, "", "")
+    return decoders.make({"engine": eng, "model": model, "device": dev or "CPU"})
+
+
+def run(method, rows, dec=None):
     from station.core import phonetic
     out = {}
     if method in ("live", "clip"):
@@ -118,29 +128,37 @@ def run(method, rows):
                                          initial_prompt=p, condition_on_previous_text=False, temperature=0.0)
             out[r["id"]] = {"text": res["text"].strip()}
     elif method == "prov":
-        out = prov(rows, whisper(LV3, FB))
+        out = prov(rows, dec or whisper(LV3, FB))
     elif method == "final":
-        out = final(rows, whisper(LV3, FB))
+        out = final(rows, dec or whisper(LV3, FB))
     elif method == "long":
-        out = cx.transcribe_clips([cx.Clip(r["id"], r["t"], r["audio"]) for r in rows], whisper(LV3, FB), mode="long")
+        out = cx.transcribe_clips([cx.Clip(r["id"], r["t"], r["audio"]) for r in rows], dec or whisper(LV3, FB), mode="long")
     else:
         raise SystemExit("unknown method " + method)
     return out
 
 
 def main():
-    method = sys.argv[1]
-    for net in sys.argv[2:]:
+    opt = {a.split("=", 1)[0]: a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--")}
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    method = args[0]
+    dec = backend(opt["--backend"]) if "--backend" in opt else None
+    name = method + (f"-{opt['--tag']}" if "--tag" in opt else "")
+    for net in args[1:]:
         rows = load_net(net)
         t0 = time.time()
-        res = run(method, rows)
+        res = run(method, rows, dec)
         el = time.time() - t0
         au = sum(len(r["audio"]) for r in rows) / 16000
         os.makedirs(hyp_dir(net), exist_ok=True)
         json.dump({"results": {k: {kk: v[kk] for kk in ("text", "conf", "flags") if kk in v} for k, v in res.items()},
-                   "elapsed_s": round(el, 1), "audio_s": round(au, 1)}, open(os.path.join(hyp_dir(net), method + ".json"), "w"))
-        print(f"{net} {method}: {el:.1f} s for {au:.1f} s of audio ({au / el:.1f}x real time)", flush=True)
+                   "elapsed_s": round(el, 1), "audio_s": round(au, 1)}, open(os.path.join(hyp_dir(net), name + ".json"), "w"))
+        print(f"{net} {name}: {el:.1f} s for {au:.1f} s of audio ({au / el:.1f}x real time)", flush=True)
 
 
 if __name__ == "__main__":
     main()
+    sys.stdout.flush()
+    if os.name == "nt":          # an OpenVINO GPU pipeline can hang the process while unloading (CLAUDE.md)
+        import ctypes
+        ctypes.windll.kernel32.TerminateProcess(ctypes.windll.kernel32.GetCurrentProcess(), 0)

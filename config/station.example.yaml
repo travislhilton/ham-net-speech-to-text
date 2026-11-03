@@ -55,8 +55,14 @@ schedule:
   #   exceptions: {"2026-12-01": {cancel: true, note: Hamfest}, "2026-12-15": {date: "2026-12-16", start: "19:30"}}
   # Older lists like `days: [Tue, Thu]` still work (read as a weekly rule).
 
-accurate:                   # the accurate second pass on the home server (optional; home network only)
+accurate:                   # the accurate second pass: the home server when reachable, else THIS PC
   urls: [http://192.168.1.20:8090, http://my-server:8090]   # your accurate-pass server(s), tried in order
+  local: auto               # this PC's spare compute when there is no home server (key or network): auto = what the
+                            # installer's benchmark found (engine.yaml accurate:), final_only = only the final text
+                            # after each net, off = never on this PC
+  local_on_battery: false   # laptops: no local pass while on battery
+  # quiet_s: 2              # the local pass waits this long after the live text last needed the PC
+  # unload_after_min: 10    # the local model leaves memory after this many idle minutes
   live: true                # re-transcribe each transmission as soon as its live text is done (provisional text,
                             # heard with the ~25 s of the net before it)
   context: true             # hear transmissions in their place in the net (an older Mac service: one at a time)

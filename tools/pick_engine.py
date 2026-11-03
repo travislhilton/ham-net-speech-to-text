@@ -102,6 +102,12 @@ def main():
     pick = lambda r: r and {k: r[k] for k in ("engine", "device", "model", "rtf")}
     choice = {"final": pick(final), "partial": pick(partial), "measured": results,
               "note": "written by tools/pick_engine.py; re-run after hardware or driver changes"}
+    try:                                     # the accurate pass's own measurement (tools/pick_accurate.py) stays
+        old = yaml.safe_load(Path(a.out).read_text()) or {}
+        if old.get("accurate"):
+            choice["accurate"] = old["accurate"]
+    except (OSError, yaml.YAMLError):
+        pass
     Path(a.out).write_text(yaml.safe_dump(choice, sort_keys=False))
     print("\nFINAL  :", pick(final)); print("PARTIAL:", pick(partial)); print("->", a.out)
     return 0 if final else 1

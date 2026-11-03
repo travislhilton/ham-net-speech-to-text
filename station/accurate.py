@@ -1,7 +1,9 @@
 """The accurate second pass: send recordings to the home server (transcribe/server.py, Whisper large-v3 on Apple
-silicon) and keep the result BESIDE the live text. The live text is never replaced; the dashboard shows the accurate
-text when there is one, and the Winlink forms use it. Progress, time left and the outcome are published so the
-operator can decide whether to send the Winlink messages now (live text) or wait.
+silicon) or, when there is none (another operator's station, another network, no internet), run the same method on
+THIS PC's spare compute (station/accurate_local.py), and keep the result BESIDE the live text. The live text is
+never replaced; the dashboard shows the accurate text when there is one, and the Winlink forms use it. Progress,
+time left and the outcome are published so the operator can decide whether to send the Winlink messages now (live
+text) or wait.
 
 Two stages (POST /accurate/context, transcribe/context.py):
   provisional  as each transmission's live text is done: the transmission is decoded inside the ~25 s of the net
@@ -12,6 +14,11 @@ Two stages (POST /accurate/context, transcribe/context.py):
 A home server without /accurate/context (older service) gets one transmission at a time on POST /accurate, as before;
 those results count as final.
 
+Where it runs, per job: the home server when a key is configured and it answers; else this PC when the installer's
+benchmark said it can (engine.yaml `accurate:`; `final_only` = the final stage only: the PC is not fast enough to
+follow every transmission); else the job waits ("unreachable", retried every 2 minutes). Results carry `model` (e.g.
+"whisper-large-v3-int8-ov@GPU (this PC)") and `where`.
+
 Config (station.yaml):
     accurate:
       urls: [http://192.168.1.20:8090, http://my-server:8090]   # your server; tried in order
@@ -19,6 +26,8 @@ Config (station.yaml):
       final_after_min: 5        # the final pass this many quiet minutes after a net's last transmission
       auto_after_min: 15        # catch-up for anything still without the final pass (e.g. the Mac was off); 0 = off
       context: true             # false = the old one-transmission-at-a-time pass
+      local: auto               # this PC when the home server is not there: auto | final_only | off
+      local_on_battery: false   # a laptop on battery: no local pass
 The key: EMCOMM_STT_KEY in the environment or in config/secrets.env (KEY=value lines; never committed).
 """
 import io
@@ -74,6 +83,8 @@ class NoContextEndpoint(Exception):
 
 class Remote:
     """The home server service. Swappable in tests."""
+    where = "home server"
+
     def __init__(self, urls, key):
         self.urls, self.key, self.url = list(urls), key, None
 
@@ -130,7 +141,7 @@ def stage_of(t: dict) -> str | None:
 
 
 class AccuratePass:
-    def __init__(self, station, cfg: dict | None = None, remote: Remote | None = None):
+    def __init__(self, station, cfg: dict | None = None, remote: Remote | None = None, local=None):
         cfg = cfg or {}
         self.st = station
         self.auto_after = timedelta(minutes=float(cfg.get("auto_after_min", 15)))
@@ -138,13 +149,15 @@ class AccuratePass:
         self.live = bool(cfg.get("live", True))
         self.cfg_prompt = cfg.get("prompt", "")
         self.remote = remote or Remote(cfg.get("urls", DEFAULT_URLS), read_key(station.root))
-        self.enabled = remote is not None or bool(self.remote.key)      # no key, no uploads (tests, demos, new PCs)
+        self.has_remote = remote is not None or bool(self.remote.key)   # no key, no uploads (tests, demos, new PCs)
+        self.local = local                       # this PC (station/accurate_local.Local), or None
+        self.enabled = self.has_remote or local is not None
         # the context endpoint: on unless configured off, the remote cannot do it, or the Mac said 404
         self.context = bool(cfg.get("context", True)) and hasattr(self.remote, "transcribe_context")
         self.jobs: dict[str, dict] = {}          # key "radio|start" (provisional) / "radio|start|final" -> status
         self.q: queue.Queue = queue.Queue()      # provisional jobs: served first
         self.qf: queue.Queue = queue.Queue()     # final jobs: a block at a time, provisional work in between
-        self.rate = FIRST_GUESS_RATE
+        self.rates = {"remote": FIRST_GUESS_RATE, "local": getattr(local, "first_rate", 1.0)}
         self.lock = threading.Lock()
         self.retry_at: dict[str, float] = {}
         self.reach: bool | None = None          # the home server at the last try (None = not tried yet)
@@ -155,15 +168,32 @@ class AccuratePass:
             return [dict(j) for j in self.jobs.values()]
 
     def available(self) -> bool:
-        """Will waiting help? On, with a key, and the home server not known to be down."""
-        return bool(self.enabled and (self.live or self.auto_after > timedelta(0)) and self.reach is not False)
+        """Will waiting help? On, and either this PC can do it or (with a key) the home server is not known to be down."""
+        return bool(self.enabled and (self.live or self.auto_after > timedelta(0))
+                    and (self.local is not None or self.reach is not False))
+
+    def _kind(self) -> str:
+        """Where the next job will probably run: 'remote' (home server) or 'local' (this PC)."""
+        return "local" if self.local is not None and (not self.has_remote or self.reach is False) else "remote"
+
+    @property
+    def where(self) -> str:
+        return getattr(self.remote, "where", "home server") if self._kind() == "remote" else self.local.where
+
+    @property
+    def rate(self) -> float:
+        return self.rates[self._kind()]
 
     def _publish(self):
-        self.st.bus.publish("accurate", {"sessions": self.status(), "available": self.available()})
+        self.st.bus.publish("accurate", {"sessions": self.status(), "available": self.available(),
+                                         "where": self.where if self.enabled else None, "rate": round(self.rate, 2)})
+
+    def _measured(self, kind, audio_s, took):
+        self.rates[kind] = 0.7 * self.rates[kind] + 0.3 * (audio_s / max(took, 0.05))
 
     def _eta(self, j) -> int:
         left = j["audio_s"] - j["audio_done_s"]
-        return int(round(left / max(self.rate, 0.5) + OVERHEAD_S * (j["total"] - j["done"] - j["failed"])))
+        return int(round(left / max(self.rate, 0.05) + OVERHEAD_S * (j["total"] - j["done"] - j["failed"])))
 
     # ----- what to do -----
     def _span(self, rid, start, end) -> list[dict]:
@@ -214,6 +244,8 @@ class AccuratePass:
         """A transmission's live text is done: queue it under its net/conversation's provisional job right away."""
         if not self.enabled or not self.live or not tx.get("wav"):
             return
+        if self.local is not None and not self.local.provisional and (not self.has_remote or self.reach is False):
+            return                     # only this PC, and it is not fast enough to follow: the final pass after the net
         s = self._session_of(tx)
         if not s:
             return
@@ -237,7 +269,8 @@ class AccuratePass:
         for rid in self.st.radios:
             for s in ics.sessions(tx, rid):
                 quiet = now - datetime.fromisoformat(s["end"])
-                due = (self.context and self.final_after > timedelta(0) and quiet >= self.final_after) or \
+                due = ((self.context or self.local is not None) and self.final_after > timedelta(0)
+                       and quiet >= self.final_after) or \
                       (self.auto_after > timedelta(0) and quiet >= self.auto_after)
                 if not due:
                     continue                                       # still going (or only just over)
@@ -292,10 +325,20 @@ class AccuratePass:
         self._publish()
         if not self.enabled:
             return self._fail(j, key, "error", "no upload key: put EMCOMM_STT_KEY=... in config\\secrets.env")
-        self.reach = self.remote.reachable()
-        if not self.reach:
-            return self._fail(j, key, "unreachable", "home server not reachable")
         stage = j.get("stage", "final")
+        backend = None
+        if self.has_remote:
+            self.reach = self.remote.reachable()
+            if self.reach:
+                backend = self.remote
+        if backend is None and self.local is not None and (stage == "final" or self.local.provisional):
+            backend = self.local
+        if backend is None:
+            return self._fail(j, key, "unreachable", "home server not reachable" +
+                              ("; this PC makes the final text when the net has been quiet" if self.local else ""))
+        local = backend is self.local
+        with self.lock:
+            j["where"] = getattr(backend, "where", "home server")
         hp = self.st.highpass_for(j["radio"])
         tried = set()
         while True:                                            # the net may grow while this runs
@@ -307,9 +350,9 @@ class AccuratePass:
             with self.lock:
                 j["total"] = j["done"] + j["failed"] + len(todo)
                 j["audio_s"] = round(j["audio_done_s"] + sum(t.get("duration_s") or 0 for t in todo), 1)
-            if self.context:
+            if self.context or local:
                 try:
-                    self._context_all(j, todo, tried, hp, stage)
+                    self._context_all(j, todo, tried, hp, stage, backend)
                 except NoContextEndpoint:
                     self.context = False                       # an older Mac service: one at a time from now on
                     print(f"{datetime.now():%H:%M:%S} accurate pass: the Mac has no /accurate/context; one transmission at a time", flush=True)
@@ -338,7 +381,7 @@ class AccuratePass:
                 t0 = time.time()
                 res = self.remote.transcribe(wav, prompt, hp)
                 took = max(time.time() - t0, 0.05)
-                self.rate = 0.7 * self.rate + 0.3 * (res.get("audio_s", t.get("duration_s") or 0) / took)
+                self._measured("remote", res.get("audio_s", t.get("duration_s") or 0), took)
                 self.st.apply_accurate(t["id"], res)
                 with self.lock:
                     j["done"] += 1; j["model"] = res.get("model")
@@ -386,7 +429,9 @@ class AccuratePass:
             reqs.append((clips, group))
         return reqs
 
-    def _context_all(self, j, todo, tried, hp, stage):
+    def _context_all(self, j, todo, tried, hp, stage, backend=None):
+        backend = backend or self.remote
+        local = backend is self.local
         for clips, targets in self._requests(j, todo, stage):
             if self.st.stop.is_set():
                 return
@@ -398,13 +443,16 @@ class AccuratePass:
                 send = []
                 for c in clips:
                     t = c["tx"]
-                    send.append({"id": t["id"], "start": t["start"], "target": c["target"],
-                                 "wav": (self.st.data / t["wav"].replace("\\", "/")).read_bytes()})
+                    path = self.st.data / t["wav"].replace("\\", "/")
+                    send.append({"id": t["id"], "start": t["start"], "target": c["target"], "path": str(path),
+                                 **({} if local else {"wav": path.read_bytes()})})
                 t0 = time.time()
-                res = self.remote.transcribe_context(send, hp, stage)
+                res = backend.transcribe_context(send, hp, stage)
                 took = max(time.time() - t0, 0.05)
-                sent_s = sum(_wav_seconds(c["wav"]) for c in send)
-                self.rate = 0.7 * self.rate + 0.3 * (sent_s / took)
+                if local:                     # time held for the live text is not the PC's speed
+                    self._measured("local", float(res.get("audio_s") or 0), float(res.get("elapsed_s") or took))
+                else:
+                    self._measured("remote", sum(_wav_seconds(c["wav"]) for c in send), took)
                 got = res.get("results") or {}
                 for t in targets:
                     r = got.get(t["id"])
@@ -412,7 +460,8 @@ class AccuratePass:
                         with self.lock:
                             j["failed"] += 1; j["error"] = f"no result for {t['id']}"
                         continue
-                    self.st.apply_accurate(t["id"], {**r, "model": res.get("model"), "stage": res.get("stage", stage)})
+                    self.st.apply_accurate(t["id"], {**r, "model": res.get("model"), "stage": res.get("stage", stage),
+                                                     "where": res.get("where") or getattr(backend, "where", "home server")})
                     with self.lock:
                         j["done"] += 1; j["model"] = res.get("model")
             except NoContextEndpoint:

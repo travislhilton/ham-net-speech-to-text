@@ -380,7 +380,7 @@ function txHtml(t0){
   if(a&&t0.status==="final")body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">${a.stage==="provisional"?"≈ accurate<span class=\"lt\"> (provisional: the final pass runs when the net ends)</span>":`✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span>`} · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
   const pend=S.accurate_available&&t0.status==="final"&&t0.wav&&accStage(t0)!=="final";   // waiting may improve it (a provisional text too)
-  return `<div class="tx${pend?" pending":""}" id="tx-${esc(t.id)}"${pend?' title="Improving: the accurate pass on the home server is working on this. Wait a moment for a better transcript."':""}><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
+  return `<div class="tx${pend?" pending":""}" id="tx-${esc(t.id)}"${pend?` title="Improving: the accurate pass ${esc(accOn())} is working on this. Wait a moment for a better transcript."`:""}><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
 }
 // A net or conversation = a run of transmissions on one frequency with no quiet gap over 15 minutes
 // (the same rule as station/ics.py sessions(), which builds the Winlink messages).
@@ -416,9 +416,11 @@ function sessHtml(rid,s,latest){
   const mins=fin.length?`<button data-mins="${esc(ikey)}" title="Attendance, announcements, schedule, action items, decisions, traffic${sn?"; what is still open":""}">Minutes</button>`:"";
   return `<details class="sess" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum"><b>${esc(title)}</b>${kind} <span class="muted small">${span}${fq} · ${fin.length} tx · ${calls.size} station${calls.size===1?"":"s"}</span></span></summary><div class="sbody"><span class="sbtn">${mins} ${btn}</span>${accHtml(rid,fin,latest)}</div></details>`;
 }
-// ---------- the accurate pass (home server) ----------
+// ---------- the accurate pass (home server, or this PC when there is none) ----------
 const dur=s=>s<60?`about ${Math.max(5,Math.round(s/5)*5)} s`:`about ${Math.round(s/60)} min`;
-const GUESS_RATE=8;   // audio seconds per second on the home server, until the station has measured it
+const GUESS_RATE=8;   // audio seconds per second on the home server, until the station has sent its own measure
+const accRate=()=>S.accurate_rate||GUESS_RATE;
+const accOn=()=>S.accurate_where==="this PC"?"on this PC":"on the home server";
 const accStage=t=>{const r=t.accurate||t.accurate_echo;return r?(r.stage||"final"):null};   // as station/accurate.py stage_of
 function accState(rid,fin){ // what the pass has done for these transmissions
   if(!fin.length)return null;
@@ -427,7 +429,7 @@ function accState(rid,fin){ // what the pass has done for these transmissions
   const active=jobs.find(j=>j.state==="queued"||j.state==="running");
   const missing=fin.filter(t=>t.wav&&accStage(t)!=="final");   // an echo of the prompt = done, live text kept; provisional = not yet
   const last=jobs.sort((x,y)=>(x.queued_at||"").localeCompare(y.queued_at||"")).pop();
-  return {active,missing,last,est:missing.reduce((n,t)=>n+(t.duration_s||0),0)/GUESS_RATE+missing.length*0.4};
+  return {active,missing,last,est:missing.reduce((n,t)=>n+(t.duration_s||0),0)/accRate()+missing.length*0.4};
 }
 function accHtml(rid,fin,latest){
   const st=accState(rid,fin);if(!st)return "";
@@ -435,7 +437,7 @@ function accHtml(rid,fin,latest){
   if(st.active){const j=st.active,pct=j.total?Math.round((j.done+j.failed)/j.total*100):0;
     return `<div class="acc"><b>Accurate pass ${j.state==="queued"?"queued":"running"}</b> <span class="bar"><i style="width:${pct}%"></i></span> ${j.done+j.failed} of ${j.total} · ${j.eta_s!=null?dur(j.eta_s)+" left":""}</div>`}
   if(!st.missing.length)return `<div class="acc ok">✓ Accurate text for all ${fin.length}${st.last&&st.last.model?` (${esc(st.last.model)})`:""}. The Winlink messages use it.</div>`;
-  if(st.last&&st.last.state==="unreachable")return `<div class="acc"><span class="bad">Accurate pass waiting: the home server is not reachable</span> <span class="muted">(tries again every 2 min)</span> ${run("Try now")}</div>`;
+  if(st.last&&st.last.state==="unreachable")return `<div class="acc"><span class="bad">Accurate pass waiting: ${esc(st.last.error||"the home server is not reachable")}</span> <span class="muted">(tries again every 2 min)</span> ${run("Try now")}</div>`;
   if(st.last&&st.last.state==="error")return `<div class="acc"><span class="bad">Accurate pass failed: ${esc(st.last.error||"")}</span> ${run("Try again")}</div>`;
   const n=st.missing.length;
   const prov=st.missing.filter(t=>accStage(t)==="provisional").length;
@@ -450,7 +452,7 @@ function wlAccNote(){
   if(st.active){const j=st.active;box.className="wlacc run";
     box.innerHTML=`<b>The accurate pass is running for this net</b>: ${j.done+j.failed} of ${j.total} done, ${j.eta_s!=null?dur(j.eta_s)+" left":"starting"}. You can put the messages in the Outbox now with the live text, or wait. This box tells you when it is done.`}
   else if(!st.missing.length&&WL.accurate_missing>0){box.className="wlacc ok";box.innerHTML=`<b>✓ The accurate pass is done.</b> ${reload}`}
-  else if(!st.missing.length){box.className="wlacc ok";box.innerHTML="✓ These forms use the accurate text from the home server."}
+  else if(!st.missing.length){box.className="wlacc ok";box.innerHTML=`✓ These forms use the accurate text${st.last&&st.last.where?` (${esc(st.last.where)})`:""}.`}
   else {box.className="wlacc";const un=st.last&&st.last.state==="unreachable";
     box.innerHTML=`${st.missing.length} of ${fin.length} transmissions do not have the final accurate text yet${un?"; the home server is not reachable right now":""}. Send now, or <button id="wlAccRun">Run the accurate pass</button> (${dur(st.est)}) and wait for it.`}
   const l=$("wlAccLoad");if(l)l.onclick=()=>wlPreview({radio:WL.radio,start:WL.start,end:WL.end});
@@ -473,7 +475,7 @@ function renderTest(){
   const res=!r?"":`<h4>Your last transmission (${hhmm(r.start)}, ${Math.round(r.duration_s||0)} s)</h4>
    <p><b>Live (${esc(r.live.model||"")}): ${pctw(r.live)} wrong</b> (${r.live.errors} of ${r.live.words} words)<br><span class="small">${esc(r.live.text)}</span></p>
    <p>${r.accurate?`<b>Accurate pass (${esc(r.accurate.model||"")}): ${pctw(r.accurate)} wrong</b> (${r.accurate.errors} of ${r.accurate.words})<br><span class="small">${esc(r.accurate.text)}</span>`
-      :r.accurate_pending?'<span class="muted">Accurate pass running on the home server… the score appears here when it is done.</span>':'<span class="muted">No accurate pass (the home server is not set up or not reachable).</span>'}</p>`;
+      :r.accurate_pending?`<span class="muted">Accurate pass running ${esc(accOn())}… the score appears here when it is done.</span>`:'<span class="muted">No accurate pass (no home server, and this PC is not set up for one).</span>'}</p>`;
   const hist=T.history.length?`<h4>Earlier tests</h4><table class="hist"><tr><th>When</th><th>Radio</th><th>MHz</th><th>Live</th><th>Accurate</th></tr>${T.history.map(h=>`<tr><td>${esc(h.start.slice(5,16).replace("T"," "))}</td><td>${esc(h.radio)}</td><td>${h.freq_mhz?Number(h.freq_mhz).toFixed(3):""}</td><td>${pctw(h.live)}</td><td>${h.accurate?pctw(h.accurate):""}</td></tr>`).join("")}</table>`:"";
   $("testBody").innerHTML=`<h3>Transcription test · ${esc(rn)}</h3>
    <p class="small">1. Have someone transmit (or key a second radio) and read this at a normal pace, about 3 cm across the microphone:</p>
@@ -830,7 +832,7 @@ function connect(){
   es.addEventListener("inst",e=>{const d=JSON.parse(e.data);   // a net's history changed: refresh what is open on it (never while typing)
     if(!$("netsDlg").open||$("netsBody").contains(document.activeElement)&&document.activeElement.matches("input,textarea,select"))return;
     if(NV.tab==="minutes"&&NV.key===d.key)renderMinutes();else if(NV.tab==="history")renderHistory()});
-  es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;renderFeed();wlAccNote()});
+  es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;S.accurate_where=d.where;S.accurate_rate=d.rate;renderFeed();wlAccNote()});
 }
 // ---------- the Nets area: Schedule | History | Analysis | Minutes | Still open ----------
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],DAYN=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];

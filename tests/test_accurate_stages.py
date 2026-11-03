@@ -33,6 +33,10 @@ class ContextRemote:
         return {"results": res, "model": "fake-large", "stage": stage, "audio_s": 3.0, "elapsed_s": 0.1}
 
 
+def _busy(st):
+    return any(j["state"] in ("queued", "running") for j in st.accurate.status())
+
+
 def _station(tmp_path, remote, texts, **acc):
     cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 15, "final_after_min": 5, **acc}
     st = Station(cfg, lambda: engine.FakeEngine(texts), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
@@ -57,6 +61,7 @@ def test_provisional_then_final_and_persisted(tmp_path):
         assert st.winlink_preview("ftm")["accurate_missing"] == 3                              # provisional = still waiting
         st.accurate.tick(datetime.now() + timedelta(minutes=1))                                # the net is not over yet
         assert not any(j["stage"] == "final" for j in st.accurate.status())
+        assert wait_for(lambda: not _busy(st))
         st.accurate.tick(datetime.now() + timedelta(minutes=6))                                # 5 quiet minutes: final
         assert wait_for(lambda: all(stage_of(t) == "final" for t in st.tx[-3:]))
         fin = [q for q in r.requests if q["stage"] == "final"]
@@ -84,6 +89,7 @@ def test_final_sets_a_noise_clip_aside_and_keeps_the_live_text(tmp_path):
             st.inject("ftm", np.zeros(16000 * 2, np.float32))
             assert wait_for(lambda: st.tx[-1]["status"] == "final" and st.tx[-1].get("accurate"))
         r.silent.add(st.tx[-1]["id"])                       # the final pass hears nothing in the 2nd clip
+        assert wait_for(lambda: not _busy(st))              # tick skips a net whose provisional job is still running
         st.accurate.tick(datetime.now() + timedelta(minutes=6))
         assert wait_for(lambda: st.tx[-1].get("accurate_echo"))
         t = st.tx[-1]

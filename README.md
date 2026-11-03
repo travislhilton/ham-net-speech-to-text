@@ -15,7 +15,7 @@ second pass and net reports (ICS-309 / ICS-213).
 1. On GitHub (signed in; the repo is private): **Code → Download ZIP**, then extract it anywhere.
 2. Open the extracted folder → `install\windows` → double-click **`install.cmd`** and allow
    administrator access.
-3. Type your callsign when asked. The first run downloads about 2.5 GB (Python packages, Whisper
+3. Type your callsign when asked. The first run downloads about 4 GB (Python packages, Whisper
    models, the FCC license database) and takes 10–20 minutes. Re-run `install.cmd` after every update.
 
 What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing needs to be installed beforehand:
@@ -23,8 +23,12 @@ What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing
 - installs the Microsoft Visual C++ runtime if it is missing (OpenVINO, PyTorch and faster-whisper need it);
 - installs Python 3.12 for all users (winget, or straight from python.org when winget is missing) and a private
   environment in `C:\ham-net-speech-to-text\.venv` with every Python package the station uses;
-- downloads three Whisper models in Intel OpenVINO format and **benchmarks this PC** to choose the
+- downloads four Whisper models in Intel OpenVINO format (three for the live text, Whisper large-v3 for the
+  accurate pass; plus faster-whisper large-v3 on a PC with an NVIDIA card) and **benchmarks this PC** to choose the
   live engine (`tools/pick_engine.py` → `config/engine.yaml`): Intel graphics, NVIDIA (CUDA) or CPU;
+- **measures what this PC can do for the accurate pass on its own** (`tools/pick_accurate.py` → `accurate:` in
+  `config/engine.yaml`): each accurate model on each device (Intel GPU, NPU, CPU; NVIDIA), then decides *both
+  stages* (fast enough to follow every transmission), *final text only* (after each net) or *none*;
 - downloads the FCC amateur license database and the world country file, and schedules a daily
   update (task "HamNet Callbook Update", 04:15, only when online);
 - asks (once, optional) for a QRZ.com login: Enter skips it. It checks the login and says in plain words what the
@@ -195,6 +199,10 @@ you chose is remembered. Each column shows:
   wait; when the pass finishes it offers **Load the accurate text** (the forms then use it). If the home server is
   unreachable the header says so and the station tries again every 2 minutes. The upload key goes in
   `config\secrets.env` as `EMCOMM_STT_KEY=…` (kept across updates, never in git).
+  **Without the home server** (any other operator's station, another network, no internet at all) the same pass
+  runs **on the station PC itself**, on its spare compute, when the installer's benchmark says the PC can do it
+  (see "The accurate pass on this PC" below). The header and the transcript's tooltip say where each text was
+  made, e.g. *whisper-large-v3-int8-ov@GPU (this PC)*.
 - **Test transcription…** (on each radio card): someone reads a fixed text over the air; **Score** shows how
   many words the live text and the accurate pass got wrong (0% = all right) and keeps a history, so a change
   to the radio, the cable or the settings can be judged by a number (`data\tests.jsonl`).
@@ -251,6 +259,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Listen only during scheduled nets (auto resume 1 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
 | Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | built + measured, not deployed yet (synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
+| Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/NPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | built + measured on an i5-12600H station PC, not deployed yet (see "The accurate pass on this PC") |
 | Over-the-air transcription test with word-error score and history | working |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
 | Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). Code + `python -m tools.voice_eval` kept to re-measure on FM nets |
@@ -300,6 +309,66 @@ over-the-air **Test transcription** score.
 
 Re-run: `python tools/accbench/gen.py OUT fm 1` makes a net; `python -m tools.accbench.run final OUT` decodes it;
 `python -m tools.accbench.score OUT --methods=live,clip,prov,final` scores it.
+
+## The accurate pass on this PC
+
+Another operator's station (another network, or no internet at all) never reaches the home server, so the
+same method (`transcribe/context.py`) runs on the station PC's own spare compute. Order per job: the home server when
+a key is set and it answers, else this PC, else the job waits and is retried.
+
+- **What it runs** (`transcribe/decoders.py`): OpenVINO GenAI `WhisperPipeline` with word timestamps on the Intel
+  GPU, NPU or CPU (model `whisper-large-v3-int8-ov`, 1.5 GB, downloaded by the installer), or faster-whisper
+  (CTranslate2) on an NVIDIA card. Whisper's 30 s long-form walk is done one window at a time by the station's own
+  code, so the pass can stop between windows. OpenVINO gives word *times* but no word *probabilities*: the merge of
+  the two decodes then prefers the words farther from a window cut, a lone "Thank you."-style text is always set
+  aside, and there is no low-confidence test (measured on the home server with the probabilities removed: 2–4 points more
+  word errors, see below).
+- **What the PC can sustain** (`tools/pick_accurate.py`, run by the installer; re-run after a hardware change):
+  each model on each device decodes a ~55 s test block; rtf = seconds of work per second of audio. Large-v3 if it
+  runs at rtf ≤ 1.0 (the final text of a net then arrives within ~2.5× its speaking time), else turbo, else none; a
+  an NPU wins when it is at most 2× slower than the fastest device (it has no live text on it), otherwise the
+  fastest device — not the CPU just because the live text is on the GPU (measured below: the CPU slowed the live
+  text more than sharing the GPU did); **both stages** only at rtf ≤ 0.12 (a provisional text for every transmission), otherwise **final text
+  only** (after each net). Written to `config\engine.yaml` (`accurate:`).
+- **The live text always wins**: the pass runs in its own process (`python -m station.accurate_local`) at
+  below-normal priority, with its own model (never the live engine's), on the GPU at low queue priority. It is held
+  while any radio is receiving or a live final is queued or being transcribed, and for 2 s after (`quiet_s`); it
+  stops between 30 s windows, so at most one window (seconds) overlaps a new transmission. The model is loaded for
+  the first job and the process ended after 10 idle minutes (`unload_after_min`), giving the memory back. On a
+  laptop on battery it does not run unless `local_on_battery: true`.
+- Settings (`config\station.yaml`, `accurate:`): `local: auto | final_only | off`, `local_on_battery`, `quiet_s`,
+  `unload_after_min`.
+
+Measured 2026-11-03 on an i5-12600H PC with Iris Xe graphics, 16 GB (live text: turbo on the GPU, base.en on the
+CPU), OpenVINO 2026.4:
+
+| accurate model @ device | rtf (one decode) | memory | |
+|---|---|---|---|
+| large-v3 int8 @ GPU | 0.62 | 3.8 GB | final pass of a net: 1.4–1.7 s per second of audio |
+| large-v3 int8 @ CPU | 0.68 | 4.1 GB | |
+| turbo int8 @ GPU | 0.22 | 2.3 GB | much less accurate (below) |
+| turbo int8 @ CPU | 0.37 | 2.0 GB | |
+| faster-whisper large-v3 int8 @ CPU | > 2 | 9.5 GB | stopped: too slow and too big for this PC |
+
+So this PC does **the final text only**, about 1.5× the net's speaking time after the net (none of these is fast
+enough to follow every transmission). Live latency (an 8.5 s transmission on turbo, GPU) while the pass ran on the
+same GPU: median 3.06 s alone, 3.24 s with the pass held as above, 3.29 s with it never held (max 3.6 s). With
+the pass on the CPU instead: 3.03 s alone, 3.46 s held, 3.52 s never held — and only ~0.6 GB of memory left to
+promise, against ~1.6 GB on the GPU. Before loading, the pass checks that its model's memory plus 1 GB is free
+(RAM + page file) and otherwise waits; a 16 GB PC with a small page file has room for one accurate model.
+Word errors on the synthetic test nets (`tools/accbench`, final pass, same nets and scoring as the home server's
+figures above):
+
+| | FM nets (4) | SSB moderate (2) | all 6 | callsign precision |
+|---|---|---|---|---|
+| live text | 55 % | 51 % | 54 % | 45 % |
+| home server (mlx large-v3, with word probabilities) | 39 % | 29 % | 36 % | 60 % |
+| home server without word probabilities | 42 % | 33 % | 39 % | 61 % |
+| **this PC** (OpenVINO large-v3 int8, Intel GPU) | 40 % | 38 % | 39 % | 65 % |
+
+On FM this PC is within a point of the home server; on SSB it is ~10 points behind (no word probabilities, and the
+int8 model hears weak SSB a little worse), still far better than the live text. The final pass took 1.4–1.7 s per second of audio (each 4-minute
+net 5–7 minutes).
 
 ## Editing the knowledge
 

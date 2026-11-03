@@ -231,7 +231,8 @@ def decode_windows(lay: Layout, wins, decode, prompt_prev=False) -> list[dict]:
                 t0, t1 = a + float(w["start"]), a + float(w["end"])
                 ea = (t0 - a) if round(a, 2) not in real else 99.0
                 eb = (b - t1) if round(b, 2) not in real else 99.0
-                words.append({"w": w["word"], "t0": t0, "t1": t1, "p": float(w.get("probability", 0.0)),
+                prob = w.get("probability", 0.0)
+                words.append({"w": w["word"], "t0": t0, "t1": t1, "p": None if prob is None else float(prob),
                               "win": k, "edge": min(ea, eb), "ok": ok, "why": why})
         out.append({"a": a, "b": b, "words": words})
         good = [w["w"] for w in words if w["ok"]]
@@ -266,11 +267,17 @@ def _clip_words(words, a, b):
     return [w for w in words if a <= (w["t0"] + w["t1"]) / 2 < b]
 
 
+def _p(w) -> float:
+    """A word's probability; a recogniser that gives none (OpenVINO) counts every word as sure, so the merge is decided
+    by the distance to a window cut alone."""
+    return 1.0 if w["p"] is None else w["p"]
+
+
 def _score(ws):
     """Mean word probability with words near a window cut discounted."""
     if not ws:
         return 0.0
-    return float(np.mean([w["p"] * (0.5 if w["edge"] < EDGE_S else 1.0) for w in ws]))
+    return float(np.mean([_p(w) * (0.5 if w["edge"] < EDGE_S else 1.0) for w in ws]))
 
 
 def merge(hyps: list[list[dict]]) -> list[dict]:
@@ -315,17 +322,29 @@ def assemble(lay: Layout, decoded: list[list[dict]], targets=None) -> dict:
         words = sorted(words, key=lambda w: w["t0"])
         text = "".join(w["w"] for w in words).strip()
         text = re.sub(r"\s+", " ", text)
-        conf = float(np.mean([w["p"] for w in words])) if words else 0.0
-        if words and _norm_phrase(text) in NOISE_PHRASES and conf < 0.75:
-            flags.add("noise_phrase"); words, text = [], ""
+        # conf None = the recogniser gives no word probabilities (OpenVINO): a lone noise phrase is then always set
+        # aside (the live text stays), and there is no low-confidence test
+        known = [w["p"] for w in words if w["p"] is not None]
+        conf = float(np.mean(known)) if known else (None if words else 0.0)
+        if words and _norm_phrase(text) in NOISE_PHRASES and (conf is None or conf < 0.75):
+            flags.add("noise_phrase"); words, text, conf = [], "", 0.0
         if not words:
             flags.add("empty")
-        elif conf < LOW_CONF:
+        elif conf is not None and conf < LOW_CONF:
             flags.add("low_conf")
-        res[cid] = {"text": text, "conf": round(conf, 3), "flags": sorted(f for f in flags if f),
-                    "words": [[w["w"].strip(), round(w["t0"] - a, 2), round(w["t1"] - a, 2), round(w["p"], 3)]
-                              for w in words]}
+        res[cid] = {"text": text, "conf": None if conf is None else round(conf, 3), "flags": sorted(f for f in flags if f),
+                    "words": [[w["w"].strip(), round(w["t0"] - a, 2), round(w["t1"] - a, 2),
+                               None if w["p"] is None else round(w["p"], 3)] for w in words]}
     return res
+
+
+def highpass(x: np.ndarray, hz: int) -> np.ndarray:
+    """Sub-audible tone + mains hum off an FM data jack (as station/core.py Station.clean)."""
+    if not hz or len(x) < 64:
+        return x
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    g = 0.5 - 0.5 * np.cos(np.pi * np.clip((f - (hz - 100)) / 100, 0, 1))
+    return np.fft.irfft(np.fft.rfft(x.astype(np.float64)) * g, len(x)).astype(np.float32)
 
 
 def _norm_phrase(text: str) -> str:

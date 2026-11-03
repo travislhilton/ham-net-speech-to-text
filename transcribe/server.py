@@ -99,34 +99,21 @@ def _wav16k(data: bytes):
 
 def _highpass(x, highpass_hz: int):
     """Sub-audible tone + mains hum off an FM data jack."""
-    import numpy as np
-    if highpass_hz and len(x) > 64:
-        f = np.fft.rfftfreq(len(x), 1 / 16000)
-        g = 0.5 - 0.5 * np.cos(np.pi * np.clip((f - (highpass_hz - 100)) / 100, 0, 1))
-        x = np.fft.irfft(np.fft.rfft(x.astype(np.float64)) * g, len(x)).astype(np.float32)
-    return x
-
-
-TEMPERATURES = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)     # Whisper's fallback when a window comes out repetitive
+    from .context import highpass
+    return highpass(x, highpass_hz)
 
 
 def _whisper_decode(model: str):
-    """context.py's recogniser: audio in (a block of a net, any length), mlx_whisper's segments with word times and
-    probabilities out. No prompt and no conditioning on the previous window's text: with the previous text as a
-    prompt large-v3 copied earlier callsigns into later transmissions (call precision 52 -> 42 % on the synthetic
+    """context.py's recogniser on the Mac: mlx_whisper (transcribe/decoders.py; station PCs use the OpenVINO or
+    faster-whisper decoder there). No prompt and no conditioning on the previous window's text: with the previous text
+    as a prompt large-v3 copied earlier callsigns into later transmissions (call precision 52 -> 42 % on the synthetic
     nets) and echoed prompts on the real ones (58 of 531).
     no_speech_threshold=None: FM data-jack hiss puts Whisper's no-speech probability at ~0.6 for whole 30 s windows,
     and its default skips such a window outright: on the 11-02 442.100 net a 294 s block lost 60 s of check-ins
     (89-150 s), 146 of 392 transmissions came back empty. Without the skip: 121 (mostly hiss the live text had read
     as "The wind is blowing up."), FCC-valid calls 82 -> 85. Loops, echoes and noise are caught in context.py."""
-    import mlx_whisper
-
-    def decode(x, prompt=""):
-        r = mlx_whisper.transcribe(x, path_or_hf_repo=model, language="en", initial_prompt=prompt or None,
-                                   condition_on_previous_text=False, temperature=TEMPERATURES, word_timestamps=True,
-                                   no_speech_threshold=None)
-        return r.get("segments") or []
-    return decode
+    from .decoders import mlx
+    return mlx(model)
 
 
 MAX_CONTEXT_AUDIO_S = 900        # one request: 15 min of audio (~29 MB); the station sends a net in blocks

@@ -155,6 +155,8 @@ class Station:
         self.partial_ev = threading.Event()
         self._final_factory, self._partial_factory = final_engine_factory, partial_engine_factory
         self.engines = {"final": None, "partial": None, "status": "loading"}
+        self._final_busy = False
+        self.accurate_spec = None          # engine.yaml `accurate:` (set by __main__): what this PC can run locally
         self.stop = threading.Event()
         self.next_id = int(time.time() * 1000)
 
@@ -170,7 +172,10 @@ class Station:
                 threading.Thread(target=self._listen, args=(r,), daemon=True, name=f"radio-{r['id']}").start()
         threading.Thread(target=self._ticker, daemon=True, name="ticker").start()
         from .accurate import AccuratePass
-        self.accurate = AccuratePass(self, self.cfg.get("accurate"), getattr(self, "_accurate_remote", None))
+        from . import accurate_local
+        local = getattr(self, "_accurate_local", None) or accurate_local.make(self, self.cfg.get("accurate"),
+                                                                               self.accurate_spec)
+        self.accurate = AccuratePass(self, self.cfg.get("accurate"), getattr(self, "_accurate_remote", None), local)
         threading.Thread(target=self.accurate.run, args=(self.stop,), daemon=True, name="accurate").start()
 
     def _index_history(self):
@@ -524,7 +529,7 @@ class Station:
         cur = t0 and (t0.get("accurate") or t0.get("accurate_echo"))
         if stage == "provisional" and cur and cur.get("stage", "final") == "final":
             return                                               # a late provisional never undoes the final text
-        extra = {k: res[k] for k in ("conf", "flags") if res.get(k) not in (None, [])}   # context pass: confidence
+        extra = {k: res[k] for k in ("conf", "flags", "where") if res.get(k) not in (None, [])}   # confidence, where
         from .textclean import collapse_repeats, template_loop
         if (self._is_echo(t0.get("radio") if t0 else None, raw) or collapse_repeats(raw)[1] or template_loop(raw)
                 or "low_conf" in (res.get("flags") or [])):
@@ -687,6 +692,14 @@ class Station:
         gain = np.clip((f - (hz - 100)) / 100, 0, 1)
         gain = 0.5 - 0.5 * np.cos(np.pi * gain)
         return np.fft.irfft(np.fft.rfft(audio.astype(np.float64)) * gain, n).astype(np.float32)
+
+    def live_busy(self) -> bool:
+        """The live text needs the machine: a transmission is being received, or a live final is queued or being
+        transcribed. The accurate pass on this PC holds while this is true (station/accurate_local.py)."""
+        with self.lock:
+            if any(r.get("live_tx") for r in self.radios.values()):
+                return True
+        return self._final_busy or not self.final_q.empty()
 
     def _set_radio(self, rid, **kw):
         with self.lock:
@@ -908,10 +921,14 @@ class Station:
                 tid, audio = self.final_q.get(timeout=0.5)
             except queue.Empty:
                 continue
-            t = time.time()
-            tx = self._find(tid)
-            res = eng.transcribe(self.clean(tx and tx["radio"], audio), prompt=self.prompt_for(tx and tx["radio"]))
-            self.finish(tid, res, round(time.time() - t, 2))
+            self._final_busy = True
+            try:
+                t = time.time()
+                tx = self._find(tid)
+                res = eng.transcribe(self.clean(tx and tx["radio"], audio), prompt=self.prompt_for(tx and tx["radio"]))
+                self.finish(tid, res, round(time.time() - t, 2))
+            finally:
+                self._final_busy = False
 
     # ---------- enrichment ----------
     def finish(self, tid: str, res: dict, took_s: float = 0.0):
@@ -1029,4 +1046,6 @@ class Station:
                     "schedule": self.nets.decorated(), "engines": self.engines,
                     "alerts": self.nets.alerts.last, "urgent": self._urgent(), "history": self.history.status,
                     "accurate": self.accurate.status() if getattr(self, "accurate", None) else [],
-                    "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False}
+                    "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False,
+                    "accurate_where": self.accurate.where if getattr(self, "accurate", None) and self.accurate.enabled else None,
+                    "accurate_rate": round(self.accurate.rate, 2) if getattr(self, "accurate", None) else None}
