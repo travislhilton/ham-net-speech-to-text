@@ -279,7 +279,7 @@ class Station:
             acc = next((j for j in self.accurate.status() if j["radio"] == rid and start <= j["start"] <= end), None)
         with self.lock:
             waiting = sum(1 for t in ics.select(list(self.tx), rid, start, end, include_noise=True)
-                          if t.get("wav") and not t.get("accurate"))
+                          if t.get("wav") and not t.get("accurate") and not t.get("accurate_echo"))
         return {"radio": rid, "start": start, "end": end, "count": len(span), "to": people, "drafts": d,
                 "accurate": acc, "accurate_missing": waiting,
                 "operator": {k: op[k] for k in ("callsign", "name", "winlink_dir", "winlink_account", "express_running")}}
@@ -462,8 +462,32 @@ class Station:
         r = self.radio_cfg.get(rid) or {}
         return int(r.get("highpass_hz", 300 if r.get("gate") == "carrier" else 0))
 
+    ECHO = re.compile(r"^\W*(ham )?radio net( on [\d.]+ ?mhz)?\W*$", re.I)
+
+    def _is_echo(self, rid, raw: str) -> bool:
+        """Whisper's well-known failure on a clip it cannot read: it returns its own prompt."""
+        words = lambda s: re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+        w = words(raw)
+        return not w or bool(self.ECHO.match(raw)) or (len(w) > 8 and w in words(self.prompt_for(rid)))
+
     def apply_accurate(self, tid: str, res: dict):
-        """Keep the home server's text beside the live text (never replacing it), log it, show it."""
+        """Keep the home server's text beside the live text (never replacing it), log it, show it. A result that only
+        repeats Whisper's prompt ("Radio net on 442.100 MHz.": 58 of 531 on 11-02) is kept as `accurate_echo` and the
+        live text stays in use."""
+        raw = (res.get("text") or "").strip()
+        t0 = self._find(tid)
+        if self._is_echo(t0.get("radio") if t0 else None, raw):
+            echo = {"text": raw, "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds")}
+            with self.lock:
+                tx = self._find(tid)
+                if not tx:
+                    return
+                tx.pop("accurate", None); tx["accurate_echo"] = echo
+                self._rebuild_heard()
+                tx = dict(tx)
+            self._log({"update": tid, "accurate_echo": echo})
+            self.bus.publish("tx", tx)
+            return
         validate = self.callbook.validate if self.callbook else None
         text, calls = normalize(res.get("text", ""), roster=self.roster, validate=validate)
         text, calls, fix = callfix.apply(self, self._find(tid), text, calls, whole_net=True)   # near-miss calls
@@ -475,6 +499,7 @@ class Station:
                 return
             acc["speaker"], acc["speaker_how"] = speaker.from_text(text, calls, self._ncs_at(tx))
             tx["accurate"] = acc
+            tx.pop("accurate_echo", None)
             new = [c for c in calls if c not in self.heard]
             self._rebuild_heard()
             for c in new:
@@ -866,7 +891,11 @@ class Station:
             if "update" in tx:                                # added after the live text: accurate pass, "Who?"
                 for t in self.tx:
                     if t.get("id") == tx["update"]:
-                        t.update({k: v for k, v in tx.items() if k in ("accurate", "speaker_set")})
+                        t.update({k: v for k, v in tx.items() if k in ("accurate", "accurate_echo", "speaker_set")})
+                        if "accurate" in tx:
+                            t.pop("accurate_echo", None)
+                        if "accurate_echo" in tx:
+                            t.pop("accurate", None)
                 continue
             cut = (self.radios.get(tx.get("radio")) or {}).get("cleared_at")
             if cut and tx.get("start", "") < cut:

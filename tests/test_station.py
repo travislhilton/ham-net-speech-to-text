@@ -293,7 +293,7 @@ class FakeRemote:
 
     def transcribe(self, wav, prompt, highpass_hz):
         self.calls += 1
-        assert wav[:4] == b"RIFF" and "W9XYZ" not in prompt and "net" in prompt and highpass_hz == 300
+        assert wav[:4] == b"RIFF" and prompt == "" and highpass_hz == 300
         return {"text": "Net control, this is K7ABC in Springfield, no traffic.", "model": "fake-large", "audio_s": 3.0, "elapsed_s": 0.1}
 
 
@@ -410,3 +410,30 @@ def test_accurate_pass_needs_a_key(tmp_path, monkeypatch):
         assert "secrets.env" in st.accurate.status()[0]["error"]
     finally:
         st.stop.set()
+
+
+def test_accurate_echo_of_the_prompt_keeps_the_live_text(tmp_path):
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 0}
+    st = Station(cfg, lambda: engine.FakeEngine(["I'm going to test here, speech to text."]), callbook=FakeBook({}), data_dir=tmp_path)
+
+    class Echo(FakeRemote):
+        def transcribe(self, wav, prompt, highpass_hz):
+            return {"text": " Radio net on 442.100 MHz.", "model": "fake-large", "audio_s": 3.0}
+    st._accurate_remote = Echo()
+    st.start(listen=False)
+    try:
+        st.inject("ftm", np.zeros(16000 * 3, np.float32))
+        assert wait_for(lambda: st.tx and st.tx[-1].get("accurate_echo"))
+        tx = st.tx[-1]
+        assert "accurate" not in tx and ics_view(tx)["text"].startswith("I'm going to test")
+        assert st.accurate.status()[0]["state"] == "done" and st.winlink_preview("ftm")["accurate_missing"] == 0
+        again = Station(copy.deepcopy(cfg), lambda: engine.FakeEngine(), callbook=FakeBook({}), data_dir=tmp_path)
+        again.load_today()
+        assert again.tx[-1].get("accurate_echo") and "accurate" not in again.tx[-1]
+    finally:
+        st.stop.set()
+
+
+def ics_view(t):
+    from station.ics import view
+    return view(t)

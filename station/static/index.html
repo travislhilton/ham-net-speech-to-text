@@ -266,7 +266,7 @@ function accState(rid,fin){ // what the pass has done for these transmissions
   const a=Date.parse(fin[0].start),b=Date.parse(fin[fin.length-1].start);
   const jobs=(S.accurate||[]).filter(j=>j.radio===rid&&Date.parse(j.start)<=b+1000&&Date.parse(j.end)>=a-1000);   // overlaps
   const active=jobs.find(j=>j.state==="queued"||j.state==="running");
-  const missing=fin.filter(t=>t.wav&&!t.accurate);
+  const missing=fin.filter(t=>t.wav&&!t.accurate&&!t.accurate_echo);   // an echo of the prompt = done, live text kept
   const last=jobs.sort((x,y)=>(x.queued_at||"").localeCompare(y.queued_at||"")).pop();
   return {active,missing,last,est:missing.reduce((n,t)=>n+(t.duration_s||0),0)/GUESS_RATE+missing.length*0.4};
 }

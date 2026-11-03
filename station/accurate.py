@@ -82,6 +82,7 @@ class AccuratePass:
         self.st = station
         self.auto_after = timedelta(minutes=float(cfg.get("auto_after_min", 15)))
         self.live = bool(cfg.get("live", True))
+        self.cfg_prompt = cfg.get("prompt", "")
         self.remote = remote or Remote(cfg.get("urls", DEFAULT_URLS), read_key(station.root))
         self.enabled = remote is not None or bool(self.remote.key)      # no key, no uploads (tests, demos, new PCs)
         self.jobs: dict[str, dict] = {}          # key "radio|start" -> status
@@ -106,7 +107,7 @@ class AccuratePass:
     def _pending(self, rid, start, end, force=False) -> list[dict]:
         from . import ics
         span = [t for t in ics.select(self.st.tx, rid, start, end, include_noise=True) if t.get("wav")]
-        return span if force else [t for t in span if not t.get("accurate")]
+        return span if force else [t for t in span if not t.get("accurate") and not t.get("accurate_echo")]
 
     def submit(self, rid: str, start: str, end: str, auto=False, force=False) -> dict:
         key = f"{rid}|{start}"
@@ -199,7 +200,7 @@ class AccuratePass:
                 self.retry_at[key] = time.time() + 120
             self._publish()
             return
-        prompt = self.st.prompt_for(j["radio"], own_call=False)       # no call in it: large-v3 echoes it
+        prompt = self.cfg_prompt          # none by default: large-v3 echoed the call (12/161) and the frequency (58/531)
         hp = self.st.highpass_for(j["radio"])
         tried = set()
         while True:                                            # the net may grow while this runs
