@@ -71,7 +71,7 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .sess:not([open]){padding-top:4px;padding-bottom:4px}
 .sess+.tx{border-top:0}
 /* a transmission the accurate pass is still working on: a thin pulsing bar + "improving…" */
-.tx.pending{box-shadow:inset 3px 0 0 var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 7%,transparent),transparent 45%);animation:accpulse 1.6s ease-in-out infinite}
+.tx.pending,.feed .tx.pending{padding-left:8px;box-shadow:inset 3px 0 0 var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 7%,transparent),transparent 45%);animation:accpulse 1.6s ease-in-out infinite}
 .tx.pending .who::after{content:"improving…";font-size:11px;color:var(--muted);margin-left:4px}
 @keyframes accpulse{50%{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 35%,transparent)}}
 @media (prefers-reduced-motion:reduce){.tx.pending{animation:none}}
