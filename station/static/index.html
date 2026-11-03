@@ -113,7 +113,10 @@ section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:va
 .tx:first-of-type{border-top:0}.tx .t{color:var(--muted);font-variant-numeric:tabular-nums;font-size:13px}
 .tx .who{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px}
 .call{font-weight:700;background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:0 6px;cursor:pointer;font-family:ui-monospace,Consolas,monospace}
-.call.spk{border-color:var(--accent)}.text{font-size:16px;overflow-wrap:anywhere}.text.partial{color:var(--partial);font-style:italic}
+.call.spk{border-color:var(--accent)}
+.spkr{font-weight:700;font-family:ui-monospace,Consolas,monospace;cursor:pointer}.spkr.inf{font-weight:400;color:var(--muted)}
+.spkr.op::after{content:" ✎";color:var(--muted);font-weight:400}.whob{font-size:12px;padding:0 6px;color:var(--muted)}
+.text{font-size:16px;overflow-wrap:anywhere}.text.partial{color:var(--partial);font-style:italic}
 .live{color:var(--ok);font-weight:600}.term{border-bottom:2px dotted var(--term);cursor:help}
 .terms{font-size:13px;color:var(--muted)}.terms b{color:var(--term)}
 button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:2px 8px;cursor:pointer}
@@ -156,6 +159,11 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
 <dialog id="testDlg"><div id="testBody"></div></dialog>
+<dialog id="whoDlg"><form id="whoForm">
+  <h3>Who was talking?</h3><p class="small muted" id="whoText"></p><div class="row" id="whoPick"></div>
+  <label>Callsign <input name="call" maxlength="12" list="whoList" autocomplete="off"></label><datalist id="whoList"></datalist>
+  <div class="row"><button type="submit">Save</button> <button type="button" id="whoAuto" title="Forget my choice; use what was said or heard">Automatic</button> <button type="button" onclick="$('whoDlg').close()">Cancel</button> <span class="err" id="whoErr"></span></div>
+</form></dialog>
 <script>
 let editing=null;
 const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[]};
@@ -174,9 +182,37 @@ function markTerms(text,terms){
   }
   return h;
 }
+// Who was talking (station/speaker.py): operator-set, stated on the air, net control (by the words), voice match.
+const WHO_HOW={operator:"set by you",stated:"said on the air",ncs:"net control (acknowledging)",voice:"voice match"};
+function whoHtml(w){
+  const inf=w.how==="ncs"||w.how==="voice";
+  const label=inf?`≈ ${esc(w.call)} (${w.how==="ncs"?"net control":"voice"})`:esc(w.call);
+  return `<span class="spkr${inf?" inf":""}${w.how==="operator"?" op":""}" data-call="${esc(w.call)}" title="Speaker: ${esc(WHO_HOW[w.how]||w.how)}">${label}</span>`;
+}
+let WHO=null;
+function openWho(id){
+  const t=S.tx.find(x=>x.id===id);if(!t)return;WHO=id;
+  const a=t.accurate,text=(a&&a.text)||t.text||"",calls=[...new Set([...(a&&a.callsigns||[]),...(t.callsigns||[])])];
+  $("whoText").textContent=hhmm(t.start)+" · "+text.slice(0,160);
+  $("whoPick").innerHTML=calls.map(c=>`<button type="button" class="call" data-whopick="${esc(c)}">${esc(c)}</button>`).join(" ");
+  $("whoList").innerHTML=[...new Set([...calls,...(S.heard||[]).map(h=>h.call)])].map(c=>`<option value="${esc(c)}">`).join("");
+  const f=$("whoForm");f.call.value=t.speaker_set||(t.who&&t.who.call)||"";$("whoErr").textContent="";
+  $("whoDlg").showModal();f.call.focus();f.call.select();
+}
+async function saveWho(call){
+  try{const r=await fetch(`/api/tx/${encodeURIComponent(WHO)}/speaker`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({call})});
+    const d=await r.json();if(!r.ok){$("whoErr").textContent=d.error||"not saved";return}
+    upsertTx(d);$("whoDlg").close()}
+  catch(e){$("whoErr").textContent="not saved: station unreachable"}
+}
+$("whoForm").addEventListener("submit",e=>{e.preventDefault();e.stopPropagation();saveWho(e.target.call.value.trim().toUpperCase())});
+$("whoAuto").onclick=()=>saveWho("");
+$("whoPick").addEventListener("click",e=>{const b=e.target.closest("[data-whopick]");if(b){e.stopPropagation();saveWho(b.dataset.whopick)}});
 function txHtml(t0){
   const a=t0.accurate,t=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise}:t0;
-  const calls=(t.callsigns||[]).map(c=>`<span class="call${c===t.speaker?" spk":""}" data-call="${esc(c)}" title="${c===t.speaker?"likely speaker":"mentioned"}">${esc(c)}</span>`).join("");
+  const w=t0.who||null,sp=w&&w.call;
+  const calls=(t.callsigns||[]).filter(c=>c!==sp).map(c=>`<span class="call" data-call="${esc(c)}" title="mentioned">${esc(c)}</span>`).join("");
+  const who=t.status!=="final"?"":(w?whoHtml(w):"")+`<button class="whob" data-who="${esc(t0.id)}" title="Say who was talking (always wins; kept in the log and the ICS-309)">Who?</button>`;
   let body;
   if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
   else if(t.status==="transcribing") body=`<div class="text partial">${esc(t.partial)} <span class="muted">transcribing…</span></div>`;
@@ -187,7 +223,7 @@ function txHtml(t0){
   const radio="";
   if(a&&t0.status==="final")body+=`<details class="livetext"><summary>✓ accurate pass (${esc(a.model||"home server")}) · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
-  return `<div class="tx" id="tx-${esc(t.id)}"><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${calls}${play}</div>${body}</div></div>`;
+  return `<div class="tx" id="tx-${esc(t.id)}"><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
 }
 // A net or conversation = a run of transmissions on one frequency with no quiet gap over 15 minutes
 // (the same rule as station/ics.py sessions(), which builds the Winlink messages).
@@ -574,6 +610,7 @@ document.addEventListener("click",e=>{
     const want={radio:"r-",guide:"guide-",heard:"heard-"}[tb.dataset.tab]+tb.dataset.rid;
     col.querySelectorAll(".stack>.pane").forEach(x=>x.classList.toggle("show",x.id===want));applySplit(tb.dataset.rid,tb.dataset.tab)}
   const p=e.target.closest("[data-play]");if(p){new Audio("/audio/"+p.dataset.play).play()}
+  const wb=e.target.closest("[data-who]");if(wb)openWho(wb.dataset.who);
   const tu=e.target.closest("[data-tune]");if(tu){editing=tu.dataset.tune;renderRadios();const i=document.querySelector(".tuneform input");if(i){i.focus();i.select()}}
   if(e.target.closest("[data-cancel]")){editing=null;document.activeElement.blur();renderRadios()}
 });
