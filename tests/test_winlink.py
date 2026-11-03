@@ -129,7 +129,10 @@ def test_session_bounds_and_drafts():
               ("2026-11-02T16:31:00", "W9XYZ", ["W9XYZ", "WA7XQZ"], "W9XYZ no traffic", []),
               ("2026-11-02T16:33:00", "K7ABC", ["K7ABC"], "relay for N0XYZ please", ["relay"])]]
     start, end = ics.session_bounds(tx, "a")
-    assert start == "2026-11-02T16:30" and end == "2026-11-02T16:34"
+    assert start == "2026-11-02T16:30:00" and end == "2026-11-02T16:33:00"
+    assert [s["count"] for s in ics.sessions(tx, "a")] == [1, 3]                       # 90-minute gap splits
+    retuned = tx + [dict(tx[-1], start="2026-11-02T16:35:00", freq_mhz=146.94)]
+    assert [(s["count"], s["freq_mhz"]) for s in ics.sessions(retuned, "a")][-1] == (1, 146.94)   # new frequency splits
     span = ics.select(tx, "a", start, end)
     people = ics.participants(span, {"W9XYZ"}, {"K7ABC": {"card": {"name": "Pat", "sources": ["FCC"]}}})
     assert [p["call"] for p in people] == ["WA7XQZ", "K7ABC"] and people[1]["confirmed"] and not people[0]["confirmed"]
@@ -139,6 +142,8 @@ def test_session_bounds_and_drafts():
     v = d[0]["values"]
     assert v["Time2"] == "2026-11-02 16:31" and v["From2"] == "W9XYZ" and v["To2"] == "WA7XQZ" and v["Time30"] == ""
     assert "K7ABC — Pat" in d[1]["values"]["Message"] and "relay for N0XYZ" in d[1]["values"]["Message"]
+    old = ics.drafts([dict(span[0], freq_mhz=3.915)], {"freq_mhz": 3.985, "mode": "LSB"}, {}, [], None, None)
+    assert old[0]["values"]["Title"] == "Net on 3.915 MHz"                             # the net's frequency, not today's
     many = [dict(tx[1], start=f"2026-11-02T16:{i:02d}:00") for i in range(40)]
     assert len([x for x in ics.drafts(many, {}, {}, [], None, "Big net") if x["form"] == "ics309"]) == 2
 

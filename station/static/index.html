@@ -54,6 +54,9 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .stack>.guide,.stack>.heard{contain:size;overflow-y:auto;overscroll-behavior:contain}
 .stack>.radio{border:0;padding:0;background:none;border-radius:0}
 .tabs .sm{display:none}
+.sess{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:8px 0 2px}
+.sess+.tx{border-top:0}
 /* splitter between the tab group and the conversation: shown on the guidance and stations tabs */
 .split{display:none;flex:none;height:12px;margin:-11px 0;cursor:row-resize;touch-action:none;position:relative;z-index:1}
 .split::before{content:"";position:absolute;left:50%;top:4px;width:56px;height:4px;margin-left:-28px;border-radius:2px;background:var(--muted);opacity:.6}
@@ -169,19 +172,43 @@ function txHtml(t){
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
   return `<div class="tx" id="tx-${esc(t.id)}"><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${calls}${play}</div>${body}</div></div>`;
 }
-function renderFeed(rid){ // one transcript per radio, under that radio's card
+// A net or conversation = a run of transmissions on one frequency with no quiet gap over 15 minutes
+// (the same rule as station/ics.py sessions(), which builds the Winlink messages).
+const GAP_MS=15*60000;
+function groupSessions(list){
+  const out=[];
+  for(const t of [...list].sort((a,b)=>a.start.localeCompare(b.start))){
+    const cur=out[out.length-1],at=Date.parse(t.start);
+    if(cur&&at-Date.parse(cur.end)<=GAP_MS&&(t.freq_mhz??null)===(cur.freq_mhz??null)){cur.tx.push(t);if(t.status==="final")cur.end=t.start}
+    else out.push({start:t.start,end:t.start,freq_mhz:t.freq_mhz??null,tx:[t]});
+  }
+  return out;
+}
+function sessHtml(rid,s,latest){
+  const fin=s.tx.filter(t=>t.status==="final"),calls=new Set(fin.flatMap(t=>t.callsigns||[]));
+  const net=latest?((S.hints||{})[rid]||{}).net:null;
+  const title=net&&net.type&&net.type!=="unknown"?net.label:(calls.size>2?"Net":"Conversation");
+  const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"")+(latest?" (continuing)":"");
+  const fq=s.freq_mhz?` · ${Number(s.freq_mhz).toFixed(3)} MHz`:"";
+  const btn=fin.length?`<button data-wls="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}" title="ICS-309 log + ICS-213 summary of this ${title.toLowerCase()}, addressed to everyone who took part">Winlink messages…</button>`:"";
+  return `<div class="sess"><div><b>${esc(title)}</b> <span class="muted small">${span}${fq} · ${fin.length} transmission${fin.length===1?"":"s"} · ${calls.size} station${calls.size===1?"":"s"}</span></div>${btn}</div>`;
+}
+function renderFeed(rid){ // one transcript per radio, grouped into nets / conversations, newest first
   for(const r of S.radios){
     if(rid&&r.id!==rid)continue;
     const f=document.getElementById("feed-"+r.id);if(!f)continue;
-    const mine=S.tx.filter(t=>t.radio===r.id);
-    f.innerHTML=mine.length?mine.slice(-200).reverse().map(txHtml).join(""):'<p class="muted">Waiting for the first transmission.</p>';
+    const mine=S.tx.filter(t=>t.radio===r.id).slice(-300);
+    if(!mine.length){f.innerHTML='<p class="muted">Waiting for the first transmission.</p>';continue}
+    const ss=groupSessions(mine),now=Date.now();
+    f.innerHTML=ss.map((s,i)=>({s,i})).reverse().map(({s,i})=>sessHtml(r.id,s,i===ss.length-1&&now-Date.parse(s.end)<GAP_MS)+
+      [...s.tx].reverse().map(txHtml).join("")).join("");
   }
 }
 function upsertTx(t){
   const i=S.tx.findIndex(x=>x.id===t.id);
   if(i>=0)S.tx[i]=t;else S.tx.push(t);
   const el=$("tx-"+t.id);
-  if(el){el.outerHTML=txHtml(t)}else renderFeed(t.radio);
+  if(el&&t.status!=="final"){el.outerHTML=txHtml(t)}else renderFeed(t.radio);   // a final one can change its net's header
   if(t.status==="final")renderHeard(t.radio);
 }
 // ---------- radio cards: built once, updated in place (the waterfall canvas must survive updates) ----------
@@ -213,7 +240,7 @@ function ensureCard(r){
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
    <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>
    <div class="sch"></div>
-   <div class="cardbtns"><button data-wl="${esc(r.id)}" title="ICS-309 log + ICS-213 summary of this radio's last net or conversation, to everyone who took part">Winlink messages…</button></div>`;
+`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
   top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button></div>
@@ -393,14 +420,25 @@ function renderWl(){
       :`<label>Title <input data-i="${i}" data-k="Title" value="${esc(f.values.Title)}" style="text-transform:none;width:100%"></label><table class="log"><tr><th>Time</th><th>From</th><th>To</th><th>Subject</th></tr>${f.rows.map(r=>`<tr><td>${esc(r.time.slice(11))}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td><td>${esc(r.sub)}</td></tr>`).join("")}</table>`;
     return `<details open><summary><label class="chk"><input type="checkbox" name="form" value="${i}" checked> ${esc(f.label)}</label></summary>${body}</details>`}).join("");
   $("wlBody").innerHTML=`<h3>Winlink messages</h3>${warn}
-   <div class="small">From <input type="datetime-local" id="wlS" value="${esc(d.start)}"> to <input type="datetime-local" id="wlE" value="${esc(d.end)}"> <button id="wlRe">Update</button> <span class="muted">${d.count} transmissions</span></div>
+   <div class="small">From <input type="datetime-local" step="1" id="wlS" value="${esc(d.start)}"> to <input type="datetime-local" step="1" id="wlE" value="${esc(d.end)}"> <button id="wlRe">Update</button> <span class="muted">${d.count} transmissions</span></div>
    <p class="small muted">Sending as <b>${esc(op.winlink_account||"?")}</b> from ${esc(op.winlink_dir||"?")}.</p>
-   <h4>To</h4><div class="tolist">${to}</div><div class="small">Add: <input id="wlAdd" maxlength="11" placeholder="callsign"> <button id="wlAddB">Add</button></div>
+   <h4>To <span class="tocount muted small"></span></h4>
+   <div class="small" style="margin-bottom:4px"><button type="button" id="toNone">Uncheck all</button> <button type="button" id="toAll">Check all</button> <button type="button" id="toConf">Only callbook-confirmed</button></div>
+   <div class="tolist">${to}</div><div class="small">Add: <input id="wlAdd" maxlength="11" placeholder="callsign"> <button id="wlAddB">Add</button></div>
    <h4>Forms</h4>${forms}
    <div class="row"><button id="wlSend" class="primary">Put in Winlink Express Outbox</button> <button onclick="$('wl').close()">Close</button> <span id="wlMsg"></span></div>`;
+  const box=$("wlBody"),toBoxes=()=>[...box.querySelectorAll("input[name=to]")];
+  const count=()=>{const n=toBoxes().filter(x=>x.checked).length;box.querySelector(".tocount").textContent=`(${n} of ${toBoxes().length} checked)`};
+  const setAll=f=>{toBoxes().forEach(x=>{x.checked=f(x)});count()};
+  box.querySelector("#toNone").onclick=()=>setAll(()=>false);
+  box.querySelector("#toAll").onclick=()=>setAll(()=>true);
+  box.querySelector("#toConf").onclick=()=>setAll(x=>!!(d.to.find(p=>p.call===x.value)||{}).confirmed);
+  box.querySelector(".tolist").addEventListener("change",count);count();
   $("wlRe").onclick=()=>wlPreview({radio:d.radio,start:$("wlS").value,end:$("wlE").value});
   $("wlAddB").onclick=()=>{const c=$("wlAdd").value.trim().toUpperCase();if(!/^[A-Z0-9]{3,8}(-\d{1,2})?$/.test(c))return;
-    d.to.push({call:c,name:"",confirmed:true});renderWl()};
+    const keep=new Set(toBoxes().filter(x=>x.checked).map(x=>x.value));keep.add(c);
+    if(!d.to.some(p=>p.call===c))d.to.push({call:c,name:"",confirmed:true});renderWl();
+    toBoxes().forEach(x=>{x.checked=keep.has(x.value)});count()};
   $("wlBody").querySelectorAll("[data-k]").forEach(el=>el.oninput=()=>{d.drafts[+el.dataset.i].values[el.dataset.k]=el.value});
   $("wlSend").onclick=async()=>{
     const to=[...$("wlBody").querySelectorAll("input[name=to]:checked")].map(x=>x.value);
@@ -422,7 +460,7 @@ async function lookup(call){
 document.addEventListener("click",e=>{
   const c=e.target.closest("[data-call]");if(c){$("q").value=c.dataset.call;lookup(c.dataset.call)}
   const rt=e.target.closest("#rtabs [data-r]");if(rt)selectRadio(rt.dataset.r);
-  const w=e.target.closest("[data-wl]");if(w)wlPreview({radio:w.dataset.wl});
+  const w=e.target.closest("[data-wls]");if(w)wlPreview({radio:w.dataset.wls,start:w.dataset.s,end:w.dataset.e});
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
     col.querySelectorAll(".toptabs [data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
     const want={radio:"r-",guide:"guide-",heard:"heard-"}[tb.dataset.tab]+tb.dataset.rid;

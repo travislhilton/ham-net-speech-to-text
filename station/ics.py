@@ -6,18 +6,27 @@ from datetime import datetime, timedelta
 ROWS_309 = 30
 
 
-def session_bounds(tx: list[dict], rid: str, gap_min: int = 15, now: datetime | None = None) -> tuple[str, str] | None:
-    """Default span for 'the conversation that just happened': the latest run of transmissions on `rid`
-    with no gap longer than `gap_min` minutes."""
-    ts = sorted(datetime.fromisoformat(t["start"]) for t in tx if t.get("radio") == rid and t.get("status") == "final")
-    if not ts:
-        return None
-    start = ts[-1]
-    for a, b in zip(reversed(ts[:-1]), reversed(ts[1:])):
-        if b - a > timedelta(minutes=gap_min):
-            break
-        start = a
-    return start.isoformat(timespec="minutes"), (ts[-1] + timedelta(minutes=1)).isoformat(timespec="minutes")
+def sessions(tx: list[dict], rid: str, gap_min: int = 15) -> list[dict]:
+    """The nets and conversations heard on `rid`, oldest first: a run of transmissions on one frequency with no
+    quiet gap longer than `gap_min` minutes. The dashboard groups its log the same way (static/index.html,
+    groupSessions) and asks for Winlink messages by a session's first and last transmission times."""
+    rows = sorted((t for t in tx if t.get("radio") == rid and t.get("status") == "final"), key=lambda t: t["start"])
+    out = []
+    for t in rows:
+        at = datetime.fromisoformat(t["start"])
+        cur = out[-1] if out else None
+        if (cur and at - datetime.fromisoformat(cur["end"]) <= timedelta(minutes=gap_min)
+                and t.get("freq_mhz") == cur["freq_mhz"]):
+            cur["end"] = t["start"]; cur["count"] += 1
+        else:
+            out.append({"start": t["start"], "end": t["start"], "freq_mhz": t.get("freq_mhz"), "count": 1})
+    return out
+
+
+def session_bounds(tx: list[dict], rid: str, gap_min: int = 15) -> tuple[str, str] | None:
+    """Default span: the latest net or conversation on `rid`."""
+    s = sessions(tx, rid, gap_min)
+    return (s[-1]["start"], s[-1]["end"]) if s else None
 
 
 def select(tx, rid, start, end):
@@ -44,7 +53,9 @@ def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | Non
     if not span:
         return []
     first, last = datetime.fromisoformat(span[0]["start"]), datetime.fromisoformat(span[-1]["start"])
-    freq = f"{radio['freq_mhz']:.3f} MHz {radio.get('mode', '')}".strip() if radio.get("freq_mhz") else ""
+    f_mhz = span[0].get("freq_mhz") or radio.get("freq_mhz")          # the net's own frequency, not the radio's now
+    mode = radio.get("mode", "") if f_mhz == radio.get("freq_mhz") else ""
+    freq = f"{f_mhz:.3f} MHz {mode}".strip() if f_mhz else ""
     title = title or f"Net on {freq}" if freq else (title or "Radio net")
     name = op.get("name") or op.get("callsign") or ""
     sender = op.get("winlink_account") or op.get("callsign") or ""

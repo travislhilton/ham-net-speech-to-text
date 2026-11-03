@@ -47,7 +47,7 @@ After installing, the station starts by itself whenever you sign in to Windows. 
 or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale.
 
 The dashboard has one column per radio, with everything about that radio in it. The top of each column is
-one set of tabs, **Radio** (meters, waterfall, frequency, Winlink button) | **What you can do now** |
+one set of tabs, **Radio** (meters, waterfall, frequency) | **What you can do now** |
 **Stations heard**, all the same height, so **On the air**, the conversation, always fills the space below
 and never moves when you switch tabs. A dot on "What you can do now" means it has guidance (red: urgent).
 On the What you can do now and Stations heard tabs, drag the bar between the tabs and the conversation to
@@ -78,12 +78,15 @@ you chose is remembered. Each column shows:
 - **Net type** (a badge on each radio card): the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
   with a red banner if it sounds like a real emergency.
 - **Nets** (on each radio card): the nets scheduled on that radio; the one running now is in green.
-- **Winlink messages…** (a button on each radio card): after a net or conversation on that radio, builds an **ICS-309**
-  Communications Log (every transmission: time, from, to, what was said; 30 rows a page) and an
-  **ICS-213** summary (stations heard, traffic and relays), addressed to every callsign that took part
-  (callsigns no callbook confirms start unticked). Edit, then **Put in Winlink Express Outbox**; Winlink
-  Express sends them the next time you connect. Close Winlink Express first; the station refuses
-  while it is open and backs up Winlink's message list before each write.
+- **Nets and conversations**: each radio's log is split into nets/conversations (a new one starts after 15
+  quiet minutes or when the radio's frequency changes), each with a header: time span, frequency, how many
+  transmissions and stations, and its own **Winlink messages…** button. That builds an **ICS-309**
+  Communications Log (every transmission: time, from, to, what was said; 30 rows a page) and an **ICS-213**
+  summary (stations heard, traffic and relays) for that net only, addressed to every callsign that took part
+  (callsigns no callbook confirms start unticked; **Uncheck all / Check all / Only callbook-confirmed**, and add
+  any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
+  connect. Close Winlink Express first; the station refuses while it is open and backs up Winlink's message
+  list before each write.
 - **Settings** (top right): your callsign, name and grid; which Winlink Express folder (found
   automatically: `C:\\RMS Express` and any other install) and which callsign account sends.
 
