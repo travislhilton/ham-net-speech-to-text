@@ -42,6 +42,10 @@ td,th{text-align:left;vertical-align:top;padding:2px 4px 2px 0;border-bottom:1px
 th{font-weight:600;white-space:nowrap;padding-right:8px}
 tr:last-child td,tr:last-child th{border-bottom:0}
 .small{font-size:8.2pt;color:var(--soft)}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center}
+.dl svg{width:1.05in;height:1.05in;display:block}
+.url{font-family:var(--mono);font-size:8.3pt;word-break:break-all}
+pre.y{font-family:var(--mono);font-size:7.6pt;line-height:1.25;background:var(--tint);padding:4px 6px;margin:3px 0;white-space:pre-wrap}
 .diagram{border:1px solid var(--ink);font-size:8pt;line-height:1.25}
 .diagram .tabsrow{display:flex;gap:8px;border-bottom:1px solid var(--ink);padding:3px 6px;background:var(--tint);font-weight:600}
 .diagram .tabsrow span:last-child{margin-left:auto;color:var(--soft)}
@@ -71,28 +75,72 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
 }
 </style>
 
-<p class="note">Two-sided reference card for HamNet Station. Print it on letter paper, double-sided (flip on the long edge). It also opens on the station itself at <span class="mono">http://localhost:8091/card</span>, where the browser's Print works.</p>
+<p class="note">Two-sided reference card for HamNet Station. Print it on letter paper, double-sided (flip on the long edge). The station also shows it under <b>Help</b>, where the browser's Print works.</p>
 
 <!-- ===================== FRONT ===================== -->
 <article class="sheet">
   <header class="mast">
-    <h1>HamNet Station: voice net to text</h1>
-    <span class="side">Side 1 · Getting around</span>
+    <h1>HamNet Station</h1>
+    <span class="side">Side 1 · Install and open it</span>
   </header>
+  <p style="margin-bottom:9px">HamNet Station listens to your radio and writes down every transmission as text, a few seconds after the station unkeys. It shows who is talking, looks up every callsign, coaches you through relays and traffic, and builds the <b>ICS-309</b> and <b>ICS-213</b> Winlink messages after the net. It runs on a Windows PC and works with no internet.</p>
   <div class="cols">
     <div>
       <section>
-        <h2>Open the dashboard</h2>
+        <h2>You need</h2>
         <ul>
-          <li>On the station PC: the <b>HamNet Station</b> icon on the desktop, or <span class="mono">http://localhost:8091</span>.</li>
-          <li>From a phone or another PC at home or on Tailscale:<br><span class="mono">http://</span><span class="fill"></span><span class="mono">:8091</span></li>
-          <li>The station starts by itself when you sign in to Windows. It works with no internet.</li>
+          <li>A Windows 10 or 11 PC (64-bit) with about 6 GB free.</li>
+          <li>Internet for the first install only (about 2.5 GB, 10–20 minutes).</li>
+          <li>The radio's receive audio on a USB sound input of its own, for example a data jack cable to a USB sound card. Never the input VARA or another digital mode uses.</li>
         </ul>
       </section>
 
       <section>
-        <h2>What you see</h2>
-        <p>One column per radio. On a phone, one radio at a time: tap its name under the header. A radio's dot turns <b>green while it is receiving</b>, red for emergency traffic.</p>
+        <h2>Quick install</h2>
+        <div class="dl">
+          <svg width="140" height="140" class="segno"><g transform="scale(4)"><path fill="#fff" d="M0 0h35v35h-35z"/><path class="qrline" stroke="#000" d="M1 1.5h7m1 0h1m1 0h1m2 0h2m1 0h1m1 0h4m1 0h1m2 0h7m-33 1h1m5 0h1m1 0h1m1 0h4m3 0h2m1 0h1m1 0h3m1 0h1m5 0h1m-33 1h1m1 0h3m1 0h1m3 0h1m1 0h1m5 0h1m5 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h1m1 0h2m4 0h1m1 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h1m1 0h2m1 0h1m2 0h3m4 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m5 0h1m2 0h2m1 0h3m4 0h1m1 0h2m1 0h1m1 0h1m5 0h1m-33 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-25 1h2m2 0h1m1 0h1m2 0h2m4 0h2m-25 1h1m1 0h2m1 0h3m1 0h2m1 0h1m1 0h1m1 0h7m1 0h1m1 0h1m2 0h1m1 0h2m-32 1h2m1 0h1m2 0h2m7 0h2m1 0h3m1 0h1m2 0h2m1 0h2m1 0h1m-32 1h2m3 0h2m2 0h3m1 0h1m1 0h2m2 0h2m1 0h1m1 0h5m1 0h2m-31 1h2m4 0h2m2 0h3m1 0h1m2 0h2m6 0h1m1 0h1m2 0h1m-33 1h1m1 0h1m1 0h3m3 0h2m5 0h1m2 0h1m1 0h4m1 0h3m1 0h2m-33 1h1m2 0h2m2 0h1m2 0h2m1 0h1m2 0h4m1 0h1m2 0h2m1 0h1m1 0h3m-32 1h3m1 0h3m1 0h1m1 0h1m1 0h2m1 0h7m4 0h1m-27 1h2m1 0h1m3 0h4m1 0h1m1 0h1m1 0h1m1 0h1m1 0h2m2 0h3m1 0h3m-30 1h1m2 0h4m1 0h1m2 0h2m1 0h1m2 0h2m1 0h3m1 0h2m1 0h3m-31 1h1m2 0h1m3 0h1m7 0h1m4 0h7m1 0h2m1 0h2m-33 1h1m2 0h4m1 0h2m1 0h3m1 0h1m4 0h2m2 0h2m1 0h2m1 0h1m-31 1h3m1 0h1m2 0h2m1 0h1m1 0h2m3 0h1m1 0h1m3 0h2m1 0h1m1 0h1m-27 1h1m2 0h2m3 0h1m4 0h1m5 0h2m1 0h2m3 0h2m1 0h1m-33 1h1m1 0h2m1 0h1m1 0h1m1 0h1m3 0h1m1 0h1m1 0h3m1 0h1m1 0h1m2 0h1m3 0h1m1 0h1m-31 1h3m1 0h1m2 0h3m1 0h1m2 0h2m3 0h1m1 0h5m3 0h2m-32 1h2m2 0h1m1 0h2m1 0h1m2 0h1m2 0h1m1 0h1m1 0h1m2 0h1m2 0h2m1 0h1m2 0h1m-33 1h1m1 0h1m2 0h2m3 0h1m1 0h2m1 0h1m1 0h1m1 0h1m2 0h1m1 0h5m2 0h1m-24 1h1m3 0h10m2 0h1m3 0h2m-30 1h7m1 0h3m1 0h1m3 0h1m2 0h2m2 0h2m1 0h1m1 0h1m-29 1h1m5 0h1m1 0h2m1 0h1m1 0h4m1 0h1m1 0h5m3 0h5m-33 1h1m1 0h3m1 0h1m4 0h1m1 0h1m1 0h1m1 0h1m1 0h10m1 0h2m-32 1h1m1 0h3m1 0h1m1 0h2m4 0h1m5 0h2m1 0h1m3 0h1m1 0h2m1 0h1m-33 1h1m1 0h3m1 0h1m1 0h1m1 0h5m2 0h2m3 0h1m3 0h2m1 0h2m-31 1h1m5 0h1m5 0h1m1 0h5m3 0h1m1 0h2m1 0h3m2 0h1m-33 1h7m1 0h2m2 0h8m1 0h1m1 0h1m4 0h1m1 0h1"/></g></svg>
+          <div><b>Download</b><br><span class="url">github.com/owner/<wbr>ham-net-speech-to-text</span><br><span class="small">Scan with a phone camera to see the page, then open the same address on the PC.</span></div>
+        </div>
+        <ol style="margin-top:6px">
+          <li>On the PC, open the address above. Press the green <span class="btn">Code</span> button, then <b>Download ZIP</b>.</li>
+          <li>Open the downloaded ZIP and press <b>Extract all</b>.</li>
+          <li>In the extracted folder open <b>install</b> → <b>windows</b>, double-click <b>install.cmd</b>, and press <b>Yes</b> when Windows asks.</li>
+          <li>Type your callsign. Press <b>Enter</b> to skip the QRZ.com question if you don't use QRZ.</li>
+          <li>Wait for <b>== Done</b>. It lists the PC's sound inputs; note the name of your radio's input.</li>
+        </ol>
+        <p class="small">To update later, download again and run install.cmd again. Your settings are kept.</p>
+      </section>
+
+      <section>
+        <h2>Add your radio (once)</h2>
+        <ol>
+          <li>Open <b>C:\ham-net-speech-to-text\config\station.yaml</b> in Notepad.</li>
+          <li>Replace <span class="mono">radios: []</span> with your radio, using part of the input's name for <span class="mono">device</span>:</li>
+        </ol>
+<pre class="y">radios:
+  - id: vhf
+    name: Club VHF
+    device: USB PnP Sound
+    gate: carrier   # voice for SSB/HF
+    freq_mhz: 146.940
+    mode: FM</pre>
+        <ol start="3"><li>Save, then sign out of Windows and back in. The station starts again with your radio.</li></ol>
+      </section>
+    </div>
+
+    <div>
+      <section>
+        <h2>Open it</h2>
+        <ul>
+          <li>On the PC: double-click <b>HamNet Station</b> on the desktop.</li>
+          <li><b>On your phone:</b> press <span class="btn">Open on phone</span> at the top of the page and point the phone's camera at the code. The phone must be on the same Wi-Fi as the PC.</li>
+          <li><span class="btn">Help</span> at the top opens this card.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>The screen</h2>
+        <p>One column per radio. On a phone, one radio at a time: tap its name under the header. A radio's dot turns <b>green while it is receiving</b>.</p>
         <div class="diagram" aria-label="Sketch of one radio's column">
           <div class="tabsrow"><span>Radio</span><span>What you can do now ●</span><span>Stations heard 12</span><span>▴ Hide</span></div>
           <div class="panel">meters · waterfall · frequency · Pause · Nets… · Clear log… · Test transcription…</div>
@@ -102,108 +150,75 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
             <div class="row pend"><span>19:05</span><span><b>≈ K7NET (net control)</b> <i class="small">improving…</i> Roger, you're in the log.</span></div>
           </div>
         </div>
-        <p class="small">The top is three tabs. <b>On the air</b>, the log, always fills the space below.</p>
-      </section>
-
-      <section>
-        <h2>The three tabs</h2>
-        <table>
-          <tr><th>Radio</th><td>Frequency, meters, waterfall and the buttons for this radio.</td></tr>
-          <tr><th>What you can do now</th><td>Step-by-step help when someone asks for a relay, calls priority or emergency traffic, opens a net or passes traffic. Also your 10-minute ID reminder. A dot means there is advice; a <b>red</b> dot means urgent.</td></tr>
-          <tr><th>Stations heard</th><td>One line per callsign: name, city, state, country. Tap a line for licence, grid and address.</td></tr>
+        <table style="margin-top:4px">
+          <tr><th>Radio</th><td>Frequency, meters, waterfall and the radio's buttons.</td></tr>
+          <tr><th>What you can do now</th><td>Steps and phrases for relays, priority or emergency traffic, check-ins and your 10-minute ID. A <b>red</b> dot means urgent.</td></tr>
+          <tr><th>Stations heard</th><td>One line per callsign. Tap it for licence, grid and address.</td></tr>
         </table>
+        <p class="small"><b>More room for the log:</b> <span class="btn">▴ Hide</span> folds the panel away; <span class="btn">▾ Show</span> brings it back. Tap a net's title to fold that net.</p>
       </section>
 
       <section>
-        <h2>More room for the log</h2>
-        <ul>
-          <li><span class="btn">▴ Hide</span> at the end of the tabs, or tap the open tab: the panel folds away and the log takes the screen. <span class="btn">▾ Show</span> brings it back.</li>
-          <li>Tap a net's title to fold that net. Each browser remembers both.</li>
-          <li>Wide screen: drag the bar under the tabs to resize; double-click it to reset.</li>
-        </ul>
+        <h2>Check the audio</h2>
+        <table>
+          <tr><th>Signal</th><td><span class="sw ok"></span>good · <span class="sw warn"></span>low or hot · <span class="sw bad"></span>clipping, or no audio. It should jump when the radio hears someone.</td></tr>
+          <tr><th>SNR</th><td>While receiving: <span class="sw ok"></span>20 dB+ · <span class="sw warn"></span>10–20 · <span class="sw bad"></span>under 10, expect mistakes.</td></tr>
+          <tr><th>Frequency</th><td>Wrong? Press <span class="btn">Change</span> and enter what the radio is tuned to.</td></tr>
+        </table>
       </section>
     </div>
+  </div>
+  <footer class="small"><span>Everything heard is kept on the PC: C:\ham-net-speech-to-text\data</span><span>Turn over: how to use it →</span></footer>
+</article>
 
+<!-- ===================== BACK ===================== -->
+<article class="sheet">
+  <header class="mast">
+    <h1>How to use it</h1>
+    <span class="side">Side 2 · Running a net</span>
+  </header>
+  <div class="cols">
     <div>
-      <section>
-        <h2>Reading the meters</h2>
-        <table>
-          <tr><th>RX</th><td>Lit while a station is transmitting.</td></tr>
-          <tr><th>Signal</th><td><span class="sw ok"></span>level is good · <span class="sw warn"></span>low or hot · <span class="sw bad"></span>clipping, or almost no audio (check cable and level). The tick is the peak.</td></tr>
-          <tr><th>SNR</th><td>While receiving: <span class="sw ok"></span>20 dB or more · <span class="sw warn"></span>10–20 dB · <span class="sw bad"></span>under 10 dB, expect mistakes.</td></tr>
-          <tr><th>Waterfall</th><td>The radio's audio over time. Voice is a bright smear; hiss is an even haze.</td></tr>
-        </table>
-      </section>
-
       <section>
         <h2>Reading the log</h2>
         <table>
           <tr><th>Grey words</th><td>Rough text while the station is still talking.</td></tr>
-          <tr><th>Black text</th><td>The live text, 2–3 seconds after they unkey.</td></tr>
-          <tr><th><span class="pend">Blue edge</span><br><i>improving…</i></th><td>Better text is on its way from the accurate pass. Wait a little and the line updates by itself. Only shown at home, where the accurate pass is available.</td></tr>
-          <tr><th><span class="call">K7ABC</span></th><td>A callsign. Tap it for the station's card. An <b>underlined</b> callsign was corrected from a near miss; a dotted <b>maybe</b> chip is a guess to check.</td></tr>
-          <tr><th>Underlined word</th><td>A Q-code or proword, with its meaning below. Untick <b>Explain radio terms</b> at the top to hide meanings.</td></tr>
-          <tr><th><span class="btn">▶ 4 s</span></th><td>Play the recording of that transmission.</td></tr>
-          <tr><th><i>probably noise</i></th><td>A burst with no speech in it. Ignore it.</td></tr>
+          <tr><th>Black text</th><td>The text, 2–3 seconds after they unkey.</td></tr>
+          <tr><th><span class="pend">Blue edge</span><br><i>improving…</i></th><td>Better text is on its way. Wait a little and the line updates by itself. Only on stations with an accurate pass set up.</td></tr>
+          <tr><th><span class="call">K7ABC</span></th><td>A callsign: tap it for the station's card. <b>Underlined</b>: corrected from a near miss. A dotted <b>maybe</b>: a guess to check.</td></tr>
+          <tr><th>Underlined word</th><td>A Q-code or proword, with its meaning below. Untick <b>Explain radio terms</b> to hide meanings.</td></tr>
+          <tr><th><span class="btn">▶ 4 s</span></th><td>Play that transmission.</td></tr>
+          <tr><th><i>probably noise</i></th><td>No speech in it. Ignore it.</td></tr>
         </table>
       </section>
 
       <section>
         <h2>Who is talking</h2>
         <table>
-          <tr><th><b>K7ABC</b></th><td>Bold: the station said its own call on the air.</td></tr>
-          <tr><th>≈ K7NET</th><td>Grey: probably net control (from the net's schedule).</td></tr>
-          <tr><th>K7ABC ✎</th><td>You chose it with <span class="btn">Who?</span>. Your choice always wins.</td></tr>
-          <tr><th>blank</th><td>Not known. The station never guesses.</td></tr>
+          <tr><th><b>K7ABC</b></th><td>Bold: the station gave its own call.</td></tr>
+          <tr><th>≈ K7NET</th><td>Grey: probably net control.</td></tr>
+          <tr><th>K7ABC ✎</th><td>You chose it with <span class="btn">Who?</span>. Your choice wins; <b>Automatic</b> undoes it.</td></tr>
+          <tr><th>blank</th><td>Not known. It never guesses.</td></tr>
         </table>
-        <p class="small">A callsign only being spoken <i>to</i> ("K7ABC, thank you") is never taken for the speaker.</p>
       </section>
 
-      <section class="box">
-        <b>Look up any callsign:</b> type it in the box at the top of the page, then <span class="btn">Look up</span>. US calls come from the FCC database on the PC, so it works offline.
-      </section>
-    </div>
-  </div>
-  <footer class="small"><span>Every transmission and recording is kept on the station PC. Nothing is deleted from the screen buttons.</span><span>Turn over: during a net →</span></footer>
-</article>
-
-<!-- ===================== BACK ===================== -->
-<article class="sheet">
-  <header class="mast">
-    <h1>Before, during and after a net</h1>
-    <span class="side">Side 2 · Running a net</span>
-  </header>
-  <div class="cols">
-    <div>
       <section>
         <h2>Before the net</h2>
         <ol>
-          <li>Tune the radio. If the frequency changed, press <span class="btn">Change</span> on the Radio tab and enter the new frequency and mode. Every transmission is logged with it.</li>
-          <li>Check that <b>Signal</b> moves with traffic and stays green.</li>
-          <li>Schedule the net once with <span class="btn">Nets…</span>: name, radio, days, start time, minutes, frequency, mode and <b>net control</b>'s callsign. Naming net control lets the station mark its words.</li>
-          <li>Optional, per radio: <b>Listen only during scheduled nets</b>. The radio starts 1 minute before each net and stops 5 minutes after it ends, so nothing in between is recorded.</li>
+          <li>Tune the radio. If the frequency changed, press <span class="btn">Change</span> and enter it.</li>
+          <li>Schedule the net once with <span class="btn">Nets…</span>: name, days, start time, length, frequency and <b>net control</b>'s callsign.</li>
+          <li>Optional: <b>Listen only during scheduled nets</b>. The radio starts 1 minute before each net and stops 5 minutes after.</li>
         </ol>
       </section>
 
       <section>
         <h2>During the net</h2>
         <ul>
-          <li>Watch <b>On the air</b>. Each net gets a header with its time, frequency and how many stations took part.</li>
-          <li>If the speaker is missing or wrong, tap <span class="btn">Who?</span>, pick a callsign from the line or type one. <b>Automatic</b> undoes it.</li>
-          <li>Watch the <b>What you can do now</b> dot. Red means emergency or priority traffic: open the tab for the steps and phrases to use.</li>
-          <li>Your own station ID is due every 10 minutes and at the end of a contact (FCC §97.119). The tab reminds you.</li>
+          <li>Each net gets its own header in the log: time, frequency, how many stations.</li>
+          <li>Fix a missing or wrong speaker with <span class="btn">Who?</span>.</li>
+          <li>Red dot on <b>What you can do now</b>: emergency or priority traffic. Open it for the steps.</li>
+          <li>Identify every 10 minutes and at the end of a contact (FCC §97.119). The tab reminds you.</li>
         </ul>
-      </section>
-
-      <section>
-        <h2>Radio card buttons</h2>
-        <table>
-          <tr><th><span class="btn">⏸ Pause</span></th><td>Stop listening to this radio. Nothing is recorded until <span class="btn">▶ Resume</span>.</td></tr>
-          <tr><th><span class="btn">Nets…</span></th><td>Add, change or delete scheduled nets.</td></tr>
-          <tr><th><span class="btn">Clear log…</span></th><td>Clears this radio's log and stations heard from the screen. Files stay on the PC.</td></tr>
-          <tr><th><span class="btn">Test transcription…</span></th><td>Measure accuracy (see right).</td></tr>
-          <tr><th><span class="btn">Settings</span></th><td>Top of the page: your callsign, name, grid, and which Winlink Express sends.</td></tr>
-        </table>
       </section>
     </div>
 
@@ -211,41 +226,45 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
       <section>
         <h2>After the net: Winlink messages</h2>
         <ol>
-          <li>Wait for the net header to say <b>✓ Accurate text for all</b>. At home this is usually a few minutes after the net goes quiet. In the field there is no accurate pass: send with the live text.</li>
-          <li>Press <span class="btn">Winlink messages…</span> on the net's header. It builds an <b>ICS-309</b> communications log and an <b>ICS-213</b> summary for that net only.</li>
-          <li>Check the <b>To:</b> list. Stations the callbook can't confirm start unticked. Use <b>Only callbook-confirmed</b>, or add any callsign.</li>
+          <li>If the net header shows a progress bar, wait for <b>✓ Accurate text for all</b>. Otherwise go ahead.</li>
+          <li>Press <span class="btn">Winlink messages…</span> on the net's header. You get an <b>ICS-309</b> communications log and an <b>ICS-213</b> summary for that net.</li>
+          <li>Check the <b>To:</b> list. Stations the callbook can't confirm start unticked.</li>
           <li>Read and edit the messages.</li>
           <li><b>Close Winlink Express</b>, then press <span class="btn">Put in Winlink Express Outbox</span>.</li>
-          <li>Open Winlink Express and connect. The messages go out with your next session.</li>
+          <li>Open Winlink Express and connect. They go out with your next session.</li>
         </ol>
-        <p class="small">If the accurate pass finishes while the window is open, it offers <b>Load the accurate text</b>.</p>
+        <p class="small">First time: set your name, grid and Winlink Express account in <span class="btn">Settings</span>.</p>
       </section>
 
       <section>
-        <h2>Measure accuracy</h2>
-        <p>Press <span class="btn">Test transcription…</span>, have someone read the printed text over the air, then press <b>Score</b>. You get the share of words wrong, for the live text and the accurate pass. Re-test after changing the radio, cable or levels, and compare the numbers.</p>
+        <h2>Buttons on each radio</h2>
+        <table>
+          <tr><th><span class="btn">⏸ Pause</span></th><td>Stop listening until <span class="btn">▶ Resume</span>.</td></tr>
+          <tr><th><span class="btn">Clear log…</span></th><td>Clear the screen. Files stay on the PC.</td></tr>
+          <tr><th><span class="btn">Test transcription…</span></th><td>Someone reads a printed text on the air; <b>Score</b> shows the share of words wrong. Re-test after changing cable or levels.</td></tr>
+        </table>
       </section>
 
       <section>
         <h2>When something looks wrong</h2>
         <table>
-          <tr><th>No text appears</th><td>Is the radio <b>Paused</b>? Does <b>Signal</b> move? Is the radio's squelch open on traffic?</td></tr>
-          <tr><th>Signal red, clipping</th><td>Turn the radio's data or audio level down.</td></tr>
-          <tr><th>Signal red, no audio</th><td>Check the cable, and that the radio is on the right band.</td></tr>
-          <tr><th>Lots of <i>probably noise</i></th><td>Squelch too open, or interference. Raise the squelch a little.</td></tr>
-          <tr><th>Wrong callsigns</th><td>Use <span class="btn">Who?</span>. Check the <b>maybe</b> chips. Low SNR means more mistakes.</td></tr>
-          <tr><th>Outbox refused</th><td>Winlink Express is still open. Close it and try again.</td></tr>
-          <tr><th>Page won't open</th><td>Sign in to Windows on the station PC; the station starts at sign-in.</td></tr>
+          <tr><th>No text</th><td>Is the radio <b>Paused</b>? Does <b>Signal</b> move? Is the squelch opening on traffic?</td></tr>
+          <tr><th>Signal red</th><td>Clipping: turn the radio's data level down. No audio: check the cable and the <span class="mono">device</span> name in station.yaml.</td></tr>
+          <tr><th>Lots of <i>noise</i></th><td>Raise the squelch a little.</td></tr>
+          <tr><th>Wrong calls</th><td>Use <span class="btn">Who?</span>. Low SNR means more mistakes.</td></tr>
+          <tr><th>Outbox refused</th><td>Winlink Express is still open. Close it.</td></tr>
+          <tr><th>Phone won't open it</th><td>Same Wi-Fi as the PC? Use the address under the code.</td></tr>
+          <tr><th>Page won't open</th><td>Sign in to Windows on the PC. The station starts at sign-in.</td></tr>
         </table>
       </section>
 
       <section class="box tint">
-        <b>Station details</b><br>
-        Station PC <span class="fill"></span><br>
+        <b>This station</b><br>
+        Address <span class="fill" style="min-width:2.3in"></span><br>
         Radios <span class="fill" style="min-width:2.4in"></span><br>
         Net control <span class="fill" style="min-width:2.1in"></span>
       </section>
     </div>
   </div>
-  <footer class="small"><span>HamNet Station (ham-net-speech-to-text) · full manual: README.md in the install folder</span><span>Logs: data\logs · recordings: data\recordings</span></footer>
+  <footer class="small"><span>HamNet Station · full manual: README.md in the install folder</span><span>Logs: data\logs · recordings: data\recordings</span></footer>
 </article>

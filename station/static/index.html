@@ -72,6 +72,10 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .sess+.tx{border-top:0}
 /* a transmission the accurate pass is still working on: a thin pulsing bar + "improving…" */
 .tx.pending,.feed .tx.pending{padding-left:8px;box-shadow:inset 3px 0 0 var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 7%,transparent),transparent 45%);animation:accpulse 1.6s ease-in-out infinite}
+.phoneqr{display:flex;flex-wrap:wrap;gap:16px;margin:8px 0}
+.phoneqr figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:4px;max-width:240px;text-align:center}
+.phoneqr svg{width:200px;height:200px;background:#fff;border-radius:6px}
+.phoneqr code{font-size:13px;word-break:break-all;user-select:all}
 .helpbtn{display:inline-block;padding:4px 10px;border:1px solid var(--line,#ccc);border-radius:6px;text-decoration:none;color:inherit;font-size:13px}
 .helpbtn:hover{background:rgba(0,0,0,.05)}
 .tx.pending .who::after{content:"improving…";font-size:11px;color:var(--muted);margin-left:4px}
@@ -182,6 +186,7 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
   <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> <span class="xl">Explain radio terms</span><span class="xs">Explain terms</span></label>
   <button id="openNets" title="Scheduled nets, and listening only while they are on">Nets…</button>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
+  <button id="openPhone" title="Show a QR code: point a phone's camera at it to open this dashboard on the phone">Open on phone</button>
   <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the two-sided reference card (printable)">Help</a>
 </header>
 <nav id="rtabs" role="tablist" aria-label="Radios"></nav>
@@ -202,6 +207,7 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
 <dialog id="wl"><div id="wlBody"></div></dialog>
 <dialog id="testDlg"><div id="testBody"></div></dialog>
 <dialog id="netsDlg"><div id="netsBody"></div></dialog>
+<dialog id="phoneDlg"><div id="phoneBody"></div><div class="row"><button onclick="$('phoneDlg').close()">Close</button></div></dialog>
 <dialog id="whoDlg"><form id="whoForm">
   <h3>Who was talking?</h3><p class="small muted" id="whoText"></p><div class="row" id="whoPick"></div>
   <label>Callsign <input name="call" maxlength="12" list="whoList" autocomplete="off"></label><datalist id="whoList"></datalist>
@@ -780,6 +786,18 @@ document.addEventListener("change",async e=>{
   catch(err){c.checked=!c.checked;alert(err.message)}
 });
 connect();
+// "Open on phone": QR codes for the addresses a phone can reach (made by the station, works offline)
+$("openPhone").addEventListener("click",async()=>{
+  $("phoneBody").innerHTML='<h3>Open on a phone</h3><p class="muted small">Getting this PC\'s addresses…</p>';$("phoneDlg").showModal();
+  try{
+    const d=await (await fetch("/api/phone")).json(),a=d.addresses||[];
+    $("phoneBody").innerHTML=`<h3>Open on a phone</h3>
+      <p class="small">Point the iPhone camera at a code and tap the link that appears. The phone must be on the same Wi-Fi as this PC${a.some(x=>x.label.startsWith("Tailscale"))?", or have Tailscale on":""}.</p>
+      ${a.length?`<div class="phoneqr">${a.map(x=>`<figure>${x.svg||""}<figcaption><code>${esc(x.url)}</code><div class="muted small">${esc(x.label)}</div></figcaption></figure>`).join("")}</div>`
+        :'<p class="err">This PC has no network address a phone could reach. Connect it to Wi-Fi or a network first.</p>'}
+      <p class="muted small">Tip: in Safari tap Share → Add to Home Screen to keep it as an icon.</p>`;
+  }catch(e){$("phoneBody").innerHTML='<h3>Open on a phone</h3><p class="err">Could not reach the station.</p>'}
+});
 </script>
 </body>
 </html>

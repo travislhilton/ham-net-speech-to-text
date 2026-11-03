@@ -56,6 +56,17 @@ def make_handler(station):
                 return self._send(200, page, "text/html; charset=utf-8")
             if u.path in ("/", "/index.html"):
                 return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if u.path == "/api/phone":                         # "Open on a phone": addresses + QR codes
+                from . import phone
+                port = self.server.server_address[1]
+                out = []
+                for x in phone.addresses(self.headers.get("Host"), port):
+                    try:
+                        x["svg"] = phone.qr_svg(x["url"])
+                    except ImportError:                    # segno missing (old install): the URL alone still helps
+                        x["svg"] = ""
+                    out.append(x)
+                return self._json({"addresses": out})
             if u.path == "/api/state":
                 return self._json(with_who("snapshot", station.snapshot()))
             if u.path == "/api/lookup":

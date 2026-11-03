@@ -12,3 +12,4 @@ silero-vad>=5.1
 faster-whisper>=1.0       # previous offline fallback; kept until the OpenVINO engine replaces it
 pyserial>=3.5
 keyring>=25           # QRZ password in Windows Credential Manager
+segno>=1.6           # QR codes for "Open on a phone" (pure Python, works offline)
