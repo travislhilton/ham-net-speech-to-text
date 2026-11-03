@@ -46,13 +46,14 @@ After installing, the station starts by itself whenever you sign in to Windows. 
 **HamNet Station** shortcut on the desktop, or browse to `http://localhost:8091/` on the station PC,
 or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale.
 
-The dashboard has one column per radio, with everything about that radio in it, top to bottom: the
-radio card with **What you can do now** to its right (stacked under it when the column is narrow), then
-**On the air** and **Stations heard** as tabs. On a wide
-screen the radio cards stay in place and the lower parts scroll on their own. On a phone (or any
-window under 900 px wide) the radios are tabs under the header, one radio at a time; a tab's dot turns
-green while that radio is receiving (red for emergency traffic), and the last tab you chose is remembered.
-Each column shows:
+The dashboard has one column per radio, with everything about that radio in it. The top of each column is
+one set of tabs, **Radio** (meters, waterfall, frequency, Winlink button) | **What you can do now** |
+**Stations heard**, all the same height, so **On the air**, the conversation, always fills the space below
+and never moves when you switch tabs. A dot on "What you can do now" means it has guidance (red: urgent).
+On a wide screen the page itself never scrolls; the conversation and the tab contents scroll on their own.
+On a phone (or any window under 900 px wide) the radios are tabs under the header, one radio at a time; a
+radio tab's dot turns green while that radio is receiving (red for emergency traffic), and the last radio
+you chose is remembered. Each column shows:
 - **Radios** (any number at once, each its own stream): frequency and band, **RX** while a station is
   transmitting, a live **Signal** meter (green = level in bounds; yellow = low or hot; red = clipping or
   almost no audio; the tick is the peak), an **SNR** meter while receiving (FM: noise quieting; SSB/AM:

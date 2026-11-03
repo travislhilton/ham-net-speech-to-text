@@ -24,9 +24,8 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   main{flex:1;min-height:0;grid-template-rows:minmax(0,1fr)}
   #radios{min-height:0;overflow-y:auto;align-items:stretch;grid-auto-rows:minmax(100%,auto)}
-  .rcol{min-height:0}.rcol>section{flex:1;min-height:0;display:flex;flex-direction:column}
+  .rcol{min-height:0}.rcol>.logbox{flex:1;min-height:0;display:flex;flex-direction:column}
   .feed{flex:1;min-height:0;max-height:none}
-  .top2>.guide{max-height:34vh}
 }
 #rtabs{display:none}
 /* phones / narrow windows: one radio at a time, picked with the tabs under the header */
@@ -40,22 +39,25 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   main{flex:1;min-height:0;padding:8px 12px 10px;display:flex;flex-direction:column}
   #radios{flex:1;min-height:0;display:flex;flex-direction:column;align-items:stretch}
   .rcol{display:none;flex:1;min-height:0}.rcol.sel{display:flex}
-  .rcol>section{flex:1;min-height:0;display:flex;flex-direction:column}
-  .top2>.guide{max-height:17vh}
+  .rcol>.logbox{flex:1;min-height:0;display:flex;flex-direction:column}
+
   .feed{flex:1;min-height:0;max-height:none}
   .radio{flex:none}.radio .wf{height:64px;margin-top:6px}.radio .cap{display:none}.radio .axis{height:13px;font-size:10px}
   .radio .sch{display:none}.radio .cardbtns{margin-top:4px}
+  .tabs .lg{display:none}.tabs .sm{display:inline}.toptabs>.tabs{overflow-x:auto;scrollbar-width:none}.toptabs>.tabs button{font-size:12px;padding:4px 7px;white-space:nowrap;letter-spacing:0}
 }
-.guide>h2,.logbox>.tabs{margin-bottom:6px}.guide .empty{margin:0}
-.rcol{container-type:inline-size}.top2{display:flex;flex-direction:column;gap:10px;flex:none;min-width:0}
-.top2>.guide{margin:0;overflow-y:auto;overscroll-behavior:contain}
-/* a column wide enough (a landscape monitor): guidance sits to the right of the radio's meters, as tall as the card */
-@container (min-width:620px){
-  .top2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch}
-  .top2>.guide{contain:size;max-height:none}
-}
+.logbox>h2{margin-bottom:6px}.guide .empty{margin:0}
+/* the top of each column: one tab set (Radio | What you can do now | Stations heard). All three panes share one
+   grid cell; the radio card sets its height, the others scroll inside it, so the conversation below never jumps. */
+.toptabs{flex:none;padding-top:6px}.toptabs>.tabs{margin-bottom:8px}
+.stack{display:grid}.stack>.pane{grid-area:1/1;min-width:0}.stack>.pane:not(.show){visibility:hidden}
+.stack>.guide,.stack>.heard{contain:size;overflow-y:auto;overscroll-behavior:contain}
+.stack>.radio{border:0;padding:0;background:none;border-radius:0}
+.tabs .sm{display:none}
+.tabs button .gn{display:inline-block;min-width:8px;height:8px;border-radius:50%;margin-left:4px;vertical-align:middle}
+.tabs button .gn.has{background:var(--accent)}.tabs button .gn.high{background:var(--bad)}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
-.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}.pane[hidden]{display:none}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
 .sch{margin-top:4px;font-size:13px}.sch .now{font-weight:700;color:var(--ok)}.cardbtns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
 #q{width:150px;text-transform:uppercase}
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
@@ -207,13 +209,13 @@ function ensureCard(r){
    <div class="sch"></div>
    <div class="cardbtns"><button data-wl="${esc(r.id)}" title="ICS-309 log + ICS-213 summary of this radio's last net or conversation, to everyone who took part">Winlink messages…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
-  const guide=document.createElement("section");guide.className="guide";guide.id="guide-"+r.id;
-  const sec=document.createElement("section");sec.className="logbox";const id=esc(r.id);
-  sec.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="feed" data-rid="${id}" role="tab">On the air</button><button data-tab="heard" data-rid="${id}" role="tab">Stations heard <span class="hn"></span></button></div>
-    <div class="feed pane" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>
-    <div class="feed pane" id="heard-${id}" hidden><p class="muted small">None yet.</p></div>`;
-  const top2=document.createElement("div");top2.className="top2";top2.append(el,guide);
-  col.append(top2,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+  const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
+  top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button></div>
+    <div class="stack"><div class="pane guide" id="guide-${id}"></div><div class="pane heard" id="heard-${id}"><p class="muted small">None yet.</p></div></div>`;
+  el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
+  const sec=document.createElement("section");sec.className="logbox";
+  sec.innerHTML=`<h2>On the air</h2><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
+  col.append(top,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
 let SEL=null;try{SEL=localStorage.getItem("hamnet.radio")}catch(e){}
 function selectRadio(id){SEL=id;try{localStorage.setItem("hamnet.radio",id)}catch(e){}
   document.querySelectorAll(".rcol").forEach(c=>c.classList.toggle("sel",c.id==="col-"+id));
@@ -293,7 +295,9 @@ function renderGuide(rid){
   const h=(S.hints||{})[rid]||{};
   const rem=(h.reminders||[]).map(r=>`<div class="rem">${esc(r.text)}</div>`).join("");
   const cards=(h.cards||[]).map(c=>`<div class="card ${c.priority==="high"?"high":""}"><h3>${esc(c.title)}</h3><ol>${(c.steps||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ol>${(c.say||[]).map(s=>`<div class="say"><span>${esc(s)}</span></div>`).join("")}</div>`).join("");
-  g.innerHTML=`<h2>What you can do now</h2>${rem}${cards||'<p class="muted small empty">Guidance appears here when something on this radio calls for it: a relay request, emergency traffic, check-ins, formal messages.</p>'}`;
+  const dot=document.querySelector(`#col-${CSS.escape(rid)} .gn`);
+  if(dot)dot.className="gn"+((h.cards||[]).some(c=>c.priority==="high")?" high":(h.cards||[]).length||(h.reminders||[]).length?" has":"");
+  g.innerHTML=`${rem}${cards||'<p class="muted small empty">Guidance appears here when something on this radio calls for it: a relay request, emergency traffic, check-ins, formal messages.</p>'}`;
 }
 function cardHtml(c,e){
   const rows=[["Name",c.name],["Location",[c.city,c.state,c.country].filter(Boolean).join(", ")],["License",c.license_class?`${c.license_class}${c.license_status&&c.license_status!=="Active"?" ("+c.license_status+")":""}${c.expires?", expires "+c.expires:""}`:""],
@@ -386,8 +390,9 @@ document.addEventListener("click",e=>{
   const rt=e.target.closest("#rtabs [data-r]");if(rt)selectRadio(rt.dataset.r);
   const w=e.target.closest("[data-wl]");if(w)wlPreview({radio:w.dataset.wl});
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
-    col.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
-    col.querySelector("#feed-"+CSS.escape(tb.dataset.rid)).hidden=tb.dataset.tab!=="feed";col.querySelector("#heard-"+CSS.escape(tb.dataset.rid)).hidden=tb.dataset.tab!=="heard"}
+    col.querySelectorAll(".toptabs [data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
+    const want={radio:"r-",guide:"guide-",heard:"heard-"}[tb.dataset.tab]+tb.dataset.rid;
+    col.querySelectorAll(".stack>.pane").forEach(x=>x.classList.toggle("show",x.id===want))}
   const p=e.target.closest("[data-play]");if(p){new Audio("/audio/"+p.dataset.play).play()}
   const tu=e.target.closest("[data-tune]");if(tu){editing=tu.dataset.tune;renderRadios();const i=document.querySelector(".tuneform input");if(i){i.focus();i.select()}}
   if(e.target.closest("[data-cancel]")){editing=null;document.activeElement.blur();renderRadios()}
