@@ -117,7 +117,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |
 | Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
 | Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
-| Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; first real Outbox write to be checked in Winlink Express |
+| Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; Outbox format matched against Winlink Express 1.8 messages (one and two recipients); first real write to be checked |
 | Net schedule with radio, frequency and band | working, edited in `config/station.yaml`; an editor in the dashboard is next |
 | Accurate second pass + ICS-309/213 reports (home network: home server + LLM server) | server side working |
 

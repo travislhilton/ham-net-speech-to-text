@@ -73,7 +73,8 @@ def test_build_213_matches_express_shape(install):
                       "W9XYZ-5", ["W9XYZ", "K7ABC"], grid="EM59et", now=now, mid="ABCDEF123456")
     msg = email.message_from_bytes(m["mime"], policy=policy.compat32)
     assert msg["Subject"] == "ICS-213: Net summary - 2026-11-02 16:38" and msg["Message-ID"] == "ABCDEF123456"
-    assert msg["To"] == "W9XYZ@winlink.org, K7ABC@winlink.org" and msg["From"] == "W9XYZ-5@winlink.org"
+    assert msg["To"] == "W9XYZ@winlink.org,\r\n K7ABC@winlink.org" and msg["From"] == "W9XYZ-5@winlink.org"
+    assert b"To: W9XYZ@winlink.org,\r\n K7ABC@winlink.org\r\n" in m["mime"]          # folded, as Express writes it
     assert msg["X-Cancel"] == "2026/11/23 23:38" and msg["X-Location"].startswith("39.812500N")
     assert b"\r\n" in m["mime"] and b"\n\n" not in m["mime"].replace(b"\r\n", b"")
     parts = [p for p in msg.walk() if not p.is_multipart()]
@@ -90,6 +91,8 @@ def test_registry_line_has_express_fields(install):
     m = winlink.build("ics309", t, {"Title": "Net"}, "W9XYZ-5", ["W9XYZ"], now=datetime(2026, 11, 2, 23, 37, 26, tzinfo=timezone.utc))
     f = winlink.registry_line(m, "W9XYZ-5").split("\x01")
     assert len(f) == 22 and f[1] == "2026/11/02 23:37" and f[8] == "Outbox" and f[16] == "W9XYZ" and f[19] == "20261102233726"
+    two = winlink.build("ics309", t, {"Title": "Net"}, "W9XYZ-5", ["W9XYZ", "W9XYZ-5"])
+    assert winlink.registry_line(two, "W9XYZ-5").split("\x01")[16] == "W9XYZ..."
 
 
 def test_outbox_write_backup_and_refusal(install):
@@ -105,6 +108,17 @@ def test_outbox_write_backup_and_refusal(install):
     assert (p / "Data" / "Registry.txt").read_bytes().decode().endswith("\r\n") and m["mid"] in (p / "Data" / "Registry.txt").read_text()
     assert (p / "Data" / "Destinations.txt").read_bytes().startswith(b"\xef\xbb\xbf")
     assert list((p / "Data" / "Backup").glob("Registry_hamnet_*.txt")) and r["written"][0]["mid"] == m["mid"]
+    m2 = winlink.build("ics213", t, {"Subjectline": "y"}, "W9XYZ-5", ["W9XYZ", "K7ABC"])
+    winlink.put_in_outbox(install, "W9XYZ-5", [m2], check_running=lambda: False)
+    dest = [l.lstrip("\ufeff").split("\x01") for l in (p / "Data" / "Destinations.txt").read_text(encoding="utf-8").splitlines() if m2["mid"] in l]
+    assert [d[2] for d in dest] == ["W9XYZ", "K7ABC"]                                   # one line per recipient
+
+
+def test_lzhuf_size_near_express():
+    from station.lzhuf import compressed_size
+    assert compressed_size(b"") == 6 and compressed_size(b"A" * 5000) < 200
+    text = ("GENERAL MESSAGE (ICS 213)\r\n1. Incident Name: TEST\r\n" * 40).encode()
+    assert compressed_size(text) < len(text) // 5
 
 
 def test_session_bounds_and_drafts():

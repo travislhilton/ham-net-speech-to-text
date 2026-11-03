@@ -9,8 +9,10 @@ posted to the Outbox, then read back):
   <install>\\<account>\\Data\\Registry.txt     one line per message, fields separated by 0x01, folder "Outbox"
   <install>\\<account>\\Data\\Mids Seen.txt    "<MID>\\x01<yyyy/mm/dd HH:MM>"
   <install>\\<account>\\Data\\Destinations.txt (UTF-8 BOM) "<MID>\\x0145<size>\\x01<to>\\x01"
-UNVERIFIED (one sample each): the size field (we estimate it) and how several recipients are joined in
-Registry/Destinations (';' assumed). Winlink Express must be CLOSED while we write (it keeps its own index in
+Several recipients (owner's 2-recipient ICS-213, 11-02): the To: header folds one address per line
+(",\r\n "), Registry's recipient field is the FIRST call + "..." , Destinations.txt has one line per recipient.
+The size field: LZHUF-compressed B2F size; ours (station/lzhuf.py) lands within ~5 % of Express's (1584 vs 1663),
+so it is an estimate; Express appears to use it only for display. Winlink Express must be CLOSED while we write (it keeps its own index in
 memory); every write backs up the Data files first. The first real write must be checked by the operator.
 """
 import base64
@@ -22,7 +24,6 @@ import re
 import shutil
 import string
 import subprocess
-import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -167,7 +168,7 @@ def build(form: str, template: dict, values: dict, sender: str, to: list[str], g
     loc = grid_location(grid)
     headers = [f"Date: {email.utils.format_datetime(now)}", f"From: {sender}@winlink.org",
                f"Reply-To: {sender}@winlink.org", f"Subject: {subject}",
-               "To: " + ", ".join(f"{c}@winlink.org" for c in to), f"Message-ID: {mid}",
+               "To: " + ",\r\n ".join(f"{c}@winlink.org" for c in to), f"Message-ID: {mid}",
                f"X-Cancel: {now + timedelta(days=21):%Y/%m/%d %H:%M}", f"X-Source: {sender}"]
     if loc:
         headers.append(f"X-Location: {loc}")
@@ -178,16 +179,28 @@ def build(form: str, template: dict, values: dict, sender: str, to: list[str], g
             f"--{boundary}\r\nContent-Disposition: attachment;\r\n name=\"{xml_name}\";\r\n filename=\"{xml_name}\"\r\n"
             f"Content-Type: text/xml;\r\n name=\"{xml_name}\"\r\nContent-Transfer-Encoding: base64\r\n\r\n"
             f"{b64(xml.encode('utf-8'))}\r\n--{boundary}--\r\n").encode("latin-1", "replace")
-    size = len(zlib.compress(mime, 9))       # Express shows a compressed size; ours is an estimate (see module doc)
+    size = b2f_size(mid, now, sender, to, subject, body.encode("iso-8859-1", "replace"), [(xml_name, xml.encode("utf-8"))])
     return {"mid": mid, "subject": subject, "to": list(to), "mime": mime, "size": size, "date": now,
             "form": form, "location": loc or "", "body": body}
+
+
+def b2f_size(mid, now, sender, to, subject, body: bytes, files) -> int:
+    """Estimate of Express's size field: the LZHUF size of the message in Winlink's B2F transfer form."""
+    from .lzhuf import compressed_size
+    h = [f"Mid: {mid}", f"Date: {now:%Y/%m/%d %H:%M}", "Type: Private", f"From: {sender}", *[f"To: {c}" for c in to],
+         f"Subject: {subject}", f"Mbo: {sender}", f"Body: {len(body)}", *[f"File: {len(b)} {n}" for n, b in files]]
+    data = "\r\n".join(h).encode("latin-1", "replace") + b"\r\n\r\n" + body
+    for _, b in files:
+        data += b"\r\n" + b
+    return compressed_size(data + b"\r\n")
 
 
 # ---------- outbox ----------
 def registry_line(msg: dict, sender: str) -> str:
     d = msg["date"]
     f = [msg["mid"], f"{d:%Y/%m/%d %H:%M}", sender, sender, "2", "True|True||||True|", str(msg["size"]),
-         msg["subject"], "Outbox", "", "", "", "C", "False", "", "", ";".join(msg["to"]), "0", "",
+         msg["subject"], "Outbox", "", "", "", "C", "False", "", "",
+         msg["to"][0] + ("..." if len(msg["to"]) > 1 else ""), "0", "",
          f"{d:%Y%m%d%H%M%S}", "0", msg["location"]]
     return SEP.join(f)
 
@@ -217,6 +230,7 @@ def put_in_outbox(install: str, account: str, messages: list[dict], check_runnin
             (acc / folder / f"{m['mid']}.mime").write_bytes(m["mime"])
         append(data / "Registry.txt", registry_line(m, account))
         append(data / "Mids Seen.txt", f"{m['mid']}{SEP}{m['date']:%Y/%m/%d %H:%M}")
-        append(data / "Destinations.txt", f"{m['mid']}{SEP}45{m['size']}{SEP}{';'.join(m['to'])}{SEP}", bom=True)
+        for c in m["to"]:                                  # one line per recipient, as Express writes them
+            append(data / "Destinations.txt", f"{m['mid']}{SEP}45{m['size']}{SEP}{c}{SEP}", bom=True)
         written.append({"mid": m["mid"], "subject": m["subject"], "to": m["to"]})
     return {"written": written, "account": account, "install": install, "backup": stamp}
