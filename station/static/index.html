@@ -54,6 +54,12 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .stack>.guide,.stack>.heard{contain:size;overflow-y:auto;overscroll-behavior:contain}
 .stack>.radio{border:0;padding:0;background:none;border-radius:0}
 .tabs .sm{display:none}
+/* splitter between the tab group and the conversation: shown on the guidance and stations tabs */
+.split{display:none;flex:none;height:12px;margin:-11px 0;cursor:row-resize;touch-action:none;position:relative;z-index:1}
+.split::before{content:"";position:absolute;left:50%;top:4px;width:56px;height:4px;margin-left:-28px;border-radius:2px;background:var(--muted);opacity:.6}
+.split:hover::before,.split.drag::before{background:var(--accent)}
+.rcol.sized .split{display:block}.rcol.sized .stack{grid-template-rows:minmax(0,1fr);overflow:hidden}
+body.dragging{user-select:none;cursor:row-resize}
 .tabs button .gn{display:inline-block;min-width:8px;height:8px;border-radius:50%;margin-left:4px;vertical-align:middle}
 .tabs button .gn.has{background:var(--accent)}.tabs button .gn.high{background:var(--bad)}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
@@ -215,7 +221,35 @@ function ensureCard(r){
   el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
   const sec=document.createElement("section");sec.className="logbox";
   sec.innerHTML=`<h2>On the air</h2><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
-  col.append(top,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+  const sp=document.createElement("div");sp.className="split";sp.title="Drag to resize · double-click to reset";
+  sp.setAttribute("role","separator");sp.setAttribute("aria-orientation","horizontal");sp.dataset.rid=r.id;
+  col.append(top,sp,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+// ---------- splitter (guidance / stations tabs) ----------
+const splitKey=rid=>"hamnet.split."+rid;
+function applySplit(rid,tab){
+  const col=$("col-"+rid),st=col.querySelector(".stack");
+  if(tab==="radio"){col.classList.remove("sized");st.style.height="";return}
+  let h=null;try{h=+localStorage.getItem(splitKey(rid))||null}catch(e){}
+  col.classList.remove("sized");st.style.height="";          // measure the card at its natural height first
+  const natural=st.offsetHeight;
+  col.classList.add("sized");st.style.height=(h||natural)+"px";
+}
+function splitBounds(col){const top=col.querySelector(".toptabs"),st=col.querySelector(".stack");
+  const chrome=top.offsetHeight-st.offsetHeight;  // tab bar + padding
+  return [60,Math.max(60,col.clientHeight-chrome-220)]}       // keep at least ~150 px of conversation
+document.addEventListener("pointerdown",e=>{
+  const sp=e.target.closest(".split");if(!sp)return;
+  e.preventDefault();sp.setPointerCapture(e.pointerId);
+  const col=$("col-"+sp.dataset.rid),st=col.querySelector(".stack"),y0=e.clientY,h0=st.offsetHeight,[lo,hi]=splitBounds(col);
+  sp.classList.add("drag");document.body.classList.add("dragging");
+  const move=ev=>{st.style.height=Math.round(Math.min(hi,Math.max(lo,h0+ev.clientY-y0)))+"px"};
+  const up=()=>{sp.classList.remove("drag");document.body.classList.remove("dragging");sp.removeEventListener("pointermove",move);
+    try{localStorage.setItem(splitKey(sp.dataset.rid),parseInt(st.style.height))}catch(err){}};
+  sp.addEventListener("pointermove",move);sp.addEventListener("pointerup",up,{once:true});sp.addEventListener("pointercancel",up,{once:true});
+});
+document.addEventListener("dblclick",e=>{const sp=e.target.closest(".split");if(!sp)return;
+  try{localStorage.removeItem(splitKey(sp.dataset.rid))}catch(err){}
+  const tab=($("col-"+sp.dataset.rid).querySelector(".toptabs .on")||{}).dataset?.tab||"guide";applySplit(sp.dataset.rid,tab)});
 let SEL=null;try{SEL=localStorage.getItem("hamnet.radio")}catch(e){}
 function selectRadio(id){SEL=id;try{localStorage.setItem("hamnet.radio",id)}catch(e){}
   document.querySelectorAll(".rcol").forEach(c=>c.classList.toggle("sel",c.id==="col-"+id));
@@ -392,7 +426,7 @@ document.addEventListener("click",e=>{
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
     col.querySelectorAll(".toptabs [data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
     const want={radio:"r-",guide:"guide-",heard:"heard-"}[tb.dataset.tab]+tb.dataset.rid;
-    col.querySelectorAll(".stack>.pane").forEach(x=>x.classList.toggle("show",x.id===want))}
+    col.querySelectorAll(".stack>.pane").forEach(x=>x.classList.toggle("show",x.id===want));applySplit(tb.dataset.rid,tb.dataset.tab)}
   const p=e.target.closest("[data-play]");if(p){new Audio("/audio/"+p.dataset.play).play()}
   const tu=e.target.closest("[data-tune]");if(tu){editing=tu.dataset.tune;renderRadios();const i=document.querySelector(".tuneform input");if(i){i.focus();i.select()}}
   if(e.target.closest("[data-cancel]")){editing=null;document.activeElement.blur();renderRadios()}

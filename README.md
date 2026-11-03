@@ -50,6 +50,8 @@ The dashboard has one column per radio, with everything about that radio in it. 
 one set of tabs, **Radio** (meters, waterfall, frequency, Winlink button) | **What you can do now** |
 **Stations heard**, all the same height, so **On the air**, the conversation, always fills the space below
 and never moves when you switch tabs. A dot on "What you can do now" means it has guidance (red: urgent).
+On the What you can do now and Stations heard tabs, drag the bar between the tabs and the conversation to
+give either one more room (remembered per radio; double-click the bar to reset).
 On a wide screen the page itself never scrolls; the conversation and the tab contents scroll on their own.
 On a phone (or any window under 900 px wide) the radios are tabs under the header, one radio at a time; a
 radio tab's dot turns green while that radio is receiving (red for emergency traffic), and the last radio
