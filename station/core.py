@@ -284,6 +284,54 @@ class Station:
               flush=True)
         return res
 
+    def set_paused(self, rid: str, paused: bool) -> dict:
+        """Stop (or resume) listening to a radio: the sound input is closed, nothing is recorded or
+        transcribed until resumed. Kept across restarts."""
+        if rid not in self.radios:
+            raise KeyError(rid)
+        with self.lock:
+            self.radios[rid]["paused"] = bool(paused)
+            if not paused and self.radios[rid].get("state") == "paused":
+                self.radios[rid]["state"] = "starting"
+            saved = self._saved()
+            saved.setdefault("radios", {}).setdefault(rid, {})["paused"] = bool(paused)
+            self._save(saved)
+            radio = dict(self.radios[rid])
+        print(f"{datetime.now():%H:%M:%S} {rid} {'PAUSED' if paused else 'RESUMED'} by the operator", flush=True)
+        self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
+        return radio
+
+    def clear_radio(self, rid: str) -> dict:
+        """Clear a radio's log and stations heard from the dashboard. The day's log file and the recordings
+        stay on disk (data/logs, data/recordings): this hides them from the screen, it deletes nothing."""
+        if rid not in self.radios:
+            raise KeyError(rid)
+        at = datetime.now().isoformat(timespec="seconds")
+        with self.lock:
+            live = self.radios[rid].get("live_tx")
+            self.tx = [t for t in self.tx if t.get("radio") != rid or t.get("id") == live]
+            self.radios[rid]["cleared_at"] = at
+            self.hinters[rid] = Hinter(self.me)
+            self.hints[rid] = {"cards": [], "reminders": [], "net": self.hinters[rid].classify()}
+            self._rebuild_heard()
+            saved = self._saved()
+            saved.setdefault("radios", {}).setdefault(rid, {})["cleared_at"] = at
+            self._save(saved)
+        print(f"{datetime.now():%H:%M:%S} {rid} log CLEARED by the operator (files kept)", flush=True)
+        self.bus.publish("snapshot", self.snapshot())
+        return {"radio": rid, "cleared_at": at}
+
+    def _rebuild_heard(self):
+        """Stations heard = callsigns in the transmissions still on screen (cards kept, no new lookups)."""
+        old, self.heard = self.heard, {}
+        for tx in self.tx:
+            if tx.get("status") != "final":
+                continue
+            for c in tx.get("callsigns", []):
+                e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"],
+                                              "card": (old.get(c) or {}).get("card")})
+                e["count"] += 1; e["last"] = tx["start"]
+
     def _apply_operator(self):
         saved = self._saved()
         if (saved.get("operator") or {}).get("callsign"):
@@ -292,7 +340,10 @@ class Station:
             return
         for rid, s in (saved.get("radios") or {}).items():
             if rid in self.radios:
-                self._set_tuning(rid, s.get("freq_mhz"), s.get("mode"), s.get("set_at"))
+                if "freq_mhz" in s:
+                    self._set_tuning(rid, s.get("freq_mhz"), s.get("mode"), s.get("set_at"))
+                self.radios[rid]["paused"] = bool(s.get("paused"))
+                self.radios[rid]["cleared_at"] = s.get("cleared_at")
 
     def _set_tuning(self, rid, freq, mode, at):
         r = self.radios[rid]
@@ -316,7 +367,7 @@ class Station:
         with self.lock:
             self._set_tuning(rid, f, m, at)
             saved = self._saved()
-            saved.setdefault("radios", {})[rid] = {"freq_mhz": f, "mode": m, "set_at": at}
+            saved.setdefault("radios", {}).setdefault(rid, {}).update(freq_mhz=f, mode=m, set_at=at)
             self._save(saved)
             radio = dict(self.radios[rid])
         self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
@@ -442,6 +493,11 @@ class Station:
     def _listen(self, r):
         rid = r["id"]
         while not self.stop.is_set():
+            if self.radios[rid].get("paused"):
+                if self.radios[rid].get("state") != "paused":
+                    self._set_radio(rid, state="paused", carrier=False, level_db=None, snr_db=None)
+                self.stop.wait(0.5)
+                continue
             try:
                 seg, meter = self.segmenter(r), self.make_meter(r)
                 raw = RawRing(self.data / "raw" / rid, int(r.get("raw_keep_min", self.cfg.get("raw_keep_min", 60))))
@@ -449,6 +505,9 @@ class Station:
                     self._set_radio(rid, state="listening", error=None)
                     last = 0.0
                     while not self.stop.is_set():
+                        if self.radios[rid].get("paused"):          # operator paused: finish what we have, close the device
+                            self._events(rid, seg, seg.flush())
+                            break
                         frame = frames.get(timeout=5)
                         raw.add(frame)
                         self.handle(rid, seg, frame)
@@ -465,7 +524,10 @@ class Station:
                 self.stop.wait(10)
 
     def handle(self, rid, seg: Segmenter, frame: np.ndarray):
-        for ev in seg.feed(frame):
+        self._events(rid, seg, seg.feed(frame))
+
+    def _events(self, rid, seg: Segmenter, events):
+        for ev in events:
             if ev[0] == "start":
                 g = seg.gate
                 print(f"{datetime.now():%H:%M:%S} {rid} gate OPEN"
@@ -658,6 +720,9 @@ class Station:
             try:
                 tx = json.loads(line)
             except ValueError:
+                continue
+            cut = (self.radios.get(tx.get("radio")) or {}).get("cleared_at")
+            if cut and tx.get("start", "") < cut:
                 continue
             self.tx.append(tx)
             for c in tx.get("callsigns", []):

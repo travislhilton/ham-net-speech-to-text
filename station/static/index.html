@@ -54,6 +54,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .stack>.guide,.stack>.heard{contain:size;overflow-y:auto;overscroll-behavior:contain}
 .stack>.radio{border:0;padding:0;background:none;border-radius:0}
 .tabs .sm{display:none}
+.radio.paused .mrow,.radio.paused .wf,.radio.paused .axis{opacity:.35}.rx.paused{color:#fff;background:var(--muted);padding:0 8px;border-radius:6px}
 .text.noise{color:var(--muted);font-style:italic;font-size:14px}
 body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inherit}
 .sess{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
@@ -244,7 +245,7 @@ function ensureCard(r){
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
    <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>
    <div class="sch"></div>
-`;
+   <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
   top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button></div>
@@ -318,8 +319,13 @@ function renderRadios(){
     el.querySelector(".cap").textContent=wfCaption(r);
     const cur=(S.net||{}).current,nets=(S.schedule||[]).filter(n=>n.radio===r.id);
     el.querySelector(".sch").innerHTML=nets.length?"Nets: "+nets.map(n=>`<span class="${cur&&cur.name===n.name?"now":""}">${cur&&cur.name===n.name?"now: ":""}${esc(n.name)} ${esc((n.days||[]).join(", ")||"daily")} ${esc(n.start)}${n.freq_mhz?" · "+esc(n.freq_mhz)+" MHz":""}</span>`).join("; "):'<span class="muted">No nets scheduled on this radio.</span>';
-    el.querySelector(".err").textContent=r.error||"";
-    if(r.state!=="listening"){el.querySelector(".rx").textContent=r.state==="error"?"no audio":r.state;el.querySelector(".rx").className="rx"}
+    el.querySelector(".err").textContent=r.paused?"":(r.error||"");
+    el.classList.toggle("paused",!!r.paused);
+    const pz=el.querySelector(".pz");pz.textContent=r.paused?"▶ Resume":"⏸ Pause";
+    pz.title=r.paused?"Start listening to this radio again":"Stop listening to this radio: nothing is recorded or transcribed until you resume";
+    pz.classList.toggle("primary",!!r.paused);
+    if(r.paused){const rx=el.querySelector(".rx");rx.textContent="PAUSED";rx.className="rx paused"}
+    if(!r.paused&&r.state!=="listening"){el.querySelector(".rx").textContent=r.state==="error"?"no audio":r.state;el.querySelector(".rx").className="rx"}
   }
 }
 function onMeter(d){
@@ -468,6 +474,11 @@ async function lookup(call){
 document.addEventListener("click",e=>{
   const c=e.target.closest("[data-call]");if(c){$("q").value=c.dataset.call;lookup(c.dataset.call)}
   const rt=e.target.closest("#rtabs [data-r]");if(rt)selectRadio(rt.dataset.r);
+  const pz=e.target.closest("[data-pause]");if(pz){const r=S.radios.find(x=>x.id===pz.dataset.pause)||{};
+    fetch(`/api/radios/${encodeURIComponent(pz.dataset.pause)}/pause`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({paused:!r.paused})})}
+  const cl=e.target.closest("[data-clear]");if(cl){const r=S.radios.find(x=>x.id===cl.dataset.clear)||{};
+    if(confirm(`Clear the ${r.name||"radio"} log and stations heard from the screen?\n\nThe recordings and log files stay on the station PC.`))
+      fetch(`/api/radios/${encodeURIComponent(cl.dataset.clear)}/clear`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})}
   const w=e.target.closest("[data-wls]");if(w)wlPreview({radio:w.dataset.wls,start:w.dataset.s,end:w.dataset.e});
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
     col.querySelectorAll(".toptabs [data-tab]").forEach(b=>b.classList.toggle("on",b===tb));

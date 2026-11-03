@@ -94,3 +94,15 @@ class Segmenter:
                                   "duration_s": round(len(audio) / self.sr, 2)})
         elif len(self.buf) % self.partial_frames == 0:
             yield ("audio", np.concatenate(self.buf))
+
+    def flush(self):
+        """End a transmission in progress now (the operator paused the radio)."""
+        if not self.active:
+            return
+        audio = np.concatenate(self.buf)
+        speech = len(self.buf) - self.silent - self.n_pre
+        if self.pauses and self.pause_frames:
+            speech = min(speech, self.voiced)
+        self.active, self.buf = False, []
+        yield ("end", audio, {"t0": self.t0, "speech_frames": speech, "kerchunk": speech < self.min_frames,
+                              "duration_s": round(len(audio) / self.sr, 2), "paused": True})

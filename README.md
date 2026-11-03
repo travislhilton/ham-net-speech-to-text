@@ -64,6 +64,11 @@ you chose is remembered. Each column shows:
   like WSJT-X/fldigi). Bounds can be changed per radio in `station.yaml` (`meter:`).
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
   transmission after that is logged with it (kept across restarts in `data\\operator.json`).
+- **Pause / Resume** (on each radio card): stop listening to that radio. Its sound input is closed and
+  nothing is recorded or transcribed until you press Resume; a transmission in progress is finished first.
+  Remembered across restarts.
+- **Clear log…** (on each radio card): clears that radio's log and stations heard from the screen. The day's
+  log file and the recordings stay on the station PC (`data\logs`, `data\recordings`); nothing is deleted.
 - **On the air** (under each radio's card, one transcript per radio): every transmission as it happens.
   Grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons

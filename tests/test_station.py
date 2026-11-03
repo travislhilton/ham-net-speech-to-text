@@ -252,3 +252,33 @@ def test_raw_ring_keeps_the_last_minutes(tmp_path):
         r.buf, r.t0 = [np.zeros(512, np.float32)], datetime(2026, 11, 2, 16, i)
         r.flush()
     assert sorted(p.name for p in (tmp_path / "raw").glob("*.wav")) == ["20261102-160200.wav", "20261102-160300.wav"]
+
+
+def test_pause_and_clear_survive_a_restart(station, tmp_path):
+    station.inject("ftm", np.zeros(16000 * 3, np.float32))
+    assert wait_for(lambda: station.tx and station.tx[-1]["status"] == "final")
+    station.set_radio("ftm", 146.94, "FM")
+    assert station.set_paused("ftm", True)["paused"] is True
+    time.sleep(1.1)                                   # cleared_at is to the second; the log line is earlier
+    r = station.clear_radio("ftm")
+    assert not [t for t in station.tx if t["radio"] == "ftm"] and "K7ABC" not in station.heard
+    assert list((tmp_path / "logs").glob("*.jsonl"))[0].read_text().strip()          # files kept on disk
+    again = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
+    again.load_today()
+    assert again.radios["ftm"]["paused"] and again.radios["ftm"]["cleared_at"] == r["cleared_at"]
+    assert again.radios["ftm"]["freq_mhz"] == 146.94                                # tuning kept beside pause/clear
+    assert not again.tx and not again.heard                                          # cleared stays cleared
+    assert station.set_paused("ftm", False)["paused"] is False
+
+
+def test_segmenter_flush_on_pause():
+    from station.segmenter import Segmenter
+
+    class Always:
+        def is_speech(self, f):
+            return True
+    seg = Segmenter(Always(), 16000, 32, clock=lambda: 0)
+    for _ in range(40):
+        list(seg.feed(np.full(512, 0.1, np.float32)))
+    ev = list(seg.flush())
+    assert ev[0][0] == "end" and ev[0][2]["paused"] and not seg.active and list(seg.flush()) == []

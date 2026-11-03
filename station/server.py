@@ -57,7 +57,7 @@ def make_handler(station):
 
         def do_POST(self):
             u = urlparse(self.path)
-            m = re.fullmatch(r"/api/radios/([\w-]+)", u.path)
+            m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear))?", u.path)
             routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send"}
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
             if not (m or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
@@ -72,6 +72,10 @@ def make_handler(station):
                                                               body.get("title")))
                 if u.path == "/api/winlink/send":
                     return self._json(station.winlink_send(body))
+                if m.group(2) == "pause":
+                    return self._json(station.set_paused(m.group(1), bool(body.get("paused", True))))
+                if m.group(2) == "clear":
+                    return self._json(station.clear_radio(m.group(1)))
                 return self._json(station.set_radio(m.group(1), body.get("freq_mhz"), body.get("mode")))
             except (RuntimeError, FileNotFoundError) as e:
                 return self._json({"error": str(e)}, 409)
