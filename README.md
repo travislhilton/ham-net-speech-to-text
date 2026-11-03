@@ -46,7 +46,9 @@ After installing, the station starts by itself whenever you sign in to Windows. 
 **HamNet Station** shortcut on the desktop, or browse to `http://localhost:8091/` on the station PC,
 or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale.
 
-The dashboard shows:
+The dashboard has one column per radio, with everything about that radio in it, top to bottom: the
+radio card, **What you can do now**, then **On the air** and **Stations heard** as tabs. On a wide
+screen the radio cards stay in place and the lower parts scroll on their own. Each column shows:
 - **Radios** (any number at once, each its own stream): frequency and band, **RX** while a station is
   transmitting, a live **Signal** meter (green = level in bounds; yellow = low or hot; red = clipping or
   almost no audio; the tick is the peak), an **SNR** meter while receiving (FM: noise quieting; SSB/AM:
@@ -56,19 +58,20 @@ The dashboard shows:
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
   transmission after that is logged with it (kept across restarts in `data\\operator.json`).
 - **On the air** (under each radio's card, one transcript per radio): every transmission as it happens.
-  On a wide screen the radio cards stay in place; each transcript (and the right-hand panel) scrolls on its own. Grey words appear while the station is still
+  Grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons
   (the outlined one is the likely speaker), Q-codes and prowords are underlined with their meaning
   below, and ▶ plays the recording.
-- **What you can do now**: step-by-step help and example phrases when someone asks for a relay,
+- **What you can do now** (per radio): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
-- **Stations heard**: name, location, license, grid and zones for each callsign (FCC, QRZ.com and the
-  country file), and a box to look up any callsign.
-- **Net type**: the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
+- **Stations heard** (per radio, a tab beside On the air): name, location, license, grid and zones for each
+  callsign heard on that radio (FCC, QRZ.com and the country file). Click any callsign for its card; the box
+  at the top of the page looks up any callsign.
+- **Net type** (a badge on each radio card): the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
   with a red banner if it sounds like a real emergency.
-- **Schedule**: your nets, which radio each uses, and a warning if the radio is on another frequency.
-- **Winlink messages**: after a net or conversation, **Prepare messages…** builds an **ICS-309**
+- **Nets** (on each radio card): the nets scheduled on that radio; the one running now is in green.
+- **Winlink messages…** (a button on each radio card): after a net or conversation on that radio, builds an **ICS-309**
   Communications Log (every transmission: time, from, to, what was said; 30 rows a page) and an
   **ICS-213** summary (stations heard, traffic and relays), addressed to every callsign that took part
   (callsigns no callbook confirms start unticked). Edit, then **Put in Winlink Express Outbox**; Winlink
