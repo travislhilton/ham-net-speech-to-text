@@ -192,3 +192,11 @@ def test_station_settings_preview_and_send(tmp_path, install, monkeypatch):
             st.winlink_send({"to": [], "drafts": p["drafts"]})
     finally:
         st.stop.set()
+
+
+def test_lapsed_licence_is_not_confirmed():
+    from station.ics import participants
+    heard = {"KA7XT": {"card": {"name": "X", "sources": ["FCC"], "license_valid": False, "license_status": "Expired"}},
+             "K7ABC": {"card": {"name": "Pat", "sources": ["FCC"], "license_valid": True}}}
+    p = {x["call"]: x for x in participants([{"callsigns": ["KA7XT", "K7ABC"]}], {"W9XYZ"}, heard)}
+    assert not p["KA7XT"]["confirmed"] and p["KA7XT"]["lapsed"] == "Expired" and p["K7ABC"]["confirmed"]

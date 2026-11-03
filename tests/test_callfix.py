@@ -176,3 +176,30 @@ def test_station_can_turn_it_off(tmp_path):
         assert st.tx[-1]["callsigns"] == [] and "corrections" not in st.tx[-1]
     finally:
         st.stop.set()
+
+
+def test_ended_net_is_corrected_with_the_whole_net(tmp_path):
+    from datetime import datetime, timedelta
+    texts = ["Good evening, all.", "This is WB6DQW checking in."]
+    st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(texts, "fake-final"),
+                 callbook=FakeBook({"WB6DQW": "Dale", "W9XYZ": "Pat"}), data_dir=tmp_path)
+    st.start(listen=False)
+    try:
+        st.inject("ftm", np.zeros(16000 * 3, np.float32))
+        assert wait_for(lambda: st.tx and st.tx[-1]["status"] == "final")
+        first = st.tx[0]
+        st.apply_accurate(first["id"], {"text": "This is WB6BQW, good evening.", "model": "fake-large"})
+        assert not st.tx[0]["accurate"].get("corrections")              # nothing to go on yet
+        st.inject("ftm", np.zeros(16000 * 3, np.float32))
+        assert wait_for(lambda: len(st.tx) == 2 and st.tx[-1]["status"] == "final")
+        st.refix_ended_nets(datetime.now())                              # still going: left alone
+        assert not st.tx[0]["accurate"].get("corrections")
+        st.refix_ended_nets(datetime.now() + timedelta(minutes=16))      # over: the whole net is known
+        acc = st.tx[0]["accurate"]
+        assert acc["callsigns"] == ["WB6DQW"] and acc["corrections"][0]["heard"] == "WB6BQW"
+        st.refix_ended_nets(datetime.now() + timedelta(minutes=17))      # once per net
+        again = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), callbook=FakeBook({"WB6DQW": "Dale"}), data_dir=tmp_path)
+        again.load_today()
+        assert again.tx[0]["accurate"]["callsigns"] == ["WB6DQW"]
+    finally:
+        st.stop.set()

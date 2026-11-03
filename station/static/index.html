@@ -116,6 +116,7 @@ section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:va
 .call.spk{border-color:var(--accent)}
 .spkr{font-weight:700;font-family:ui-monospace,Consolas,monospace;cursor:pointer}.spkr.inf{font-weight:400;color:var(--muted)}
 .spkr.op::after{content:" ✎";color:var(--muted);font-weight:400}.whob{font-size:12px;padding:0 6px;color:var(--muted)}
+.maybe{font-size:12px;color:var(--muted);display:inline-flex;gap:3px;align-items:center;margin-left:4px}.maybe .call{font-size:11px;opacity:.75}
 .call.fixed,.spkr.fixed{text-decoration:underline dotted;text-underline-offset:3px}.text{font-size:16px;overflow-wrap:anywhere}.text.partial{color:var(--partial);font-style:italic}
 .live{color:var(--ok);font-weight:600}.term{border-bottom:2px dotted var(--term);cursor:help}
 .terms{font-size:13px;color:var(--muted)}.terms b{color:var(--term)}
@@ -219,11 +220,12 @@ $("whoForm").addEventListener("submit",e=>{e.preventDefault();e.stopPropagation(
 $("whoAuto").onclick=()=>saveWho("");
 $("whoPick").addEventListener("click",e=>{const b=e.target.closest("[data-whopick]");if(b){e.stopPropagation();saveWho(b.dataset.whopick)}});
 function txHtml(t0){
-  const a=t0.accurate,t=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections}:t0;
+  const a=t0.accurate,t=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections,maybe:a.maybe}:t0;
   const fx=Object.fromEntries((t.corrections||[]).map(f=>[f.call,f]));  // near-miss corrections: keep what was heard
   const w=t0.who||null,sp=w&&w.call;
   const calls=(t.callsigns||[]).filter(c=>c!==sp).map(c=>{const f=fx[c],tip="mentioned"+(f?` · heard "${f.heard}", corrected: ${f.why}`:"");
-    return `<span class="call${f?" fixed":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("");
+    return `<span class="call${f?" fixed":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("")+
+    (t.maybe||[]).map(m=>`<span class="maybe" title="Heard &quot;${esc(m.heard)}&quot;; could be ${esc(m.candidates.join(" or "))}. Click one to look it up; use Who? to set the speaker.">${esc(m.heard)}? ${m.candidates.map(c=>`<span class="call" data-call="${esc(c)}">${esc(c)}</span>`).join("")}</span>`).join("");
   const who=t.status!=="final"?"":(w?whoHtml(w,fx[sp]):"")+`<button class="whob" data-who="${esc(t0.id)}" title="Say who was talking (always wins; kept in the log and the ICS-309)">Who?</button>`;
   let body;
   if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
@@ -564,7 +566,7 @@ async function wlPreview(body){
 function renderWl(){
   const d=WL,op=d.operator;
   const warn=!op.winlink_dir?'<p class="bad">Set your Winlink Express folder in Settings first.</p>':op.express_running?'<p class="rem">Winlink Express is open. Close it before putting messages in the Outbox.</p>':"";
-  const to=d.to.map(p=>`<label class="chk"><input type="checkbox" name="to" value="${esc(p.call)}"${p.confirmed?" checked":""}> <b>${esc(p.call)}</b> ${esc(p.name||"")} <span class="muted">${p.confirmed?"":"(not in any callbook: check it)"}</span></label>`).join("")||'<p class="muted">No callsigns were identified.</p>';
+  const to=d.to.map(p=>`<label class="chk"><input type="checkbox" name="to" value="${esc(p.call)}"${p.confirmed?" checked":""}> <b>${esc(p.call)}</b> ${esc(p.name||"")} <span class="muted">${p.confirmed?"":p.lapsed?`(licence ${esc(String(p.lapsed).toLowerCase())}: check it)`:"(not in any callbook: check it)"}</span></label>`).join("")||'<p class="muted">No callsigns were identified.</p>';
   const forms=d.drafts.map((f,i)=>{
     const body=f.form==="ics213"?`<label>Subject <input data-i="${i}" data-k="Subjectline" value="${esc(f.values.Subjectline)}" style="text-transform:none;width:100%"></label><label>Message<textarea data-i="${i}" data-k="Message" rows="9">${esc(f.values.Message)}</textarea></label>`
       :`<label>Title <input data-i="${i}" data-k="Title" value="${esc(f.values.Title)}" style="text-transform:none;width:100%"></label><table class="log"><tr><th>Time</th><th>From</th><th>To</th><th>Subject</th></tr>${f.rows.map(r=>`<tr><td>${esc(r.time.slice(11))}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td><td>${esc(r.sub)}</td></tr>`).join("")}</table>`;

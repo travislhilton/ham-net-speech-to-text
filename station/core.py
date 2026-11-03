@@ -173,6 +173,11 @@ class Station:
         n = 0
         while not self.stop.wait(1.0):
             n += 1
+            if n % 60 == 0:
+                try:
+                    self.refix_ended_nets()
+                except Exception as e:  # noqa: BLE001
+                    print(f"refix: {type(e).__name__}: {e}", flush=True)
             if n % 15 == 0 and getattr(self, "accurate", None):
                 try:
                     self.accurate.tick()
@@ -536,6 +541,40 @@ class Station:
         self._log({"update": tid, "speaker_set": call or None})
         self.bus.publish("tx", tx)
         return tx
+
+    def refix_ended_nets(self, now: datetime | None = None, quiet_min: float = 15):
+        """When a net is over, run the near-miss callsign correction once more over its accurate text with the WHOLE
+        net known (the follow-along pass saw only the net so far): a call heard late fixes an earlier garble."""
+        from . import ics
+        now = now or datetime.now()
+        done = self.__dict__.setdefault("_refixed", set())
+        with self.lock:
+            tx = list(self.tx)
+        for rid in self.radios:
+            for s in ics.sessions(tx, rid):
+                key = (rid, s["start"])
+                if key in done or now - datetime.fromisoformat(s["end"]) < timedelta(minutes=quiet_min):
+                    continue
+                done.add(key)
+                for t in ics.select(tx, rid, s["start"], s["end"], include_noise=True):
+                    a = (self._find(t["id"]) or {}).get("accurate")
+                    if not a or a.get("noise"):
+                        continue
+                    text, calls, fix = callfix.apply(self, self._find(t["id"]), a["text"], a.get("callsigns", []), whole_net=True)
+                    if not fix.get("corrections"):
+                        continue
+                    acc = dict(a, text=text, callsigns=calls,
+                               corrections=(a.get("corrections") or []) + fix["corrections"], maybe=fix.get("maybe", []))
+                    with self.lock:
+                        live = self._find(t["id"])
+                        if not live:
+                            continue
+                        acc["speaker"], acc["speaker_how"] = speaker.from_text(text, calls, self._ncs_at(live))
+                        live["accurate"] = acc
+                        self._rebuild_heard()
+                        pub = dict(live)
+                    self._log({"update": t["id"], "accurate": acc})
+                    self.bus.publish("tx", pub)
 
     def accurate_now(self, rid: str, start: str | None = None, end: str | None = None, force=False) -> dict:
         from . import ics

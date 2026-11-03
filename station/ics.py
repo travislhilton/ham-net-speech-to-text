@@ -67,7 +67,9 @@ def participants(span, me_calls: set[str], heard: dict) -> list[dict]:
     out = []
     for c in seen:
         card = (heard.get(c) or {}).get("card") or {}
-        out.append({"call": c, "name": card.get("name"), "confirmed": bool(card.get("sources")),
+        lapsed = card.get("license_valid") is False                     # expired / cancelled / terminated
+        out.append({"call": c, "name": card.get("name"), "confirmed": bool(card.get("sources")) and not lapsed,
+                    "lapsed": card.get("license_status") if lapsed else None,
                     "count": sum(c in said(t) for t in span)})
     return out
 
