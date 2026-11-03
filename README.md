@@ -69,6 +69,9 @@ you chose is remembered. Each column shows:
   Remembered across restarts.
 - **Clear log…** (on each radio card): clears that radio's log and stations heard from the screen. The day's
   log file and the recordings stay on the station PC (`data\logs`, `data\recordings`); nothing is deleted.
+- **More room for the log on a phone:** tap the open tab (or **▴ Hide**) to fold the radio panel down to its tab
+  bar; **▾ Show** or any tab brings it back (remembered per radio). Each net's header folds too (tap its title; open
+  by default, remembered).
 - **On the air** (under each radio's card, one transcript per radio): every transmission as it happens.
   Grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons, Q-codes
@@ -88,8 +91,8 @@ you chose is remembered. Each column shows:
 - **What you can do now** (per radio): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
-- **Stations heard** (per radio, a tab beside On the air): name, location, license, grid and zones for each
-  callsign heard on that radio (FCC, QRZ.com and the country file). Click any callsign for its card; the box
+- **Stations heard** (per radio, a tab beside On the air): one line per callsign (city, state, country · name, how
+  often and when last heard); tap a line for the license, grid, zones and address (FCC, QRZ.com and the country file). Click any callsign for its card; the box
   at the top of the page looks up any callsign.
 - **Net type** (a badge on each radio card): the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
   with a red banner if it sounds like a real emergency.

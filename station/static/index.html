@@ -45,7 +45,13 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   .radio{flex:none}.radio .wf{height:64px;margin-top:6px}.radio .cap{display:none}.radio .axis{height:13px;font-size:10px}
   .radio .sch{display:none}.radio .cardbtns{margin-top:4px}
   .toptabs>.tabs .lg{display:none}.toptabs>.tabs .sm{display:inline}.toptabs>.tabs{overflow-x:auto;scrollbar-width:none}.toptabs>.tabs button{font-size:12px;padding:4px 7px;white-space:nowrap;letter-spacing:0}
+  /* more of the log on a phone: tighter rows, the time beside the buttons' column, a one-line header */
+  .feed .tx{grid-template-columns:2.9em minmax(0,1fr);gap:2px 6px;padding:6px 0}.feed .tx .t{font-size:12px}
+  .logbox>h2{margin:0 0 4px;font-size:12px}.sess{margin:4px 0 2px;padding:4px 8px}
+  details.livetext summary .lt{display:none}
+  header .xl{display:none}header .xs{display:inline!important}
 }
+header .xs{display:none}
 .logbox>h2{margin-bottom:6px}.guide .empty{margin:0}
 /* the top of each column: one tab set (Radio | What you can do now | Stations heard). All three panes share one
    grid cell; the radio card sets its height, the others scroll inside it, so the conversation below never jumps. */
@@ -57,8 +63,12 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .radio.paused .mrow,.radio.paused .wf,.radio.paused .axis{opacity:.35}.rx.paused{color:#fff;background:var(--muted);padding:0 8px;border-radius:6px}
 .text.noise{color:var(--muted);font-style:italic;font-size:14px}
 body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inherit}
-.sess{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
+.sess{position:sticky;top:0;z-index:1;display:block;
   background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:8px 0 2px}
+.sess>summary{list-style:none;display:flex;align-items:baseline;gap:6px;cursor:pointer;min-width:0}
+.sess>summary .sum{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess .sbody{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sess:not([open]){padding-top:4px;padding-bottom:4px}
 .sess+.tx{border-top:0}
 .sess .acc{flex-basis:100%;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .acc .bar{flex:1 1 120px;max-width:220px;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
@@ -127,6 +137,21 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 .st{display:grid;grid-template-columns:auto 1fr;gap:0 10px;font-size:13px}.st dt{color:var(--muted)}.st dd{margin:0;overflow-wrap:anywhere}
 .station{border-top:1px solid var(--line);padding:8px 0}.station:first-of-type{border-top:0}
 .station .hd{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+/* Stations heard: one line per station, details on expand */
+details.hrow{border:0;border-top:1px solid var(--line);border-radius:0;margin:0;padding:0}details.hrow:first-of-type{border-top:0}
+.hrow .station>.hd{display:none}
+/* phone: tap the open tab again to fold the radio panel down to its tab bar (more room for the log) */
+.rcol.folded .stack,.rcol.folded .split{display:none!important}.rcol.folded .toptabs>.tabs{margin-bottom:0}
+.toptabs>.tabs .fold{margin-left:auto;font-size:13px;color:var(--muted);border:0;background:none}
+.toptabs>.tabs .fold::after{content:"▴ Hide"}.rcol.folded .toptabs>.tabs .fold::after{content:"▾ Show"}
+.rcol.folded .toptabs>.tabs button.on{border-bottom-color:transparent}
+details.hrow>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer;min-width:0}
+details.hrow>summary::-webkit-details-marker,details.sess>summary::-webkit-details-marker{display:none}
+details.hrow>summary::before,details.sess>summary::before{content:"▸";color:var(--muted);flex:none;width:10px}
+details.hrow[open]>summary::before,details.sess[open]>summary::before{content:"▾"}
+.hrow .who{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.hrow .n{flex:none;font-size:12px;color:var(--muted)}
+.hrow .station{border-top:0;padding:0 0 8px 18px}
 .muted{color:var(--muted)}.small{font-size:13px}input{font:inherit;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);width:130px;text-transform:uppercase}
 /* schedule: the Nets dialog and the card's listening line */
 .why{margin-top:4px;font-size:13px;color:var(--muted)}.why b{color:var(--ink)}
@@ -147,7 +172,7 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
   <span class="clock" id="clock"></span>
   <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
   <span class="small"><input id="q" placeholder="callsign" maxlength="12" aria-label="Callsign to look up"> <button id="go">Look up</button></span>
-  <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> Explain radio terms</label>
+  <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> <span class="xl">Explain radio terms</span><span class="xs">Explain terms</span></label>
   <button id="openNets" title="Scheduled nets, and listening only while they are on">Nets…</button>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
 </header>
@@ -235,7 +260,7 @@ function txHtml(t0){
     (t.terms&&t.terms.length?`<div class="terms gloss">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
     (t.looped?`<div class="terms">Weak signal: repeated words were removed.</div>`:"");
   const radio="";
-  if(a&&t0.status==="final")body+=`<details class="livetext"><summary>✓ accurate pass (${esc(a.model||"home server")}) · live text</summary>${esc(t0.text||"")}</details>`;
+  if(a&&t0.status==="final")body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span> · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
   return `<div class="tx" id="tx-${esc(t.id)}"><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
 }
@@ -251,6 +276,13 @@ function groupSessions(list){
   }
   return out;
 }
+// Net headers start open; the ones the operator closes stay closed (remembered in this browser).
+const SESS_CLOSED=new Set((()=>{try{return JSON.parse(localStorage.getItem("hamnet.sessClosed")||"[]")}catch(e){return []}})());
+const HEARD_OPEN=new Set();   // Stations heard rows start collapsed; the ones opened stay open across updates
+document.addEventListener("toggle",e=>{const d=e.target;
+  if(d.matches&&d.matches("details.sess")){d.open?SESS_CLOSED.delete(d.dataset.sk):SESS_CLOSED.add(d.dataset.sk);
+    try{localStorage.setItem("hamnet.sessClosed",JSON.stringify([...SESS_CLOSED].slice(-200)))}catch(err){}}
+  if(d.matches&&d.matches("details.hrow"))d.open?HEARD_OPEN.add(d.dataset.hk):HEARD_OPEN.delete(d.dataset.hk);},true);
 function sessHtml(rid,s,latest){
   const fin=s.tx.filter(t=>t.status==="final"),calls=new Set(fin.flatMap(t=>t.callsigns||[]));
   const net=latest?((S.hints||{})[rid]||{}).net:null;
@@ -258,7 +290,8 @@ function sessHtml(rid,s,latest){
   const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"")+(latest?" (continuing)":"");
   const fq=s.freq_mhz?` · ${Number(s.freq_mhz).toFixed(3)} MHz`:"";
   const btn=fin.length?`<button data-wls="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}" title="ICS-309 log + ICS-213 summary of this ${title.toLowerCase()}, addressed to everyone who took part">Winlink messages…</button>`:"";
-  return `<div class="sess"><div><b>${esc(title)}</b> <span class="muted small">${span}${fq} · ${fin.length} transmission${fin.length===1?"":"s"} · ${calls.size} station${calls.size===1?"":"s"}</span></div>${btn}${accHtml(rid,fin,latest)}</div>`;
+  const key=rid+"|"+s.start,open=!SESS_CLOSED.has(key);
+  return `<details class="sess" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum"><b>${esc(title)}</b> <span class="muted small">${span}${fq} · ${fin.length} tx · ${calls.size} station${calls.size===1?"":"s"}</span></span></summary><div class="sbody">${btn}${accHtml(rid,fin,latest)}</div></details>`;
 }
 // ---------- the accurate pass (home server) ----------
 const dur=s=>s<60?`about ${Math.max(5,Math.round(s/5)*5)} s`:`about ${Math.round(s/60)} min`;
@@ -385,9 +418,10 @@ function ensureCard(r){
    <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-nets="${esc(r.id)}" title="This radio's nets, and listening only while they are on">Nets…</button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
-  top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button></div>
+  top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button><button class="fold" data-fold="${id}" title="Fold this panel away to see more of the log (or tap the open tab)"></button></div>
     <div class="stack"><div class="pane guide" id="guide-${id}"></div><div class="pane heard" id="heard-${id}"><p class="muted small">None yet.</p></div></div>`;
   el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
+  try{if(localStorage.getItem("hamnet.fold."+r.id))col.classList.add("folded")}catch(e){}
   const sec=document.createElement("section");sec.className="logbox";
   sec.innerHTML=`<h2>On the air</h2><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
   const sp=document.createElement("div");sp.className="split";sp.title="Drag to resize · double-click to reset";
@@ -395,6 +429,7 @@ function ensureCard(r){
   col.append(top,sp,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
 // ---------- splitter (guidance / stations tabs) ----------
 const splitKey=rid=>"hamnet.split."+rid;
+function setFold(rid,f){$("col-"+rid).classList.toggle("folded",f);try{localStorage.setItem("hamnet.fold."+rid,f?"1":"")}catch(e){}}
 function applySplit(rid,tab){
   const col=$("col-"+rid),st=col.querySelector(".stack");
   if(tab==="radio"){col.classList.remove("sized");st.style.height="";return}
@@ -519,6 +554,14 @@ function cardHtml(c,e){
    <dl class="st">${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join("")}</dl>
    <div class="small muted">${(c.sources||[]).join(" · ")||"not found in the callbooks"}${c.qrz_url?` · <a href="${esc(c.qrz_url)}" target="_blank" rel="noopener">QRZ page</a>`:""}</div></div>`;
 }
+function heardRow(rid,c,e){
+  const tc=x=>String(x||"").toLowerCase().replace(/\b[a-z]/g,m=>m.toUpperCase());
+  const where=[tc(c.city),c.state,c.country==="United States"||(!c.country&&c.state)?"USA":c.country].filter(Boolean).join(", ");
+  const k=rid+"|"+c.call;
+  return `<details class="hrow" data-hk="${esc(k)}"${HEARD_OPEN.has(k)?" open":""}><summary><span class="call">${esc(c.call)}</span>`+
+    `<span class="who">${esc(where)}${c.name&&where?" · ":""}<span class="muted">${esc(tc(c.name))}</span>${!c.name&&!where?'<span class="muted">not in the callbooks</span>':""}</span>`+
+    `<span class="n">${e.count}× ${hhmm(e.last)}</span></summary>${cardHtml(c,e)}</details>`;
+}
 function renderHeard(rid){
   const cards=Object.fromEntries((S.heard||[]).map(e=>[e.call,e.card]));
   for(const r of S.radios){
@@ -526,9 +569,9 @@ function renderHeard(rid){
     const box=document.getElementById("heard-"+r.id);if(!box)continue;
     const seen={};
     for(const t of S.tx){if(t.radio!==r.id||t.status!=="final")continue;
-      for(const c of t.callsigns||[]){const s=seen[c]||(seen[c]={call:c,count:0,last:t.start});s.count++;if(t.start>s.last)s.last=t.start}}
+      for(const c of (t.accurate||t).callsigns||[]){const s=seen[c]||(seen[c]={call:c,count:0,last:t.start});s.count++;if(t.start>s.last)s.last=t.start}}
     const list=Object.values(seen).sort((a,b)=>b.last.localeCompare(a.last));
-    box.innerHTML=list.length?list.map(e=>cardHtml(cards[e.call]||{call:e.call},e)).join(""):'<p class="muted small">None yet.</p>';
+    box.innerHTML=list.length?list.map(e=>heardRow(r.id,cards[e.call]||{call:e.call},e)).join(""):'<p class="muted small">None yet.</p>';
     const n=document.querySelector(`#col-${CSS.escape(r.id)} .hn`);if(n)n.textContent=list.length?`(${list.length})`:"";
   }
 }
@@ -620,7 +663,10 @@ document.addEventListener("click",e=>{
   const ac=e.target.closest("[data-acc]");if(ac)runAcc(ac.dataset.acc,ac.dataset.s,ac.dataset.e);
   const te=e.target.closest("[data-test]");if(te)openTest(te.dataset.test);
   const w=e.target.closest("[data-wls]");if(w)wlPreview({radio:w.dataset.wls,start:w.dataset.s,end:w.dataset.e});
+  const fo=e.target.closest("[data-fold]");if(fo){setFold(fo.dataset.fold,!$("col-"+fo.dataset.fold).classList.contains("folded"));return}
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
+    if(tb.classList.contains("on")||col.classList.contains("folded")){              // the open tab again: fold / unfold
+      const f=tb.classList.contains("on")&&!col.classList.contains("folded");setFold(tb.dataset.rid,f);if(f)return}
     col.querySelectorAll(".toptabs [data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
     const want={radio:"r-",guide:"guide-",heard:"heard-"}[tb.dataset.tab]+tb.dataset.rid;
     col.querySelectorAll(".stack>.pane").forEach(x=>x.classList.toggle("show",x.id===want));applySplit(tb.dataset.rid,tb.dataset.tab)}
