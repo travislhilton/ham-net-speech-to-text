@@ -102,7 +102,7 @@ you chose is remembered. Each column shows:
   every open browser, no restart. The schedule starts as the `schedule:` list in `config\station.yaml`; the
   first change made here is saved to `data\schedule.json`, which from then on is the schedule (station.yaml is
   never rewritten; delete schedule.json to start again from station.yaml).
-  Per radio, **Listen only during scheduled nets**: the station resumes that radio 2 minutes before each of its
+  Per radio, **Listen only during scheduled nets**: the station resumes that radio 1 minute before each of its
   nets and pauses it 5 minutes after the net ends, so nothing between nets is recorded. The card says why it is
   paused ("Paused until Springfield Valley ARES net at 20:00" or "Paused by you"). Pause and Resume still work; the next
   net start or end takes over again. Optionally, **when a net starts, log the radio at the net's frequency and
@@ -168,7 +168,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
 | Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; Outbox format matched against Winlink Express 1.8 messages (one and two recipients); first real write to be checked |
 | Net schedule with radio, frequency and band; editor in the dashboard (Nets…) | working (`data/schedule.json`, seeded from `config/station.yaml`) |
-| Listen only during scheduled nets (auto resume 2 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
+| Listen only during scheduled nets (auto resume 1 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml; 3.915 net: 42 → 59 callsigns found) |
 | Over-the-air transcription test with word-error score and history | working |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |

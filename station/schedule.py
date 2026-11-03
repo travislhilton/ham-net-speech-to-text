@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 MODES = ("FM", "USB", "LSB", "AM", "CW", "DIG")
-LEAD_MIN = 2          # resume this many minutes before a net starts
+LEAD_MIN = 1          # resume this many minutes before a net starts (owner 11-02: one minute)
 GRACE_MIN = 5         # pause this many minutes after it ends (nets run over)
 CALL = re.compile(r"[A-Z0-9]{3,8}(-\d{1,2})?")
 

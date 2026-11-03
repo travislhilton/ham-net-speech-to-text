@@ -79,9 +79,9 @@ def test_seeded_from_station_yaml_then_stored_in_data(tmp_path):
 
 def test_listen_window_lead_and_grace():
     nets = [{"id": "a", "name": "ARES", "radio": "ftm", "days": ["Tue"], "start": "20:00", "duration_min": 60}]
-    cur, nxt = listen_window(nets, "ftm", TUE.replace(hour=19, minute=57))
+    cur, nxt = listen_window(nets, "ftm", TUE.replace(hour=19, minute=58))
     assert cur is None and nxt["name"] == "ARES" and nxt["start"] == "2026-11-03T20:00"
-    assert listen_window(nets, "ftm", TUE.replace(hour=19, minute=58))[0]["name"] == "ARES"       # 2 min early
+    assert listen_window(nets, "ftm", TUE.replace(hour=19, minute=59))[0]["name"] == "ARES"       # 1 min early
     assert listen_window(nets, "ftm", TUE.replace(hour=21, minute=4))[0]["name"] == "ARES"        # 5 min grace
     cur, nxt = listen_window(nets, "ftm", TUE.replace(hour=21, minute=5))
     assert cur is None and nxt["start"] == "2026-11-10T20:00"                                     # next week
@@ -96,7 +96,10 @@ def test_listen_only_during_nets_pauses_and_resumes(tmp_path):
     assert r["paused"] and r["paused_by"] == "schedule"                   # no net now: paused at once
     assert r["listen"]["next"] == {"name": "Springfield Valley ARES net", "start": "2026-11-03T20:00"}
     assert not st.radios["ic705"].get("paused")                             # the other radio is untouched
-    clock.t = TUE.replace(hour=19, minute=58)
+    clock.t = TUE.replace(hour=19, minute=58)                             # 2 min before: still paused
+    st.nets.tick()
+    assert st.radios["ftm"]["paused"]
+    clock.t = TUE.replace(hour=19, minute=59)                             # 1 min before: listening
     st.nets.tick()
     assert not st.radios["ftm"]["paused"] and st.radios["ftm"]["paused_by"] is None
     assert st.radios["ftm"]["freq_mhz"] == 146.94                         # logged as the net's frequency

@@ -750,7 +750,7 @@ function renderNets(full){
   box.innerHTML=`<div id="netsList">${head+table}</div>
    <h4>${edit?"Edit "+esc(edit.name):"Add a net"}</h4>${netForm(edit||{})}
    <h4>Listening</h4><div id="netsListen">${listen}</div>
-   <p class="small muted">A radio set to listen only during nets is resumed 2 minutes before each of its nets and paused 5 minutes after it ends. Pause and Resume on the card still work; the next net start or end takes over again. You still tune the radio yourself.</p>
+   <p class="small muted">A radio set to listen only during nets is resumed 1 minute before each of its nets and paused 5 minutes after it ends. Pause and Resume on the card still work; the next net start or end takes over again. You still tune the radio yourself.</p>
    <div class="row">${NETS.radio?'<button id="netAll">Show all radios</button> ':""}<button onclick="$('netsDlg').close()">Close</button></div>`;
   const f=$("netForm");
   f.onsubmit=async e=>{e.preventDefault();
