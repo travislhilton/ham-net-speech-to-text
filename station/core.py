@@ -17,6 +17,7 @@ from hamkit import glossary
 from hamkit.bands import band
 from hamkit.callsigns import load_roster, normalize
 from hamkit.hints import Hinter, phonetic
+from . import callfix
 from .meter import Meter
 from .segmenter import Segmenter
 
@@ -459,8 +460,9 @@ class Station:
         """Keep the home server's text beside the live text (never replacing it), log it, show it."""
         validate = self.callbook.validate if self.callbook else None
         text, calls = normalize(res.get("text", ""), roster=self.roster, validate=validate)
+        text, calls, fix = callfix.apply(self, self._find(tid), text, calls, whole_net=True)   # near-miss calls
         acc = {"text": text, "callsigns": calls, "speaker": speaker_of(text, calls), "noise": probably_noise(text, calls),
-               "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds")}
+               "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds"), **fix}
         with self.lock:
             tx = self._find(tid)
             if not tx:
@@ -761,6 +763,7 @@ class Station:
     def finish(self, tid: str, res: dict, took_s: float = 0.0):
         validate = self.callbook.validate if self.callbook else None
         text, calls = normalize(res["text"], roster=self.roster, validate=validate)
+        text, calls, fix = callfix.apply(self, self._find(tid), text, calls)                    # near-miss calls
         terms = [{k: v for k, v in g.items() if k != "pos"} for g in glossary.find(text)]
         with self.lock:
             tx = self._find(tid)
@@ -778,7 +781,7 @@ class Station:
             tx.update(status="final", text=text, callsigns=calls, speaker=speaker_of(text, calls), terms=terms,
                       noise=probably_noise(text, calls),
                       model=res.get("model"), looped=res.get("looped", False), took_s=took_s,
-                      hint_keys=[c["key"] for c in h["cards"]], partial="")
+                      hint_keys=[c["key"] for c in h["cards"]], partial="", **fix)
             new = []
             for c in calls:
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"], "card": None})

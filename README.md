@@ -136,6 +136,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
+| Near-miss callsign correction ('WB6BQW' -> WB6DQW heard in this net, 'K7XDG Waverly' -> K7XVG of Waverly); only when one reading clearly wins, what was heard kept (dotted underline + tooltip), live and accurate text, stations heard and Winlink use the corrected call | working (`hamkit/callfix.py`, `callfix: false` turns it off); 3.915 net: 8 corrections, none contradicted, most garbles left as heard |
 | QRZ.com online lookups (grid, international names), cached for offline use | working (`hamkit.qrz set-login`) |
 | Q-code / proword / abbreviation explanations | working (`config/glossary.yaml`) |
 | Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |

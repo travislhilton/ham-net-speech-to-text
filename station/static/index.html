@@ -113,7 +113,7 @@ section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:va
 .tx:first-of-type{border-top:0}.tx .t{color:var(--muted);font-variant-numeric:tabular-nums;font-size:13px}
 .tx .who{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px}
 .call{font-weight:700;background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:0 6px;cursor:pointer;font-family:ui-monospace,Consolas,monospace}
-.call.spk{border-color:var(--accent)}.text{font-size:16px;overflow-wrap:anywhere}.text.partial{color:var(--partial);font-style:italic}
+.call.spk{border-color:var(--accent)}.call.fixed{text-decoration:underline dotted;text-underline-offset:3px}.text{font-size:16px;overflow-wrap:anywhere}.text.partial{color:var(--partial);font-style:italic}
 .live{color:var(--ok);font-weight:600}.term{border-bottom:2px dotted var(--term);cursor:help}
 .terms{font-size:13px;color:var(--muted)}.terms b{color:var(--term)}
 button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:2px 8px;cursor:pointer}
@@ -175,8 +175,10 @@ function markTerms(text,terms){
   return h;
 }
 function txHtml(t0){
-  const a=t0.accurate,t=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise}:t0;
-  const calls=(t.callsigns||[]).map(c=>`<span class="call${c===t.speaker?" spk":""}" data-call="${esc(c)}" title="${c===t.speaker?"likely speaker":"mentioned"}">${esc(c)}</span>`).join("");
+  const a=t0.accurate,t=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections}:t0;
+  const fx=Object.fromEntries((t.corrections||[]).map(f=>[f.call,f]));  // near-miss corrections: keep what was heard
+  const calls=(t.callsigns||[]).map(c=>{const f=fx[c],tip=(c===t.speaker?"likely speaker":"mentioned")+(f?` · heard "${f.heard}", corrected: ${f.why}`:"");
+    return `<span class="call${c===t.speaker?" spk":""}${f?" fixed":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("");
   let body;
   if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
   else if(t.status==="transcribing") body=`<div class="text partial">${esc(t.partial)} <span class="muted">transcribing…</span></div>`;
