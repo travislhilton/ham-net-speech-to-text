@@ -16,6 +16,10 @@ overwritten by re-extraction or the accurate pass.
                station/minutes.py, `edited` = the operator changed it (re-extraction then leaves it alone)
     minutes    per instance: the operator's notes, net control and attendance corrections
 
+Taking part (attendance, the regulars): net control, the speaker of a transmission (station/speaker.py), a station
+net control acknowledges ("K7ABC, thank you, you're in the log"), or one that starts a transmission with its own
+call and is not being spoken to ("W9XYZ, water is rising on Mill Creek Road"). A callsign only mentioned is not.
+
 Which instance a transmission belongs to: the scheduled occurrence on its radio from 15 minutes before it starts
 to 15 minutes after it ends (schedule.occurrence_at); otherwise the latest net or conversation on that radio if
 it is under 15 quiet minutes old on the same frequency (a net running over stays that net); otherwise a new
@@ -344,7 +348,12 @@ class History:
             calls = list(v.get("callsigns") or [])
             if v.get("speaker"):
                 seen(v["speaker"], "checkin", v["start"])
-            acked = speaker.addressed(v.get("text") or "", calls) if speaker._ACK.search(v.get("text") or "") else set()
+            text = v.get("text") or ""
+            acked = speaker.addressed(text, calls) if speaker._ACK.search(text) else set()
+            lead = re.match(r"\W*([A-Z0-9]{1,3}\d[A-Z0-9]{1,4})[,.]\s", text)      # "W9XYZ, water is rising on ...":
+            if lead and lead.group(1) in calls and lead.group(1) not in speaker.addressed(text, calls) \
+                    and not speaker._ACK.search(text):                       # a station leading with its own call
+                acked = acked | {lead.group(1)}
             for c in calls:
                 if c != v.get("speaker"):
                     seen(c, "checkin" if c in acked else "mentioned", v["start"])
@@ -724,7 +733,7 @@ class History:
                 ok, why = minutes.still_valid(it, today, day)
                 if ok and not any(minutes.similar(x["text"], it["text"]) for x in out["announcements"]):
                     out["announcements"].append(it | {"valid": why})
-            if it["kind"] in ("event", "announcement") and (it.get("event_at") or "")[:10] >= today.isoformat():
+            if it["kind"] == "event" and (it.get("event_at") or "")[:10] >= today.isoformat():
                 if not any(minutes.similar(x["text"], it["text"]) for x in out["upcoming"]):
                     out["upcoming"].append(it)
             if it["kind"] == "action":
@@ -733,7 +742,10 @@ class History:
                 out["traffic"].append(it)
             if it["kind"] == "urgent":
                 out["urgent"].append(it)
-        out["upcoming"].sort(key=lambda i: i.get("event_at") or "")
+        # a dated announcement is read out once, under Announcements, not again under Coming up
+        out["upcoming"] = sorted((i for i in out["upcoming"] if not any(minutes.similar(x["text"], i["text"])
+                                                                        for x in out["announcements"])),
+                                 key=lambda i: i.get("event_at") or "")
         return out
 
     def open_counts(self, net_id: str, at: datetime | None = None) -> dict:

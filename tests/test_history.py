@@ -65,7 +65,8 @@ def test_instances_from_the_schedule_and_conversations(tmp_path):
     d = h.instance("ares@2026-11-03")
     roll = [(p["call"], p["role"]) for p in d["participants"] if p["role"] != "mentioned"]
     assert roll[:4] == [("K7NET", "ncs"), ("K7ABC", "checkin"), ("W9XYZ", "checkin"), ("KD9AAA", "checkin")]
-    assert ("W7TST", "checkin") in roll      # "N0CALL, I have one formal message": not stated, only mentioned
+    assert ("W7TST", "checkin") in roll and ("N0CALL", "checkin") in roll     # leads with its call: takes part
+    assert "KD9AAA" in [c for c, _ in roll] and ("K7NET", "ncs") in roll
     kinds = sorted(i["kind"] for i in d["items"])
     assert kinds == ["action", "action", "action", "announcement", "announcement", "announcement", "decision",
                      "event", "traffic"]
@@ -199,7 +200,8 @@ def test_operator_layer_survives_re_extraction_and_carries_forward(tmp_path):
     so = h.still_open("ares", datetime(2026, 11, 3, 18, 55))
     # still valid on 3 Nov: the hamfest (14 Nov) and VE testing; the club meeting (Thu 29 Oct) is past
     assert {i["text"][:20] for i in so["announcements"]} == {"Reminder, the Spring", "VE testing is on the"}
-    assert so["upcoming"][0]["event_at"] == "2026-11-14T08:00" and len(so["actions"]) >= 3 and so["traffic"]
+    assert len(so["actions"]) >= 3 and so["traffic"]
+    assert [i["event_at"][:10] for i in so["upcoming"]] == ["2026-12-05"]   # dated announcements are not listed twice
     h.update_item(added["id"], {"status": "done"})
     assert h.open_counts("ares", datetime(2026, 11, 3, 18, 55))["actions"] == len(so["actions"]) - 1
     # after the hamfest it is no longer read out

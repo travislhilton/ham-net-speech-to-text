@@ -152,6 +152,9 @@ def test_skip_move_restore_preview_and_alert_api(tmp_path):
         assert _post(base, "/api/schedule/preview", res["schedule"][0])["next"][0]["cancelled"]
         res = _post(base, "/api/schedule/sun/move", {"date": "2026-12-06", "start": "18:30", "freq_mhz": 147.0})
         assert res["schedule"][0]["next"]["start"] == "2026-12-06T18:30" and res["schedule"][0]["next"]["moved"]
+        res = _post(base, "/api/schedule/sun/move", {"date": "2026-12-06", "to_date": "2026-12-05", "start": "18:30"})
+        assert res["schedule"][0]["next"]["start"] == "2026-12-05T18:30"
+        assert st.cfg["schedule"][0]["exceptions"]["2026-12-06"] == {"date": "2026-12-05", "start": "18:30"}
         # an edit from the editor (which does not send the exceptions) keeps them
         _post(base, "/api/schedule/sun", {k: v for k, v in res["schedule"][0].items()
                                           if k not in ("exceptions", "summary", "next")} | {"name": "Sunday ARES Net"})
@@ -159,17 +162,18 @@ def test_skip_move_restore_preview_and_alert_api(tmp_path):
         res = _post(base, "/api/schedule/sun/restore", {"date": "2026-11-15"})
         assert res["schedule"][0]["next"]["date"] == "2026-11-15"
         for path, body in (("/api/schedule/sun/skip", {"date": "2026-11-16"}),          # not a day it meets
-                           ("/api/schedule/sun/skip", {}),
-                           ("/api/schedule/preview", {"name": "x", "radio": "ftm", "start": "19:00",
-                                                      "repeat": {"freq": "monthly"}})):
+                           ("/api/schedule/sun/skip", {})):
             with pytest.raises(urllib.error.HTTPError) as e:
                 _post(base, path, body)
             assert e.value.code == 400, path
+        bad = _post(base, "/api/schedule/preview", {"name": "x", "radio": "ftm", "start": "19:00",
+                                                    "repeat": {"freq": "monthly"}})
+        assert bad["error"] and "next" not in bad                 # a rule half typed: said in place, not a 400
         clock.t = SUN.replace(hour=18, minute=57)
         st.nets.tick()
         got = json.loads(urllib.request.urlopen(base + "/api/alerts").read())["alerts"]
         assert got[0]["key"] == "sun@2026-11-15"
-        r = _post(base, "/api/alerts/sun@2026-11-15/ready", {})
+        r = _post(base, "/api/alerts/sun%402026-11-15/ready", {})          # encoded as the page sends it
         assert r["alerts"][0]["state"] == "ready"
         with pytest.raises(urllib.error.HTTPError) as e:
             _post(base, "/api/alerts/nope@2026-11-15/ready", {})

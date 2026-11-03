@@ -6,7 +6,7 @@ import queue
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import unquote, parse_qs, urlparse
 
 from .schedule import NoSuchNet
 from . import speaker
@@ -139,10 +139,11 @@ def make_handler(station):
             routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore))?)?", u.path)   # schedule
-            alert = re.fullmatch(r"/api/alerts/([\w@.-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
+            alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
             if not (m or sched or who or alert or item or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+                self.close_connection = True                   # its body is unread: never reuse the connection
                 return self._json({"error": "not found"}, 404)
             try:
                 n = min(int(self.headers.get("Content-Length") or 0), 512 * 1024)
@@ -150,7 +151,7 @@ def make_handler(station):
                 if sched:
                     return self._json(station.nets.post(u.path, body))
                 if alert:
-                    return self._json(station.nets.alerts.act(alert.group(1), alert.group(2)))
+                    return self._json(station.nets.alerts.act(unquote(alert.group(1)), alert.group(2)))
                 if item:
                     if not item.group(1):
                         return self._json(station.history.add_item(body))

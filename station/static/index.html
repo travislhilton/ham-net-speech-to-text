@@ -101,7 +101,7 @@ body.dragging{user-select:none;cursor:row-resize}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
 .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
 .sch{margin-top:4px;font-size:13px}.sch .now{font-weight:700;color:var(--ok)}.cardbtns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
-#q{width:150px;text-transform:uppercase}
+.hsearch{display:flex;gap:4px;align-items:center;margin:0}#q{width:200px;text-transform:none}
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 .radio .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.radio .top .nm{flex:1}
 .rx{font-weight:700;color:var(--muted);font-size:13px}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
@@ -172,6 +172,104 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
 .netform .days label{display:flex;gap:4px;align-items:center;margin:0}.netform .days input{width:auto;display:inline}
 @media (max-width:900px){table.nets .wide{display:none}}
 #conn{font-size:12px}.ok{color:var(--ok)}.bad{color:var(--bad)}
+/* ---------- nets: alerts, urgent board, the Nets area, search ---------- */
+@media (max-width:900px){.hsearch{flex:1 1 180px}#q{flex:1;width:auto;min-width:0}}
+button.quiet{border-color:transparent;background:none;color:var(--muted)}button.quiet:hover{color:var(--ink);border-color:var(--line)}
+.linkish{border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font:inherit}
+.badge.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.sbtn{display:inline-flex;gap:6px;flex-wrap:wrap}
+input.up,.dbody input.up{text-transform:uppercase}
+/* the pre-net alert: a strip under the header, the full banner on the radio's column */
+#alerts{flex:none;display:flex;flex-direction:column}#alerts:empty{display:none}
+.astrip{display:block;width:100%;text-align:left;border:0;border-radius:0;padding:6px 16px;background:var(--warnbg);color:var(--ink);border-bottom:1px solid var(--warnc);font-size:14px}
+.astrip.ready,.astrip.already{background:color-mix(in srgb,var(--ok) 14%,var(--panel));border-bottom-color:var(--ok)}
+.abox{flex:none}
+.alertb{border:2px solid var(--warnc);background:var(--warnbg);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.alertb.ready,.alertb.already{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--panel))}
+.alertb .ah{font-size:16px}.alertb .am{margin:4px 0;font-size:15px}.alertb .aopen{font-size:13px;margin:4px 0}
+.alertb .abtn{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.alertb .abtn button{padding:6px 12px}.alertb .chimeb{margin-left:auto}
+@media (prefers-reduced-motion:no-preference){.alertb.due.soon{animation:alertpulse 2s ease-in-out 3}}
+@keyframes alertpulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--warnc) 45%,transparent)}}
+/* the urgent board: loud, pinned above the log, never in the way */
+.urg{border:2px solid var(--bad);background:var(--badbg);border-radius:10px;padding:6px 10px;margin-bottom:6px;max-height:40%;overflow:auto;flex:none}
+.urg .uh{display:flex;gap:8px;align-items:baseline;color:var(--bad);flex-wrap:wrap}.urg .uh button{margin-left:auto}
+.urg ul{list-style:none;margin:4px 0 0;padding:0}.urg li{border-top:1px solid color-mix(in srgb,var(--bad) 30%,transparent);padding:5px 0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+.urg .ut{font-weight:600;flex:1 1 55%;min-width:0}.urg .ub{margin-left:auto;display:flex;gap:4px}
+.cat{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:4px;background:var(--bad);color:#fff}
+/* big dialogs: the Nets area and Search */
+dialog.big{max-width:min(980px,96vw);height:min(88dvh,920px);padding:0;flex-direction:column}dialog.big[open]{display:flex}
+.dhead{display:flex;gap:12px;align-items:center;padding:12px 16px 6px;flex:none}.dhead h3{margin:0;flex:none}.dhead .x{margin-left:auto}
+.dhead label{display:flex;gap:6px;align-items:center;margin:0}.dhead select{display:inline-block;margin:0;max-width:240px}
+button.x{font-size:16px;line-height:1;padding:5px 10px}
+.ntabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;flex:none}
+.ntabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.ntabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.dbody{padding:10px 16px 18px;overflow-y:auto;flex:1;min-height:0}.dbody input{text-transform:none}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:14px 16px;color:var(--muted);margin:8px 0;line-height:1.5}.empty b{color:var(--ink)}
+@media (max-width:600px){dialog.big{max-width:100vw;width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;border:0}
+  .dhead{padding:10px 12px 4px;gap:8px}.dhead label{flex:1;min-width:0}.dhead select{width:100%;max-width:none}.dbody{padding:8px 12px 18px}.ntabs{padding:0 4px}.ntabs button{padding:8px 7px;font-size:14px}}
+/* Schedule */
+.ncards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:10px;margin:8px 0}
+.ncard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel)}.ncard.live{border-color:var(--ok);box-shadow:inset 3px 0 0 var(--ok)}
+.ncard .sum{margin:3px 0;font-size:14px}.ncard .btns{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px}.lrow{margin:6px 0}
+.netform .chk input{width:auto;margin:0}.netform .wide{grid-column:1/-1}.netform .hint{font-size:12px;color:var(--muted)}
+fieldset.rep{border:1px solid var(--line);border-radius:10px;padding:8px 12px 10px;margin:8px 0 0;min-width:0}fieldset.rep legend{font-weight:600;padding:0 4px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg label{margin:0}.seg input{position:absolute;opacity:0;width:1px;height:1px}.seg span{display:block;padding:5px 12px;cursor:pointer;border-right:1px solid var(--line)}
+.seg label:last-child span{border-right:0}.seg input:checked+span{background:var(--accent);color:#fff}.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-2px}
+.rline{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:8px}.rline[hidden],[data-for][hidden]{display:none!important}.rline label{margin:0}
+.netform .rline input,.netform .rline select{width:auto;display:inline-block;margin:0}.netform input.num{width:64px}
+.chips{display:inline-flex;flex-wrap:wrap;gap:4px}.chip{margin:0!important;position:relative}.chip input{position:absolute;opacity:0;width:1px;height:1px}
+.chip span{display:inline-block;min-width:40px;text-align:center;padding:3px 8px;border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:13px}
+.chip input:checked+span{background:var(--accent);border-color:var(--accent);color:#fff}.chip input:focus-visible+span{outline:2px solid var(--accent);outline-offset:1px}
+.inl{display:inline-flex!important;gap:6px;align-items:center;margin:0!important}.inl input{margin:0!important;display:inline-block!important}
+.pv{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px}.pvsum{font-size:15px;margin-bottom:4px}
+ol.occ{margin:4px 0 0;padding-left:20px;font-size:14px}ol.occ li{padding:2px 0}ol.occ li.cx>span{text-decoration:line-through;color:var(--muted)}
+ol.occ button{font-size:12px;padding:0 6px}.mvform{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0;font-size:13px}.mvform input{width:auto}.mvform .num2{width:90px}
+/* History */
+.hlist{display:flex;flex-direction:column}.dbody h4{margin:14px 0 2px}
+.hline{display:grid;grid-template-columns:7.5em 6.8em minmax(0,1fr) auto;gap:0 10px;text-align:left;border:0;border-top:1px solid var(--line);border-radius:0;padding:8px 4px;background:none;align-items:baseline;width:100%}
+.hline:hover{background:var(--chip)}.hline .hn{font-weight:600}.hline .hm{grid-column:3;font-size:13px;color:var(--muted)}.hline .go{grid-row:1/3;grid-column:4;align-self:center;color:var(--muted);font-size:18px}
+.hline .ht{font-variant-numeric:tabular-nums;color:var(--muted)}.hline.em{box-shadow:inset 3px 0 0 var(--bad)}
+@media (max-width:600px){.hline{display:block;position:relative;padding-right:22px}.hline .hd,.hline .ht{font-size:13px;color:var(--muted);margin-right:6px}.hline .hn,.hline .hm{display:block}.hline .go{position:absolute;right:4px;top:35%}}
+/* Analysis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin:4px 0 8px}
+.kpis div{border:1px solid var(--line);border-radius:10px;padding:8px 10px}.kpis b{display:block;font-size:22px;font-variant-numeric:tabular-nums}.kpis span{font-size:12px;color:var(--muted)}
+svg.chart{width:100%;max-width:660px;height:auto;display:block}svg.chart rect.b{fill:color-mix(in srgb,var(--accent) 50%,transparent)}svg.chart rect.bl{fill:var(--accent)}
+svg.chart text{font-size:10px;fill:var(--muted)}svg.chart .ax{stroke:var(--line)}
+.call.new{border-color:var(--ok)}.tscroll{overflow-x:auto}table.st td.n{text-align:right;font-variant-numeric:tabular-nums}table.st tr.reg td:first-child{font-weight:700}
+details.tbl{border:0;padding:0;margin:2px 0}
+@media (max-width:600px){table.nets .wide{display:none}}
+/* Minutes */
+.mhead{position:sticky;top:-10px;background:var(--panel);z-index:1;padding:4px 0 8px;border-bottom:1px solid var(--line)}
+.mnav{display:flex;gap:8px;align-items:center}.mnav>div{flex:1;min-width:0}.mnav>button{font-size:18px;padding:2px 10px}
+.mtitle{font-size:18px;font-weight:700}.mtools{margin-top:6px}.mtools label input{display:inline-block;width:110px;margin:0 0 0 4px}
+.msec{margin:14px 0 0}.msec h4{margin:0 0 4px}
+ul.items{list-style:none;margin:0;padding:0}
+.item{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:4px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px}
+.item .itx{grid-column:1;overflow-wrap:anywhere}.item .imeta{grid-column:1;color:var(--muted)}.item .iact{grid-column:2;grid-row:1/3;display:flex;flex-wrap:wrap;gap:4px;align-items:center;justify-content:flex-end}
+.item.s-done .itx,.item.s-handled .itx{text-decoration:line-through;color:var(--muted)}
+.item.k-urgent{border-color:var(--bad)}.item.k-urgent.s-open{background:var(--badbg)}
+@media (max-width:600px){.item{grid-template-columns:1fr}.item .iact{grid-column:1;grid-row:auto;justify-content:flex-start}}
+.sug{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 6px;white-space:nowrap}
+.src{font-size:12px;padding:0 6px;font-family:ui-monospace,Consolas,monospace}
+ol.roll{display:flex;flex-wrap:wrap;gap:4px 16px;padding-left:22px;margin:4px 0}ol.roll li{padding:2px 0}
+ol.roll .x{font-size:11px;padding:0 5px;border-color:transparent;background:none;color:var(--muted)}
+#attAdd input{text-transform:uppercase}
+#mNotes{font:14px/1.4 system-ui,"Segoe UI",sans-serif}
+ol.mtx{font-size:14px;padding-left:0;list-style:none;margin:4px 0}ol.mtx li{padding:3px 2px;border-top:1px solid var(--line)}ol.mtx .t{color:var(--muted);font-variant-numeric:tabular-nums}ol.mtx li.noise{color:var(--muted);font-style:italic}
+ol.mtx button{font-size:11px;padding:0 5px}
+.iform{display:grid;gap:6px;border:1px solid var(--accent);border-radius:8px;padding:8px;grid-column:1/-1}.iform textarea{font:14px/1.4 system-ui,"Segoe UI",sans-serif}
+.iform select{justify-self:start;margin:0}.ifg{display:flex;flex-wrap:wrap;gap:4px 12px}.ifg label{margin:0;font-size:13px}.ifg input{width:auto;display:inline-block;margin-left:4px}
+.flash{animation:flash 2.4s ease-out}@keyframes flash{0%,40%{background:color-mix(in srgb,var(--warnc) 45%,transparent)}100%{background:transparent}}
+.nlist{padding-left:18px;margin:4px 0}
+/* Search */
+.srform{display:flex;gap:6px}.srform input{flex:1;width:auto;font-size:16px;padding:6px 10px}
+.srfilters{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0}.srfilters label{margin:0;display:flex;align-items:center;gap:4px}.srfilters input,.srfilters select{display:inline-block;width:auto;margin:0}
+.srfilters #srCall{width:96px}
+.srg h4{margin:12px 0 4px}ul.srl{list-style:none;margin:0;padding:0}li.sr{border-top:1px solid var(--line);padding:6px 0}
+.srt{font-size:15px;margin:2px 0;overflow-wrap:anywhere}mark{background:color-mix(in srgb,var(--warnc) 55%,transparent);color:inherit;border-radius:2px;padding:0 1px}
+.srb{display:flex;gap:6px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -182,13 +280,14 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
   <span id="nettype" class="badge">Net type: listening…</span>
   <span class="clock" id="clock"></span>
   <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
-  <span class="small"><input id="q" placeholder="callsign" maxlength="12" aria-label="Callsign to look up"> <button id="go">Look up</button></span>
+  <form id="searchForm" class="hsearch" role="search"><input id="q" type="search" placeholder="Search everything" aria-label="Search every transmission, callsign, net and the minutes" autocomplete="off"> <button>Search</button></form>
   <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> <span class="xl">Explain radio terms</span><span class="xs">Explain terms</span></label>
-  <button id="openNets" title="Scheduled nets, and listening only while they are on">Nets…</button>
+  <button id="openNets" title="Schedule, history, who takes part, minutes and what is still open">Nets</button>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
   <button id="openPhone" title="Show a QR code: point a phone's camera at it to open this dashboard on the phone">Open on phone</button>
   <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the two-sided reference card (printable)">Help</a>
 </header>
+<div id="alerts" aria-live="polite"></div>
 <nav id="rtabs" role="tablist" aria-label="Radios"></nav>
 <main>
   <div id="radios"></div>
@@ -202,11 +301,15 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
   <label>Winlink Express folder <select name="winlink_dir"></select></label>
   <div class="small muted" id="wlNone"></div>
   <label>Send as (callsign account in that folder) <select name="winlink_account"></select></label>
+  <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
 <dialog id="testDlg"><div id="testBody"></div></dialog>
-<dialog id="netsDlg"><div id="netsBody"></div></dialog>
+<dialog id="netsDlg" class="big" aria-labelledby="netsTitle"><div class="dhead"><h3 id="netsTitle">Nets</h3><label class="small">Net <select id="netPick"></select></label><button id="netsClose" class="x" aria-label="Close">✕</button></div>
+<nav id="netsTabs" class="ntabs" role="tablist" aria-label="Nets"><button role="tab" data-ntab="schedule">Schedule</button><button role="tab" data-ntab="history">History</button><button role="tab" data-ntab="analysis">Analysis</button><button role="tab" data-ntab="minutes">Minutes</button><button role="tab" data-ntab="open">Still open</button></nav>
+<div id="netsBody" class="dbody" role="tabpanel"></div></dialog>
+<dialog id="searchDlg" class="big" aria-labelledby="searchTitle"><div class="dhead"><h3 id="searchTitle">Search</h3><button id="searchClose" class="x" aria-label="Close">✕</button></div><div id="searchBody" class="dbody"></div></dialog>
 <dialog id="phoneDlg"><div id="phoneBody"></div><div class="row"><button onclick="$('phoneDlg').close()">Close</button></div></dialog>
 <dialog id="whoDlg"><form id="whoForm">
   <h3>Who was talking?</h3><p class="small muted" id="whoText"></p><div class="row" id="whoPick"></div>
@@ -215,7 +318,7 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
 </form></dialog>
 <script>
 let editing=null;
-const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[]};
+const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[],alerts:[],urgent:[]};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hhmm=iso=>iso?iso.slice(11,16):"";
@@ -286,8 +389,9 @@ function groupSessions(list){
   const out=[];
   for(const t of [...list].sort((a,b)=>a.start.localeCompare(b.start))){
     const cur=out[out.length-1],at=Date.parse(t.start);
-    if(cur&&at-Date.parse(cur.end)<=GAP_MS&&(t.freq_mhz??null)===(cur.freq_mhz??null)){cur.tx.push(t);if(t.status==="final")cur.end=t.start}
-    else out.push({start:t.start,end:t.start,freq_mhz:t.freq_mhz??null,tx:[t]});
+    const nk=(t.net||{}).key||null;     // a scheduled net's first transmission starts a new one (ics.sessions does the same)
+    if(cur&&at-Date.parse(cur.end)<=GAP_MS&&(t.freq_mhz??null)===(cur.freq_mhz??null)&&(!nk||nk===cur.net)){cur.tx.push(t);if(t.status==="final")cur.end=t.start}
+    else out.push({start:t.start,end:t.start,freq_mhz:t.freq_mhz??null,tx:[t],net:nk});
   }
   return out;
 }
@@ -301,12 +405,16 @@ document.addEventListener("toggle",e=>{const d=e.target;
 function sessHtml(rid,s,latest){
   const fin=s.tx.filter(t=>t.status==="final"),calls=new Set(fin.flatMap(t=>t.callsigns||[]));
   const net=latest?((S.hints||{})[rid]||{}).net:null;
-  const title=net&&net.type&&net.type!=="unknown"?net.label:(calls.size>2?"Net":"Conversation");
+  const sn=(s.tx.find(t=>t.net)||{}).net;                 // the scheduled net it belongs to
+  const title=sn?sn.name:net&&net.type&&net.type!=="unknown"?net.label:(calls.size>2?"Net":"Conversation");
+  const kind=sn&&net&&net.type&&net.type!=="unknown"?` <span class="badge ${esc(net.type)}">${esc(net.label)}</span>`:"";
+  const ikey=sn?sn.key:`${rid}@${(fin[0]||s.tx[0]).start}`;
   const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"")+(latest?" (continuing)":"");
   const fq=s.freq_mhz?` · ${Number(s.freq_mhz).toFixed(3)} MHz`:"";
   const btn=fin.length?`<button data-wls="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}" title="ICS-309 log + ICS-213 summary of this ${title.toLowerCase()}, addressed to everyone who took part">Winlink messages…</button>`:"";
   const key=rid+"|"+s.start,open=!SESS_CLOSED.has(key);
-  return `<details class="sess" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum"><b>${esc(title)}</b> <span class="muted small">${span}${fq} · ${fin.length} tx · ${calls.size} station${calls.size===1?"":"s"}</span></span></summary><div class="sbody">${btn}${accHtml(rid,fin,latest)}</div></details>`;
+  const mins=fin.length?`<button data-mins="${esc(ikey)}" title="Attendance, announcements, schedule, action items, decisions, traffic${sn?"; what is still open":""}">Minutes</button>`:"";
+  return `<details class="sess" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum"><b>${esc(title)}</b>${kind} <span class="muted small">${span}${fq} · ${fin.length} tx · ${calls.size} station${calls.size===1?"":"s"}</span></span></summary><div class="sbody"><span class="sbtn">${mins} ${btn}</span>${accHtml(rid,fin,latest)}</div></details>`;
 }
 // ---------- the accurate pass (home server) ----------
 const dur=s=>s<60?`about ${Math.max(5,Math.round(s/5)*5)} s`:`about ${Math.round(s/60)} min`;
@@ -440,10 +548,11 @@ function ensureCard(r){
   el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
   try{if(localStorage.getItem("hamnet.fold."+r.id))col.classList.add("folded")}catch(e){}
   const sec=document.createElement("section");sec.className="logbox";
-  sec.innerHTML=`<h2>On the air</h2><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
+  sec.innerHTML=`<h2>On the air</h2><div class="urg" id="urg-${id}" hidden></div><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
   const sp=document.createElement("div");sp.className="split";sp.title="Drag to resize · double-click to reset";
   sp.setAttribute("role","separator");sp.setAttribute("aria-orientation","horizontal");sp.dataset.rid=r.id;
-  col.append(top,sp,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+  const ab=document.createElement("div");ab.className="abox";ab.id="ab-"+r.id;ab.hidden=true;
+  col.append(ab,top,sp,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
 // ---------- splitter (guidance / stations tabs) ----------
 const splitKey=rid=>"hamnet.split."+rid;
 function setFold(rid,f){$("col-"+rid).classList.toggle("folded",f);try{localStorage.setItem("hamnet.fold."+rid,f?"1":"")}catch(e){}}
@@ -506,8 +615,8 @@ function renderRadios(){
         <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.</div></form>`:"";
     }
     el.querySelector(".cap").textContent=wfCaption(r);
-    const cur=(S.net||{}).current,nets=(S.schedule||[]).filter(n=>n.radio===r.id);
-    el.querySelector(".sch").innerHTML=nets.length?"Nets: "+nets.map(n=>`<span class="${cur&&cur.name===n.name?"now":""}">${cur&&cur.name===n.name?"now: ":""}${esc(n.name)} ${esc((n.days||[]).join(", ")||"daily")} ${esc(n.start)}${n.freq_mhz?" · "+esc(n.freq_mhz)+" MHz":""}</span>`).join("; "):'<span class="muted">No nets scheduled on this radio.</span>';
+    const run=(S.net||{}).running||[],nets=(S.schedule||[]).filter(n=>n.radio===r.id);
+    el.querySelector(".sch").innerHTML=nets.length?"Nets: "+nets.map(n=>{const on=run.some(x=>x.id===n.id);return `<span class="${on?"now":""}" title="${esc(n.summary||"")}">${on?"now: ":""}${esc(n.name)}${!on&&n.next?" · next "+esc(fmtWhen(n.next.start)):""}${n.freq_mhz?" · "+esc(Number(n.freq_mhz).toFixed(3))+" MHz":""}</span>`}).join("; "):'<span class="muted">No nets scheduled on this radio.</span>';
     el.querySelector(".err").textContent=r.paused?"":(r.error||"");
     el.classList.toggle("paused",!!r.paused);
     const pz=el.querySelector(".pz");pz.textContent=r.paused?"▶ Resume":"⏸ Pause";
@@ -538,8 +647,8 @@ function onMeter(d){
 function renderNet(){
   const n=S.net||{},c=n.current,x=n.next;
   let h="";
-  if(c) h=`<b>${esc(c.name)}</b><span>${freq(c.band)}</span>${c.radio_name?`<span class="muted">on ${esc(c.radio_name)}</span>`:""}${c.ncs?`<span class="muted">NCS ${esc(c.ncs)}</span>`:""}${c.retune?`<span class="badge exercise">Set the radio to ${esc(c.freq_mhz)} MHz</span>`:""}`;
-  else if(x) h=`<span class="muted">Next net:</span> <b>${esc(x.name)}</b> <span class="muted">${esc(x.start.replace("T"," "))} · ${freq(x.band)}</span>`;
+  if(c) h=`<b>${esc(c.name)}</b><span>${freq(c.band)}</span>${c.radio_name?`<span class="muted">on ${esc(c.radio_name)}</span>`:""}${c.ncs?`<span class="muted">NCS ${esc(c.ncs)}</span>`:""}${c.retune?`<span class="badge exercise">Set the radio to ${esc(Number(c.freq_mhz).toFixed(3))} MHz</span>`:""}<button class="linkish small" data-goto="open" data-net="${esc(c.id)}">Still open ›</button>`;
+  else if(x) h=`<span class="muted">Next net:</span> <button class="linkish" data-goto="schedule" data-net="${esc(x.id)}"><b>${esc(x.name)}</b></button> <span class="muted">${esc(fmtWhen(x.start))} · ${freq(x.band)}</span>`;
   else h='<span class="muted">No net scheduled</span>';
   $("net").innerHTML=h;
 }
@@ -605,7 +714,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -656,21 +765,23 @@ function renderWl(){
     const to=[...$("wlBody").querySelectorAll("input[name=to]:checked")].map(x=>x.value);
     const drafts=[...$("wlBody").querySelectorAll("input[name=form]:checked")].map(x=>d.drafts[+x.value]);
     const m=$("wlMsg");m.className="";m.textContent="Writing…";
-    const r=await fetch("/api/winlink/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to,drafts})});
+    const r=await fetch("/api/winlink/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to,drafts,radio:d.radio,start:d.start})});
     const res=await r.json();
     if(!r.ok){m.className="bad";m.textContent=res.error||"not written";return}
     m.className="ok";m.textContent=`${res.written.length} message(s) are in the ${res.account} Outbox. Open Winlink Express to check them, then connect to send.`;
   };
 }
 function renderEngine(e){if(!e)return;$("engine").textContent=e.status==="ready"?"· "+e.final:e.status==="loading"?"· loading speech models…":"· "+(e.status||"")+" "+(e.final||e.final_error||"")}
-function all(){renderRadios();renderNet();renderHints();renderHeard();renderFeed()}
+function all(){renderRadios();renderNet();renderHints();renderHeard();renderFeed();renderAlerts();renderUrgent()}
 async function lookup(call){
   call=call.trim().toUpperCase();if(!call)return;
   $("lookup").innerHTML='<p class="muted small">Looking up…</p>';if(!$("callDlg").open)$("callDlg").showModal();
   try{const r=await fetch("/api/lookup?call="+encodeURIComponent(call));const c=await r.json();$("lookup").innerHTML=c.error?`<p class="bad small">${esc(c.error)}</p>`:cardHtml(c)}catch(e){$("lookup").innerHTML='<p class="bad small">Lookup failed.</p>'}
+  try{const n=await api("/api/station/nets?call="+enc(call));   // the nets this station takes part in (station/history.py)
+    if(n.nets.length)$("lookup").insertAdjacentHTML("beforeend",`<h4>Nets</h4><ul class="small nlist">${n.nets.map(x=>`<li><b>${esc(x.name)}</b>: ${x.times} of ${x.held} time${x.held===1?"":"s"}, last ${esc(fmtDate(x.last))} <button class="linkish" data-goto="analysis" data-net="${esc(x.net_id)}">Who takes part ›</button></li>`).join("")}</ul>`)}catch(e){}
 }
 document.addEventListener("click",e=>{
-  const c=e.target.closest("[data-call]");if(c){$("q").value=c.dataset.call;lookup(c.dataset.call)}
+  const c=e.target.closest("[data-call]");if(c)lookup(c.dataset.call);
   const rt=e.target.closest("#rtabs [data-r]");if(rt)selectRadio(rt.dataset.r);
   const pz=e.target.closest("[data-pause]");if(pz){const r=S.radios.find(x=>x.id===pz.dataset.pause)||{};
     fetch(`/api/radios/${encodeURIComponent(pz.dataset.pause)}/pause`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({paused:!r.paused})})}
@@ -701,7 +812,6 @@ document.addEventListener("submit",async e=>{
     const i=S.radios.findIndex(x=>x.id===d.id);if(i>=0)S.radios[i]=d;editing=null;document.activeElement.blur();renderRadios();renderNet()}
   catch(err){errEl().textContent="not saved: station unreachable"}
 });
-$("go").onclick=()=>lookup($("q").value);$("q").addEventListener("keydown",e=>{if(e.key==="Enter")lookup($("q").value)});
 function connect(){
   const es=new EventSource("/events");
   es.onopen=()=>{$("conn").textContent="● live";$("conn").className="ok"};
@@ -714,77 +824,424 @@ function connect(){
   es.addEventListener("radios",e=>{const d=JSON.parse(e.data);S.radios=d.radios;S.net=d.net;renderRadios();renderNet()});
   es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
-  es.addEventListener("schedule",e=>{const d=JSON.parse(e.data);S.schedule=d.schedule;S.net=d.net;renderRadios();renderNet();if($("netsDlg").open)renderNets(false)});
+  es.addEventListener("schedule",e=>{const d=JSON.parse(e.data);S.schedule=d.schedule;S.net=d.net;renderRadios();renderNet();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(false)});
+  es.addEventListener("alerts",e=>{S.alerts=JSON.parse(e.data).alerts;renderAlerts()});
+  es.addEventListener("urgent",e=>{S.urgent=JSON.parse(e.data).urgent;renderUrgent()});
+  es.addEventListener("inst",e=>{const d=JSON.parse(e.data);   // a net's history changed: refresh what is open on it (never while typing)
+    if(!$("netsDlg").open||$("netsBody").contains(document.activeElement)&&document.activeElement.matches("input,textarea,select"))return;
+    if(NV.tab==="minutes"&&NV.key===d.key)renderMinutes();else if(NV.tab==="history")renderHistory()});
   es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;renderFeed();wlAccNote()});
 }
-// ---------- schedule: the Nets dialog (data/schedule.json) + listen only during scheduled nets ----------
-const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-let NETS={edit:null,radio:null};
+// ---------- the Nets area: Schedule | History | Analysis | Minutes | Still open ----------
+const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],DAYN=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const ORDS=[[1,"1st"],[2,"2nd"],[3,"3rd"],[4,"4th"],[5,"5th"],[-1,"last"]];
+const NV={tab:"schedule",net:"",radio:null,key:null,edit:null,adding:false,hl:null,conv:false,move:null};
+const enc=encodeURIComponent;
+const api=async url=>{const r=await fetch(url);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"not available");return d};
+const post=(url,body)=>fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"not saved");return d});
+const dt=iso=>new Date(iso.length<=10?iso+"T12:00":iso);
+const fmtDay=iso=>iso?dt(iso).toLocaleDateString([], {weekday:"short",day:"numeric",month:"short"}):"";
+const fmtDate=iso=>iso?dt(iso).toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"}):"";
+const fmtWhen=iso=>iso?fmtDay(iso)+(iso.length>10?" "+hhmm(iso):""):"";
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const mhz=(f,m)=>f?`${Number(f).toFixed(3)} MHz${m?" "+esc(m):""}`:"";
+const snip=s=>esc(s).replace(/\x02/g,"<mark>").replace(/\x03/g,"</mark>");
+const netName=id=>((S.schedule||[]).find(n=>n.id===id)||{}).name||id;
+const busy=box=>{box.innerHTML='<p class="muted">Loading…</p>'};
 const whenNet=iso=>{const d=new Date(iso),t=new Date();
-  return (d.toDateString()===t.toDateString()?"at ":"on "+DAYS[(d.getDay()+6)%7]+" at ")+hhmm(iso)};
+  return (d.toDateString()===t.toDateString()?"at ":"on "+DAYS[(d.getDay()+6)%7]+" "+d.getDate()+" at ")+hhmm(iso)};
 function renderWhy(el,r){
   const L=r.listen||{},w=el.querySelector(".why");if(!w)return;let h="";
   if(r.paused)h=r.paused_by==="schedule"&&L.next?`Paused until <b>${esc(L.next.name)}</b> ${esc(whenNet(L.next.start))}`
     :r.paused_by==="schedule"?"Paused by the schedule (no net coming up on this radio)":"Paused by you";
   else if(L.scheduled)h=L.now?`Listening for <b>${esc(L.now)}</b> (pauses when it ends)`:"Listening only during scheduled nets";
   w.innerHTML=h;w.style.display=h?"":"none"}
-const post=(url,body)=>fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||"not saved");return d});
-function openNets(rid){NETS={edit:null,radio:rid||null};renderNets(true);if(!$("netsDlg").open)$("netsDlg").showModal()}
-function netForm(n){
-  const rs=S.radios,rid=n.radio||NETS.radio||(rs[0]||{}).id,days=n.days||[];
-  return `<form class="netform" id="netForm">
-   <label>Name <input name="name" maxlength="80" required value="${esc(n.name||"")}"></label>
-   <label>Radio <select name="radio">${rs.map(r=>`<option value="${esc(r.id)}"${r.id===rid?" selected":""}>${esc(r.name)}</option>`).join("")}</select></label>
-   <label>Starts (local time) <input name="start" type="time" required value="${esc(n.start||"20:00")}"></label>
-   <label>Lasts (minutes) <input name="duration_min" type="number" min="1" max="1440" required value="${esc(n.duration_min||60)}"></label>
-   <label>Frequency (MHz) <input name="freq_mhz" inputmode="decimal" placeholder="the radio's" value="${esc(n.freq_mhz??"")}"></label>
-   <label>Mode <select name="mode"><option value="">the radio's</option>${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===n.mode?" selected":""}>${m}</option>`).join("")}</select></label>
-   <label>Net control (callsign) <input name="ncs" maxlength="11" value="${esc(n.ncs||"")}" style="text-transform:uppercase"></label>
-   <div class="days">Days: ${DAYS.map(d=>`<label><input type="checkbox" name="days" value="${d}"${days.includes(d)?" checked":""}> ${d}</label>`).join("")}</div>
-   <div class="row" style="grid-column:1/-1"><button class="primary" type="submit">${NETS.edit?"Save changes":"Add net"}</button>${NETS.edit?' <button type="button" id="netNew">Cancel edit</button>':""} <span class="err" id="netErr"></span></div></form>`}
-function renderNets(full){
-  const box=$("netsBody"),list=(S.schedule||[]).filter(n=>!NETS.radio||n.radio===NETS.radio);
+function openNetsArea(o={}){
+  Object.assign(NV,{edit:null,adding:false,move:null,hl:null},o);
+  renderNetPick();renderNetsArea();if(!$("netsDlg").open)$("netsDlg").showModal()}
+function openNets(rid){openNetsArea({tab:"schedule",radio:rid||null})}
+function renderNetPick(){
+  const sel=$("netPick"),nets=S.schedule||[];
+  sel.innerHTML=`<option value="">All nets</option>`+nets.map(n=>`<option value="${esc(n.id)}"${n.id===NV.net?" selected":""}>${esc(n.name)}</option>`).join("");
+  if(NV.net&&!nets.some(n=>n.id===NV.net))sel.insertAdjacentHTML("beforeend",`<option value="${esc(NV.net)}" selected>${esc(NV.net)}</option>`);
+}
+$("netPick").onchange=e=>{NV.net=e.target.value;NV.key=null;renderNetsArea()};
+$("netsTabs").addEventListener("click",e=>{const b=e.target.closest("[data-ntab]");if(!b)return;NV.tab=b.dataset.ntab;NV.edit=null;NV.adding=false;renderNetsArea()});
+$("netsTabs").addEventListener("keydown",e=>{if(!["ArrowLeft","ArrowRight"].includes(e.key))return;
+  const bs=[...$("netsTabs").querySelectorAll("[data-ntab]")],i=bs.findIndex(b=>b.dataset.ntab===NV.tab);
+  const n=bs[(i+(e.key==="ArrowRight"?1:bs.length-1))%bs.length];NV.tab=n.dataset.ntab;renderNetsArea();n.focus()});
+function renderNetsArea(){
+  document.querySelectorAll("#netsTabs [data-ntab]").forEach(b=>{const on=b.dataset.ntab===NV.tab;b.classList.toggle("on",on);b.setAttribute("aria-selected",on);b.tabIndex=on?0:-1});
+  $("netPick").parentElement.style.visibility=NV.tab==="schedule"&&!NV.radio?"hidden":"";
+  ({schedule:renderSchedule,history:renderHistory,analysis:renderAnalysis,minutes:renderMinutes,open:renderOpen})[NV.tab](true);
+}
+// ----- Schedule -----
+function netCard(n){
+  const rname=(S.radios.find(r=>r.id===n.radio)||{}).name||n.radio;
+  const now=((S.net||{}).running||[]).some(x=>x.id===n.id);
+  const nx=n.next?`Next: <b>${esc(fmtWhen(n.next.start))}</b>${n.next.moved?" (moved)":""}${n.next.note?" · "+esc(n.next.note):""}`:'<span class="bad">Does not meet again</span>';
+  return `<article class="ncard${now?" live":""}"><div class="nt"><b>${esc(n.name)}</b>${now?' <span class="badge ok">on the air</span>':""}${n.emergency?' <span class="badge emergency">Emergency net</span>':""}</div>
+   <div class="sum">${esc(n.summary||"")}</div>
+   <div class="muted small">${esc(rname)}${n.ncs?` · net control ${esc(n.ncs)}`:""} · ${n.alert_min?`alert ${n.alert_min} min before`:"no alert"} · ${nx}</div>
+   <div class="btns"><button data-netedit="${esc(n.id)}">Edit</button> <button data-goto="history" data-net="${esc(n.id)}">History</button> <button data-goto="analysis" data-net="${esc(n.id)}">Who takes part</button> <button data-goto="open" data-net="${esc(n.id)}">Still open</button> <button data-netdel="${esc(n.id)}" class="quiet">Delete</button></div></article>`}
+function renderSchedule(full){
+  const box=$("netsBody"),list=(S.schedule||[]).filter(n=>!NV.radio||n.radio===NV.radio);
   const rname=id=>(S.radios.find(r=>r.id===id)||{}).name||id;
-  const cur=(S.net||{}).current;
-  const rows=list.map(n=>`<tr><td><b>${esc(n.name)}</b>${cur&&cur.name===n.name?' <span class="ok small">now</span>':""}${n.ncs?`<div class="muted">NCS ${esc(n.ncs)}</div>`:""}</td>
-    <td class="wide">${esc(rname(n.radio))}</td><td>${esc((n.days||[]).join(", "))} ${esc(n.start)}<div class="muted">${esc(n.duration_min)} min</div></td>
-    <td class="wide">${n.freq_mhz?esc(Number(n.freq_mhz).toFixed(3))+" MHz":'<span class="muted">radio\'s</span>'} ${esc(n.mode||"")}</td>
-    <td class="b"><button data-netedit="${esc(n.id)}">Edit</button> <button data-netdel="${esc(n.id)}">Delete</button></td></tr>`).join("");
-  const radios=S.radios.filter(r=>!NETS.radio||r.id===NETS.radio);
-  const listen=radios.map(r=>{const L=r.listen||{};return `<div style="margin:4px 0"><b>${esc(r.name)}</b>
+  const head=NV.radio?`<p class="small">Nets on <b>${esc(rname(NV.radio))}</b> · <button id="netAll" class="linkish">show every radio</button></p>`:"";
+  const cards=list.length?list.map(netCard).join(""):`<div class="empty"><b>No nets scheduled${NV.radio?" on this radio":""}.</b><br>Add the nets you follow: the station reminds you ${(S.schedule_alert||5)} minutes before each one to set the radio, names each net in the log, and keeps its history and minutes.</div>`;
+  const listen=S.radios.filter(r=>!NV.radio||r.id===NV.radio).map(r=>{const L=r.listen||{};return `<div class="lrow"><b>${esc(r.name)}</b>
     <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="scheduled"${L.scheduled?" checked":""}> Listen only during scheduled nets</label>
     <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="tune"${L.tune?" checked":""}> When a net starts, log the radio at the net's frequency and mode</label></div>`}).join("");
-  const edit=NETS.edit&&(S.schedule||[]).find(n=>n.id===NETS.edit);
-  const head=`<h3>Nets${NETS.radio?" on "+esc(rname(NETS.radio)):""}</h3>`;
-  const table=list.length?`<table class="nets"><tr><th>Net</th><th class="wide">Radio</th><th>When</th><th class="wide">Frequency</th><th></th></tr>${rows}</table>`:'<p class="muted">No nets scheduled'+(NETS.radio?" on this radio":"")+".</p>";
-  if(!full&&$("netsList")){$("netsList").innerHTML=head+table;$("netsListen").innerHTML=listen;return}   // an update from the station: keep what is being typed
-  box.innerHTML=`<div id="netsList">${head+table}</div>
-   <h4>${edit?"Edit "+esc(edit.name):"Add a net"}</h4>${netForm(edit||{})}
+  if(!full&&$("netsList")&&(NV.edit||NV.adding)){$("netsList").innerHTML=cards;$("netsListen").innerHTML=listen;return}
+  const editing=NV.edit?(S.schedule||[]).find(n=>n.id===NV.edit):null;
+  if(NV.edit||NV.adding){box.innerHTML=`<h4>${editing?"Edit "+esc(editing.name):"Add a net"}</h4>${netForm(editing||{radio:NV.radio})}`;wireNetForm(editing);return}
+  box.innerHTML=`${head}<div class="row" style="margin-top:0"><button class="primary" id="netAdd">+ Add a net</button></div><div id="netsList" class="ncards">${cards}</div>
    <h4>Listening</h4><div id="netsListen">${listen}</div>
-   <p class="small muted">A radio set to listen only during nets is resumed 1 minute before each of its nets and paused 5 minutes after it ends. Pause and Resume on the card still work; the next net start or end takes over again. You still tune the radio yourself.</p>
-   <div class="row">${NETS.radio?'<button id="netAll">Show all radios</button> ':""}<button onclick="$('netsDlg').close()">Close</button></div>`;
-  const f=$("netForm");
-  f.onsubmit=async e=>{e.preventDefault();
-    const body={name:f.name.value,radio:f.radio.value,start:f.start.value,duration_min:f.duration_min.value,freq_mhz:f.freq_mhz.value,
-      mode:f.mode.value,ncs:f.ncs.value,days:[...f.querySelectorAll("input[name=days]:checked")].map(x=>x.value)};
-    try{const d=await post(NETS.edit?`/api/schedule/${encodeURIComponent(NETS.edit)}`:"/api/schedule",body);S.schedule=d.schedule;NETS.edit=null;renderNets(true);renderRadios()}
-    catch(err){$("netErr").textContent=err.message}};
-  const nn=$("netNew");if(nn)nn.onclick=()=>{NETS.edit=null;renderNets(true)};
-  const na=$("netAll");if(na)na.onclick=()=>{NETS.radio=null;renderNets(true)};
+   <p class="small muted">A radio set to listen only during nets is resumed 1 minute before each of its nets and paused 5 minutes after it ends. Pause and Resume on the card still work; the next net start or end takes over again. You still tune the radio yourself.</p>`;
+  $("netAdd").onclick=()=>{NV.adding=true;renderSchedule(true)};
+  const na=$("netAll");if(na)na.onclick=()=>{NV.radio=null;renderNetsArea()};
 }
-$("openNets").onclick=()=>openNets(null);
+function netForm(n){
+  const rs=S.radios,rid=n.radio||(rs[0]||{}).id,r=n.repeat||{freq:"weekly",weekdays:[DAYS[(new Date().getDay()+6)%7]]};
+  const f=r.freq,wd=r.weekdays||[],nth=r.nth||[],ends=r.until?"on":r.count?"after":"never",mby=r.nth?"nth":"day";
+  const chip=(name,val,label,on)=>`<label class="chip"><input type="checkbox" name="${name}" value="${val}"${on?" checked":""}><span>${label}</span></label>`;
+  return `<form class="netform" id="netForm" novalidate>
+   <label>Name <input name="name" maxlength="80" required value="${esc(n.name||"")}" placeholder="Springfield ARES Net"></label>
+   <label>Radio <select name="radio">${rs.map(x=>`<option value="${esc(x.id)}"${x.id===rid?" selected":""}>${esc(x.name)}</option>`).join("")}</select></label>
+   <label>Starts at (this PC's time) <input name="start" type="time" required value="${esc(n.start||"19:00")}"></label>
+   <label>Lasts (minutes) <input name="duration_min" type="number" min="1" max="1440" required value="${esc(n.duration_min||60)}"></label>
+   <label>Frequency (MHz) <input name="freq_mhz" inputmode="decimal" placeholder="146.940" value="${esc(n.freq_mhz??"")}"></label>
+   <label>Mode <select name="mode"><option value="">the radio's</option>${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===n.mode?" selected":""}>${m}</option>`).join("")}</select></label>
+   <label>Net control (callsign) <input name="ncs" maxlength="11" value="${esc(n.ncs||"")}" class="up" placeholder="optional"></label>
+   <label>Alert, minutes before <input name="alert_min" type="number" min="0" max="120" value="${esc(n.alert_min??5)}"><span class="hint">0 = no alert</span></label>
+   <label class="chk wide"><input type="checkbox" name="emergency"${n.emergency?" checked":""}> Emergency or priority net: keep an Urgent board for it</label>
+   <fieldset class="wide rep"><legend>Repeats</legend>
+    <div class="seg" role="radiogroup" aria-label="Repeats">${[["once","Once"],["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["yearly","Yearly"]].map(([v,l])=>`<label><input type="radio" name="rfreq" value="${v}"${v===f?" checked":""}><span>${l}</span></label>`).join("")}</div>
+    <div class="rline" data-for="daily weekly monthly yearly">Every <input name="interval" type="number" min="1" max="99" value="${esc(r.interval||1)}" class="num"> <span class="unit"></span></div>
+    <div class="rline" data-for="yearly">In <select name="month">${MONTHS.map((m,i)=>`<option value="${i+1}"${(r.month||new Date().getMonth()+1)===i+1?" selected":""}>${m}</option>`).join("")}</select></div>
+    <div class="rline" data-for="monthly yearly"><label class="chk"><input type="radio" name="mby" value="day"${mby==="day"?" checked":""}> On day <select name="monthday">${Array.from({length:31},(_,i)=>`<option${r.monthday===i+1?" selected":""}>${i+1}</option>`).join("")}<option value="last"${r.monthday===-1?" selected":""}>last</option></select></label>
+      <label class="chk"><input type="radio" name="mby" value="nth"${mby==="nth"?" checked":""}> On the</label> <span class="chips" data-for-mby="nth">${ORDS.map(([v,l])=>chip("nth",v,l,nth.includes(v))).join("")}</span></div>
+    <div class="rline" data-for="weekly monthly yearly" data-wd><span class="lbl">${f==="weekly"?"On":"of"}</span> <span class="chips">${DAYS.map(d=>chip("wd",d,d,wd.includes(d))).join("")}</span></div>
+    <div class="rline"><label class="inl"><span data-for="once">On</span><span data-for="daily weekly monthly yearly">Starting</span> <input type="date" name="starts" value="${esc(r.starts||today())}"></label></div>
+    <div class="rline" data-for="daily weekly monthly yearly">Ends <label class="chk"><input type="radio" name="ends" value="never"${ends==="never"?" checked":""}> never</label>
+      <label class="chk"><input type="radio" name="ends" value="on"${ends==="on"?" checked":""}> on <input type="date" name="until" value="${esc(r.until||"")}"></label>
+      <label class="chk"><input type="radio" name="ends" value="after"${ends==="after"?" checked":""}> after <input type="number" name="count" min="1" max="999" class="num" value="${esc(r.count||10)}"> times</label></div>
+   </fieldset>
+   <div class="wide pv" id="netPv" aria-live="polite"></div>
+   <div class="row wide"><button class="primary" type="submit">${NV.edit?"Save changes":"Add net"}</button> <button type="button" id="netCancel">Cancel</button> <span class="err" id="netErr"></span></div></form>`}
+function collectNet(f,saved){
+  const freq=f.rfreq.value,iv=parseInt(f.interval.value)||1,wd=[...f.querySelectorAll("input[name=wd]:checked")].map(x=>x.value);
+  const rule={freq};
+  if(freq!=="once"&&iv>1)rule.interval=iv;
+  if(freq==="weekly")rule.weekdays=wd;
+  if(freq==="monthly"||freq==="yearly"){
+    if(f.mby.value==="nth"){rule.nth=[...f.querySelectorAll("input[name=nth]:checked")].map(x=>+x.value);rule.weekdays=wd}
+    else rule.monthday=f.monthday.value==="last"?-1:+f.monthday.value;
+    if(freq==="yearly")rule.month=+f.month.value}
+  if(f.starts.value)rule.starts=f.starts.value;
+  if(freq!=="once"){if(f.ends.value==="on")rule.until=f.until.value;if(f.ends.value==="after")rule.count=f.count.value}
+  const b={name:f.name.value,radio:f.radio.value,start:f.start.value,duration_min:f.duration_min.value,freq_mhz:f.freq_mhz.value,
+    mode:f.mode.value,ncs:f.ncs.value,alert_min:f.alert_min.value,emergency:f.emergency.checked,repeat:rule};
+  if(saved&&saved.exceptions)b.exceptions=saved.exceptions;
+  return b}
+function showFor(f){
+  const freq=f.rfreq.value,mby=f.mby.value;
+  f.querySelectorAll("[data-for]").forEach(x=>{x.hidden=!x.dataset.for.split(" ").includes(freq)});
+  f.querySelectorAll("[data-for-mby]").forEach(x=>{x.style.opacity=mby==="nth"?1:.45});
+  const wd=f.querySelector("[data-wd]");wd.hidden=!(freq==="weekly"||((freq==="monthly"||freq==="yearly")&&mby==="nth"));
+  wd.querySelector(".lbl").textContent=freq==="weekly"?"On":"";
+  const n=parseInt(f.interval.value)||1;f.querySelector(".unit").textContent={daily:"day",weekly:"week",monthly:"month",yearly:"year"}[freq]+(n>1?"s":"")+(freq==="weekly"?"":"");
+}
+let PVT=null;
+function wireNetForm(saved){
+  const f=$("netForm");showFor(f);
+  const pv=()=>{clearTimeout(PVT);PVT=setTimeout(async()=>{const box=$("netPv");if(!box)return;
+    try{const d=await post("/api/schedule/preview",collectNet(f,saved));box.innerHTML=d.error?`<p class="err">${esc(d.error)}</p>`:pvHtml(d,saved)}
+    catch(err){box.innerHTML=`<p class="err">${esc(err.message)}</p>`}},200)};
+  f.addEventListener("input",()=>{showFor(f);pv()});f.addEventListener("change",()=>{showFor(f);pv()});pv();
+  f.onsubmit=async e=>{e.preventDefault();
+    try{const d=await post(NV.edit?`/api/schedule/${enc(NV.edit)}`:"/api/schedule",collectNet(f,saved));S.schedule=d.schedule;NV.edit=null;NV.adding=false;renderNetPick();renderSchedule(true);renderRadios()}
+    catch(err){$("netErr").textContent=err.message}};
+  $("netCancel").onclick=()=>{NV.edit=null;NV.adding=false;renderSchedule(true)};
+  f.name.focus();
+}
+function pvHtml(d,saved){
+  const occ=d.next.map(o=>{const btn=saved?(o.cancelled?`<button type="button" data-exc="restore" data-d="${o.date}">Restore</button>`
+      :`<button type="button" data-exc="skip" data-d="${o.date}">Skip</button> <button type="button" data-exc="move" data-d="${o.date}">Move…</button>`):"";
+    const mv=NV.move===o.date?`<div class="mvform" data-d="${o.date}">Move to <input type="date" name="mdate" value="${esc(o.start.slice(0,10))}"> <input type="time" name="mtime" value="${esc(hhmm(o.start))}"> <input name="mfreq" inputmode="decimal" placeholder="MHz" value="${esc(o.freq_mhz??"")}" class="num2"> <button type="button" class="primary" data-exc="savemove" data-d="${o.date}">Save</button></div>`:"";
+    return `<li class="${o.cancelled?"cx":""}"><span>${esc(fmtWhen(o.start))}${o.cancelled?" · cancelled":o.moved?" · moved":""}${o.freq_mhz&&o.moved?" · "+mhz(o.freq_mhz):""}${o.note?" · "+esc(o.note):""}</span> ${btn}${mv}</li>`}).join("");
+  return `<div class="pvsum"><b>${esc(d.summary)}</b></div>${d.ended?'<p class="bad small">This rule does not meet again.</p>':""}
+   <div class="small muted">Next ${d.next.length} time${d.next.length===1?"":"s"}${saved?" (skip or move one occurrence here; the rest stay as they are)":""}:</div><ol class="occ">${occ}</ol>`}
+$("netsBody").addEventListener("click",async e=>{
+  const x=e.target.closest("[data-exc]");if(!x||!NV.edit)return;
+  const id=NV.edit,d=x.dataset.d,k=x.dataset.exc;
+  if(k==="move"){NV.move=NV.move===d?null:d;$("netForm").dispatchEvent(new Event("change"));return}
+  try{let body={date:d};
+    if(k==="savemove"){const m=x.closest(".mvform"),nd=m.querySelector("[name=mdate]").value;
+      const res=await post(`/api/schedule/${enc(id)}/move`,{date:d,to_date:nd&&nd!==d?nd:"",start:m.querySelector("[name=mtime]").value,
+        freq_mhz:m.querySelector("[name=mfreq]").value});S.schedule=res.schedule}
+    else{const res=await post(`/api/schedule/${enc(id)}/${k}`,body);S.schedule=res.schedule}
+    NV.move=null;const saved=(S.schedule||[]).find(n=>n.id===id);
+    const box=$("netPv");if(box)box.innerHTML=pvHtml(await post("/api/schedule/preview",collectNet($("netForm"),saved)),saved);renderRadios()}
+  catch(err){alert(err.message)}
+});
+// ----- History -----
+async function renderHistory(){
+  const box=$("netsBody");busy(box);
+  const qs=new URLSearchParams();if(NV.net)qs.set("net",NV.net);if(!NV.conv&&!NV.net)qs.set("kind","net");if(NV.radio)qs.set("radio",NV.radio);
+  let d;try{d=await api("/api/history?"+qs)}catch(err){box.innerHTML=`<p class="err">${esc(err.message)}</p>`;return}
+  const rows=d.instances,st=d.status||{};
+  const tools=`<div class="row" style="margin-top:0"><label class="chk"><input type="checkbox" id="hConv"${NV.conv?" checked":""}${NV.net?" disabled":""}> Include conversations (not scheduled)</label>${st.indexing?` <span class="muted small">Reading the older logs… (${st.days} days so far)</span>`:""}</div>`;
+  if(!rows.length){box.innerHTML=tools+`<div class="empty"><b>No ${NV.net?esc(netName(NV.net))+" ":"nets "}in the history yet.</b><br>Each time a scheduled net meets, it is kept here: who took part, net control, its minutes and its Winlink messages. Transmissions heard outside any net are kept as conversations.</div>`;wireHist();return}
+  let html="",month="";
+  for(const i of rows){const m=i.start.slice(0,7);if(m!==month){month=m;html+=`<h4>${MONTHS[+m.slice(5)-1]} ${m.slice(0,4)}</h4>`}
+    const it=i.items||{},n=Object.entries(it).filter(([k])=>k!=="urgent").reduce((a,[,v])=>a+v,0);
+    const acc=i.acc_total?(i.acc_final>=i.acc_total?'<span class="ok">✓ accurate</span>':`<span class="muted">${i.acc_final}/${i.acc_total} accurate</span>`):"";
+    html+=`<button class="hline${i.emergency?" em":""}" data-mins="${esc(i.key)}"><span class="hd">${esc(fmtDay(i.start))}</span><span class="ht">${hhmm(i.start)}–${hhmm(i.end)}</span>
+      <span class="hn">${esc(i.kind==="net"?i.name:"Conversation")}${i.emergency?' <span class="badge emergency">emergency</span>':""}</span>
+      <span class="hm">${i.stations} station${i.stations===1?"":"s"} · ${i.tx_count} tx${acc?" · "+acc:""}${n?` · ${n} minute item${n===1?"":"s"}`:""}${it.urgent?` · <b class="bad">⚠ ${it.urgent} urgent</b>`:""}${(i.winlink||[]).length?" · ✉ Winlink sent":""}</span><span class="go" aria-hidden="true">›</span></button>`}
+  box.innerHTML=tools+`<div class="hlist">${html}</div>`;wireHist();
+}
+function wireHist(){const c=$("hConv");if(c)c.onchange=()=>{NV.conv=c.checked;renderHistory()}}
+// ----- Analysis -----
+function pickNetHtml(what){
+  const nets=S.schedule||[];
+  return `<div class="empty"><b>Choose a net</b> to see ${what}.<div class="row">${nets.map(n=>`<button data-net="${esc(n.id)}" data-goto="${NV.tab}">${esc(n.name)}</button>`).join(" ")||'<span class="muted">No nets scheduled yet: add one under Schedule.</span>'}</div></div>`}
+function chartSvg(att){
+  const a=att.slice(-26),max=Math.max(1,...a.map(x=>x.count)),W=560,H=150,pad=22,bw=(W-pad)/a.length;
+  const bars=a.map((x,i)=>{const h=Math.round((H-pad-16)*x.count/max),X=pad+i*bw+bw*.15,Y=H-pad-h,last=i===a.length-1;
+    return `<g><title>${esc(fmtDate(x.date))}: ${x.count} station${x.count===1?"":"s"}${x.ncs?", net control "+esc(x.ncs):""}</title><rect x="${X.toFixed(1)}" y="${Y}" width="${(bw*.7).toFixed(1)}" height="${h}" rx="2" class="${last?"bl":"b"}"/>${a.length<=14||last||i%Math.ceil(a.length/8)===0?`<text x="${(X+bw*.35).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(dt(x.date).toLocaleDateString([], {day:"numeric",month:"short"}))}</text>`:""}${a.length<=14?`<text x="${(X+bw*.35).toFixed(1)}" y="${Y-3}" text-anchor="middle" class="v">${x.count}</text>`:""}</g>`}).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Stations taking part each time: ${a.map(x=>`${fmtDate(x.date)} ${x.count}`).join(", ")}"><line x1="${pad}" y1="${H-pad}" x2="${W}" y2="${H-pad}" class="ax"/><text x="2" y="12" class="v">${max}</text><text x="2" y="${H-pad}" class="v">0</text>${bars}</svg>`}
+async function renderAnalysis(){
+  const box=$("netsBody");if(!NV.net){box.innerHTML=pickNetHtml("who takes part, who the regulars are and who runs it");return}
+  busy(box);let a;try{a=await api("/api/nets/analysis?net="+enc(NV.net))}catch(err){box.innerHTML=`<p class="err">${esc(err.message)}</p>`;return}
+  if(!a.held){box.innerHTML=`<div class="empty"><b>${esc(a.name)} has no history yet.</b><br>After it meets, this shows every station that took part, how often, the regulars, newcomers and who ran it.</div>`;return}
+  const avg=a.attendance.reduce((s,x)=>s+x.count,0)/a.held;
+  const chips=(l,cls="")=>l.length?l.map(c=>`<span class="call ${cls}" data-call="${esc(c)}">${esc(c)}</span>`).join(" "):'<span class="muted">none</span>';
+  const rows=a.stations.map(r=>`<tr${r.regular?' class="reg"':""}><td><span class="call" data-call="${esc(r.call)}">${esc(r.call)}</span>${r.regular?' <span title="regular">★</span>':""}</td><td class="wide">${esc(r.name||"")}</td><td class="n">${r.times}</td><td class="n">${r.recent}/${r.of_recent}</td><td class="wide">${esc(fmtDate(r.first))}</td><td>${esc(fmtDate(r.last))}</td><td class="n">${r.streak||""}</td></tr>`).join("");
+  box.innerHTML=`<div class="kpis"><div><b>${a.held}</b><span>times met</span></div><div><b>${avg.toFixed(1)}</b><span>stations on average</span></div><div><b>${a.stations.length}</b><span>different stations</span></div><div><b>${a.regulars.length}</b><span>regulars</span></div></div>
+   <h4>Stations each time</h4>${chartSvg(a.attendance)}
+   <details class="tbl"><summary class="small">Show as a table</summary><table class="nets"><tr><th>Date</th><th>Stations</th><th>Net control</th></tr>${a.attendance.slice().reverse().map(x=>`<tr><td><button class="linkish" data-mins="${esc(x.key)}">${esc(fmtDate(x.date))}</button></td><td>${x.count}</td><td>${esc(x.ncs||"")}</td></tr>`).join("")}</table></details>
+   <h4>Last time (${esc(fmtDate(a.latest.date))})</h4>
+   <p class="small"><b>New:</b> ${chips(a.newcomers,"new")}</p><p class="small"><b>Regulars not heard:</b> ${chips(a.missing)}</p>
+   <h4>Regulars</h4><p class="small">${chips(a.regulars)}</p><p class="small muted">${esc(a.rule)}</p>
+   <h4>Net control</h4>${a.rota.length?`<table class="nets"><tr><th>Callsign</th><th>Times</th><th>Last</th></tr>${a.rota.map(r=>`<tr><td><span class="call" data-call="${esc(r.call)}">${esc(r.call)}</span></td><td>${r.times}</td><td>${esc(fmtDate(r.last))}</td></tr>`).join("")}</table>`:'<p class="muted small">Not known yet. Set it in the schedule or in the minutes.</p>'}
+   <h4>Every station (${a.stations.length})</h4><div class="tscroll"><table class="nets st"><tr><th>Callsign</th><th class="wide">Name</th><th>Times</th><th title="of the last ${a.stations[0].of_recent} times">Last ${a.stations[0].of_recent}</th><th class="wide">First</th><th>Last</th><th title="times in a row up to the last one">Streak</th></tr>${rows}</table></div>`;
+}
+// ----- Minutes -----
+const KIND={urgent:"Urgent",announcement:"Announcements",event:"Schedule",action:"Action items",decision:"Decisions",traffic:"Traffic handled",note:"Notes"};
+const KIND1={urgent:"Urgent",announcement:"Announcement",event:"Event",action:"Action item",decision:"Decision",traffic:"Traffic",note:"Note"};
+function itemMeta(i){
+  return [i.category&&i.kind==="urgent"?`<span class="cat">${esc(i.category)}</span>`:"",i.who?`who: <b>${esc(i.who)}</b>`:"",i.due?`due ${esc(fmtDay(i.due))}`:"",
+    i.event_at?`on <b>${esc(fmtWhen(i.event_at))}</b>`:"",i.until?`until ${esc(fmtDay(i.until))}`:"",i.place?`at ${esc(i.place)}`:"",i.valid&&!i.event_at&&!i.until?esc(i.valid):"",
+    i.from?`from ${esc(fmtDay(i.from))}`:""].filter(Boolean).join(" · ")}
+function itemHtml(i,opts={}){
+  const src=i.tx_start?`<button class="src" data-src="${esc(i.tx_id||"")}" data-sinst="${esc(i.inst||"")}" title="Show the transmission">${hhmm(i.tx_start)}${i.by?" "+esc(i.by):""} ›</button>`:"";
+  const st=i.kind==="action"||i.kind==="traffic"?`<label class="chk done"><input type="checkbox" data-idone="${i.id}"${i.status==="done"?" checked":""}> done</label>`
+    :i.kind==="urgent"?`<button data-istatus="${i.id}" data-v="${i.status==="handled"?"open":"handled"}">${i.status==="handled"?"Reopen":"Handled"}</button>`:"";
+  const sug=i.auto&&!i.edited?'<span class="sug" title="Drafted from the transcript: check it">suggested</span>':"";
+  return `<li class="item k-${i.kind} s-${i.status}" data-iid="${i.id}"><div class="itx">${esc(i.text)} ${sug}</div><div class="imeta small">${itemMeta(i)}${opts.from?` · <button class="linkish" data-mins="${esc(i.inst)}">from ${esc(fmtDay(i.occ_date||i.inst_start))}</button>`:""}</div>
+    <div class="iact">${st} ${src} <button data-iedit="${i.id}" class="quiet">Edit</button> <button data-idel="${i.id}" class="quiet" title="${i.auto?"Not right: hide it (it will not come back)":"Delete"}">${i.auto?"Not right":"Delete"}</button></div></li>`}
+function itemForm(i){
+  return `<form class="iform" data-ifid="${i.id||""}"><select name="kind">${Object.entries(KIND1).map(([k,l])=>`<option value="${k}"${k===(i.kind||"action")?" selected":""}>${l}</option>`).join("")}</select>
+   <textarea name="text" rows="2" required>${esc(i.text||"")}</textarea>
+   <div class="ifg"><label>Who <input name="who" value="${esc(i.who||"")}"></label><label>Due <input type="date" name="due" value="${esc(i.due||"")}"></label>
+   <label>On (date) <input type="date" name="event_at" value="${esc((i.event_at||"").slice(0,10))}"></label><label>Until <input type="date" name="until" value="${esc(i.until||"")}"></label>
+   <label>Place <input name="place" value="${esc(i.place||"")}"></label></div>
+   <div class="row"><button class="primary" type="submit">Save</button> <button type="button" data-icancel>Cancel</button> <span class="err"></span></div></form>`}
+let MIN=null;
+async function renderMinutes(){
+  const box=$("netsBody");
+  if(!NV.key){if(!NV.net){box.innerHTML=pickNetHtml("its latest minutes (or open any net from History)");return}
+    busy(box);try{const h=await api("/api/history?limit=1&net="+enc(NV.net));NV.key=(h.instances[0]||{}).key||null}catch(e){}
+    if(!NV.key){box.innerHTML=`<div class="empty"><b>${esc(netName(NV.net))} has not met yet.</b><br>Its minutes are drafted here from the transcript as it runs: attendance, announcements, schedule, action items, decisions, traffic and urgent issues.</div>`;return}}
+  if(!MIN||MIN.key!==NV.key)busy(box);
+  try{MIN=await api("/api/history/instance?key="+enc(NV.key))}catch(err){box.innerHTML=`<div class="empty">${esc(err.message==="not found"?"This net or conversation is not in the history yet. It appears a few seconds after its first transmission.":err.message)}</div>`;return}
+  const d=MIN,net=d.kind==="net";
+  const roll=d.participants.filter(p=>p.role!=="mentioned"),ment=d.participants.filter(p=>p.role==="mentioned");
+  const acc=d.acc_total?(d.acc_final>=d.acc_total?'<span class="ok">✓ accurate text</span>':`${d.acc_final} of ${d.acc_total} accurate`):"";
+  const by=k=>d.items.filter(i=>i.kind===k);
+  const sec=(k,extra=[])=>{const its=by(k).concat(extra);if(!its.length)return "";
+    return `<section class="msec k-${k}"><h4>${KIND[k]} <span class="muted">(${its.length})</span></h4><ul class="items">${its.map(i=>itemHtml(i,{from:i.inst!==d.key})).join("")}</ul></section>`};
+  const carried=(d.carried||[]).map(i=>({...i}));
+  const txrows=d.tx.map(t=>`<li id="mtx-${esc(t.id)}" class="${t.noise?"noise":""}"><span class="t">${hhmm(t.start)}</span> <b>${esc(t.speaker||"")}</b> ${esc(t.text||"")} ${t.wav?`<button data-play="${esc(t.id)}" title="Play">▶</button>`:""}</li>`).join("");
+  $("netsBody").innerHTML=`<div class="mhead">
+     <div class="mnav">${d.prev?`<button data-mins="${esc(d.prev)}" title="The time before">‹</button>`:""}<div><div class="mtitle">${esc(net?d.name:"Conversation")} ${d.emergency?'<span class="badge emergency">Emergency net</span>':""}</div>
+     <div class="small muted">${esc(fmtDate(d.occ_date||d.start))} · ${hhmm(d.start)}–${hhmm(d.end)}${d.freq_mhz?" · "+mhz(d.freq_mhz,d.mode):""} · ${d.tx_count} transmissions${acc?" · "+acc:""}${(d.winlink||[]).length?` · ✉ Winlink sent ${(d.winlink||[]).length}×`:""}</div></div>${d.next?`<button data-mins="${esc(d.next)}" title="The time after">›</button>`:""}</div>
+     <div class="row mtools"><label class="inl small">Net control <input id="mNcs" class="up" maxlength="11" value="${esc(d.ncs||"")}" placeholder="callsign"></label>
+      <button id="mWl" title="ICS-309 log + ICS-213 summary with these minutes">Winlink messages…</button>
+      <a class="helpbtn" href="/api/history/minutes?key=${enc(d.key)}&format=md" download>Download .md</a> <button id="mCopy">Copy as text</button>${d.net_id?` <button data-goto="open" data-net="${esc(d.net_id)}">Still open</button>`:""}</div></div>
+   <p class="small muted">Drafted from the transcript by rules: <span class="sug">suggested</span> items are the station's; check them, edit or mark them not right. Your changes are kept and never overwritten.</p>
+   ${sec("urgent",carried.filter(i=>i.kind==="urgent"))}
+   <section class="msec"><h4>Attendance <span class="muted">(${roll.length})</span></h4>
+    <ol class="roll">${roll.map(p=>`<li><span class="call" data-call="${esc(p.call)}">${esc(p.call)}</span>${p.role==="ncs"?' <span class="badge">net control</span>':""}${p.name?` <span class="muted small">${esc(p.name)}</span>`:""} <span class="muted small">${hhmm(p.first_at)}</span>${p.source==="operator"?' <span class="small" title="added by you">✎</span>':""} <button class="x" data-attrm="${esc(p.call)}" title="Not in this net" aria-label="Remove ${esc(p.call)}">✕</button></li>`).join("")}</ol>
+    <form id="attAdd" class="row"><input name="call" maxlength="11" placeholder="callsign" class="up" aria-label="Callsign to add"> <button>Add to attendance</button></form>
+    ${ment.length?`<p class="small muted">Mentioned only (not counted): ${ment.map(p=>`<span class="call" data-call="${esc(p.call)}">${esc(p.call)}</span>`).join(" ")}</p>`:""}</section>
+   ${sec("announcement")}${sec("event")}${sec("action",carried.filter(i=>i.kind==="action"))}${sec("decision")}${sec("traffic",carried.filter(i=>i.kind==="traffic"))}${sec("note")}
+   <section class="msec"><h4>Add to the minutes</h4><div id="iAddBox">${itemForm({kind:"action"})}</div></section>
+   <section class="msec"><h4>Notes</h4><textarea id="mNotes" rows="4" placeholder="Anything else for the record. Saved when you click outside the box.">${esc(d.notes||"")}</textarea><span class="small muted" id="mNotesSt"></span></section>
+   ${d.dismissed.length?`<details><summary class="small">Marked not right (${d.dismissed.length})</summary><ul class="items">${d.dismissed.map(i=>`<li class="item"><div class="itx muted">${esc(i.text)}</div><button data-istatus="${i.id}" data-v="open">Put back</button></li>`).join("")}</ul></details>`:""}
+   <details id="mTx"${NV.hl?" open":""}><summary>Transcript (${d.tx.length})</summary><ol class="mtx">${txrows}</ol></details>`;
+  $("mNcs").onchange=e=>saveMin({ncs:e.target.value});
+  $("mNotes").onblur=e=>saveMin({notes:e.target.value},true);
+  $("attAdd").onsubmit=e=>{e.preventDefault();const c=e.target.call.value.trim().toUpperCase();if(c)saveMin({add:c})};
+  $("mWl").onclick=()=>wlPreview({radio:d.radio,start:d.start,end:d.end});
+  $("mCopy").onclick=async()=>{const t=await (await fetch(`/api/history/minutes?key=${enc(d.key)}&format=txt`)).text();
+    try{await navigator.clipboard.writeText(t);$("mCopy").textContent="Copied ✓"}catch(err){const w=window.open("","_blank");if(w){w.document.title="Minutes";w.document.body.innerHTML="<pre></pre>";w.document.body.firstChild.textContent=t}}};
+  if(NV.hl){const el=$("mtx-"+NV.hl);if(el){el.classList.add("flash");el.scrollIntoView({block:"center"})}NV.hl=null}
+}
+async function saveMin(body,quiet){
+  try{MIN=await post("/api/history/minutes",{key:NV.key,...body});if(quiet){$("mNotesSt").textContent="Saved ✓"}else renderMinutes()}
+  catch(err){alert(err.message)}}
+// ----- Still open -----
+async function renderOpen(){
+  const box=$("netsBody");busy(box);let d;
+  try{d=await api("/api/nets/open"+(NV.net?"?net="+enc(NV.net):""))}catch(err){box.innerHTML=`<p class="err">${esc(err.message)}</p>`;return}
+  const sec=(k,label,its)=>its.length?`<section class="msec k-${k}"><h4>${label} <span class="muted">(${its.length})</span></h4><ul class="items">${its.map(i=>itemHtml(i,{from:true})).join("")}</ul></section>`:"";
+  const n=d.urgent.length+d.announcements.length+d.upcoming.length+d.actions.length+d.traffic.length;
+  box.innerHTML=`<p class="small">${NV.net?`For <b>${esc(netName(NV.net))}</b>: `:"For every net: "}read this out at the start of the net. Items stay here until they are done, handled or out of date.</p>`+
+    (n?sec("urgent","Urgent, still open",d.urgent)+sec("announcement","Announcements still valid",d.announcements)+sec("event","Coming up",d.upcoming)+sec("action","Open action items",d.actions)+sec("traffic","Traffic not yet handled",d.traffic)
+      :`<div class="empty"><b>Nothing open${NV.net?" for this net":""}.</b><br>Announcements, upcoming events and action items from the minutes show here until they are done or out of date.</div>`);
+}
+// ----- shared clicks in the Nets area, search results and the urgent boards -----
 document.addEventListener("click",async e=>{
   const o=e.target.closest("[data-nets]");if(o)openNets(o.dataset.nets);
-  const ed=e.target.closest("[data-netedit]");if(ed){NETS.edit=ed.dataset.netedit;renderNets(true);const i=$("netForm")&&$("netForm").name;if(i)i.focus()}
+  const g=e.target.closest("[data-goto]");if(g){NV.tab=g.dataset.goto;if(g.dataset.net!==undefined)NV.net=g.dataset.net;if(NV.tab==="minutes")NV.key=null;openNetsArea({tab:NV.tab,net:NV.net,radio:NV.tab==="schedule"?NV.radio:null});return}
+  const mi=e.target.closest("[data-mins]");if(mi){const k=mi.dataset.mins;openNetsArea({tab:"minutes",key:k,hl:mi.dataset.hl||null,net:k.includes("@")&&!/T\d/.test(k)?k.split("@")[0]:NV.net});return}
+  const ed=e.target.closest("[data-netedit]");if(ed){NV.edit=ed.dataset.netedit;NV.adding=false;renderSchedule(true);return}
   const del=e.target.closest("[data-netdel]");if(del){const n=(S.schedule||[]).find(x=>x.id===del.dataset.netdel)||{};
-    if(confirm(`Delete the net "${n.name}"?`)){try{const d=await post(`/api/schedule/${encodeURIComponent(del.dataset.netdel)}/delete`,{});S.schedule=d.schedule;const was=NETS.edit===n.id;if(was)NETS.edit=null;renderNets(was);renderRadios()}catch(err){alert(err.message)}}}
+    if(confirm(`Delete the net "${n.name}"?\n\nIts history and minutes are kept.`)){try{const d=await post(`/api/schedule/${enc(del.dataset.netdel)}/delete`,{});S.schedule=d.schedule;renderNetPick();renderSchedule(true);renderRadios()}catch(err){alert(err.message)}}}
+  const src=e.target.closest("[data-src]");if(src){const id=src.dataset.src;
+    if(src.dataset.sinst&&MIN&&MIN.key===src.dataset.sinst&&$("netsDlg").open&&NV.tab==="minutes"){const el=$("mtx-"+id);if(el){$("mTx").open=true;el.classList.remove("flash");void el.offsetWidth;el.classList.add("flash");el.scrollIntoView({block:"center",behavior:"smooth"})}}
+    else jumpTo(id,src.dataset.sinst,src.dataset.radio);return}
+  const done=e.target.closest("[data-idone]");if(done){await setItem(done.dataset.idone,{status:done.checked?"done":"open"});return}
+  const stt=e.target.closest("[data-istatus]");if(stt){await setItem(stt.dataset.istatus,{status:stt.dataset.v});return}
+  const dl=e.target.closest("[data-idel]");if(dl){try{await post(`/api/items/${dl.dataset.idel}/delete`,{});refreshNetsView()}catch(err){alert(err.message)}return}
+  const ie=e.target.closest("[data-iedit]");if(ie){const li=ie.closest("li.item"),i=findItem(+ie.dataset.iedit);if(li&&i)li.innerHTML=itemForm(i);return}
+  if(e.target.closest("[data-icancel]")){const f=e.target.closest("form");if(f.dataset.ifid)refreshNetsView();else f.reset();return}
+  const rm=e.target.closest("[data-attrm]");if(rm){saveMin({remove:rm.dataset.attrm});return}
+  const cv=e.target.closest("[data-ctx]");if(cv){jumpTo(cv.dataset.ctx,cv.dataset.inst,cv.dataset.radio);return}
 });
+document.addEventListener("submit",async e=>{const f=e.target.closest(".iform");if(!f)return;e.preventDefault();
+  const body=Object.fromEntries(["kind","text","who","due","event_at","until","place"].map(k=>[k,f[k].value]));
+  try{if(f.dataset.ifid)await post(`/api/items/${f.dataset.ifid}`,body);else await post("/api/items",{...body,inst:NV.key});refreshNetsView()}
+  catch(err){f.querySelector(".err").textContent=err.message}});
+function findItem(id){const all=[...(MIN?MIN.items.concat(MIN.carried||[]):[]),...(OPEN_ITEMS||[])];return all.find(i=>i.id===id)}
+let OPEN_ITEMS=[];
+async function setItem(id,body){try{await post(`/api/items/${id}`,body);refreshNetsView()}catch(err){alert(err.message)}}
+function refreshNetsView(){if($("netsDlg").open)renderNetsArea();if($("searchDlg").open)runSearch()}
+function jumpTo(id,inst,radio){ // a transmission: in today's log on screen, else in its net's minutes
+  const t=S.tx.find(x=>x.id===id);
+  if(t){["netsDlg","searchDlg"].forEach(d=>{if($(d).open)$(d).close()});selectRadio(t.radio);
+    const el=$("tx-"+id);if(el){el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.remove("flash");void el.offsetWidth;el.classList.add("flash")}return}
+  if(inst)openNetsArea({tab:"minutes",key:inst,hl:id});
+}
 document.addEventListener("change",async e=>{
   const c=e.target.closest("[data-listen]");if(!c)return;
-  try{const r=await post(`/api/radios/${encodeURIComponent(c.dataset.listen)}/listen`,{[c.dataset.k]:c.checked});
+  try{const r=await post(`/api/radios/${enc(c.dataset.listen)}/listen`,{[c.dataset.k]:c.checked});
     const i=S.radios.findIndex(x=>x.id===r.id);if(i>=0)S.radios[i]=r;renderRadios()}
   catch(err){c.checked=!c.checked;alert(err.message)}
 });
+$("openNets").onclick=()=>openNetsArea({tab:NV.tab||"schedule",radio:null});
+$("netsClose").onclick=()=>$("netsDlg").close();
+// ---------- search everything ----------
+const SR={q:"",net:"",radio:"",from:"",to:"",call:""};
+function openSearch(q){
+  SR.q=q;const nets=S.schedule||[];
+  $("searchBody").innerHTML=`<form id="srForm" class="srform" role="search"><input id="srQ" type="search" value="${esc(q)}" placeholder="Words, callsign, name, net…" aria-label="Search"><button class="primary">Search</button></form>
+   <div class="srfilters small"><label>Net <select id="srNet"><option value="">any</option>${nets.map(n=>`<option value="${esc(n.id)}"${n.id===SR.net?" selected":""}>${esc(n.name)}</option>`).join("")}</select></label>
+   <label>Radio <select id="srRadio"><option value="">any</option>${S.radios.map(r=>`<option value="${esc(r.id)}"${r.id===SR.radio?" selected":""}>${esc(r.name)}</option>`).join("")}</select></label>
+   <label>From <input type="date" id="srFrom" value="${esc(SR.from)}"></label><label>To <input type="date" id="srTo" value="${esc(SR.to)}"></label>
+   <label>Callsign <input id="srCall" class="up" maxlength="11" value="${esc(SR.call)}" placeholder="any"></label></div><div id="srRes" aria-live="polite"></div>`;
+  const f=$("srForm");f.onsubmit=e=>{e.preventDefault();SR.q=$("srQ").value;runSearch()};
+  ["srNet","srRadio","srFrom","srTo","srCall"].forEach(id=>$(id).onchange=()=>{SR.net=$("srNet").value;SR.radio=$("srRadio").value;SR.from=$("srFrom").value;SR.to=$("srTo").value;SR.call=$("srCall").value.trim().toUpperCase();runSearch()});
+  if(!$("searchDlg").open)$("searchDlg").showModal();
+  runSearch();
+}
+async function runSearch(){
+  const box=$("srRes");if(!box)return;
+  if(!SR.q.trim()&&!SR.call){box.innerHTML='<div class="empty">Search every transmission ever heard (live and accurate text), callsigns and callbook names, nets, and the minutes. Several words must all match; put words in "quotes" for an exact phrase. Narrow it with the filters.</div>';return}
+  busy(box);
+  const qs=new URLSearchParams({q:SR.q});for(const k of ["net","radio","from","to","call"])if(SR[k])qs.set(k,SR[k]);
+  let d;try{d=await api("/api/search?"+qs)}catch(err){box.innerHTML=`<p class="err">${esc(err.message)}</p>`;return}
+  OPEN_ITEMS=d.items;
+  const tx=d.tx.map(t=>`<li class="sr"><div class="srh small"><span>${esc(fmtWhen(t.start))}</span> · <span>${esc(t.inst_kind==="net"?t.net_name:"Conversation")}</span>${t.speaker?` · <b>${esc(t.speaker)}</b>`:""} · <span class="muted">${esc((S.radios.find(r=>r.id===t.radio)||{}).name||t.radio)}</span></div>
+     <div class="srt${t.noise?" muted":""}">${snip(t.snippet)}</div><div class="srb">${t.wav?`<button data-play="${esc(t.id)}">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:""} <button data-ctx="${esc(t.id)}" data-inst="${esc(t.inst||"")}" data-radio="${esc(t.radio)}">Show in context ›</button></div></li>`).join("");
+  const st=d.stations.map(s=>`<li class="sr"><span class="call" data-call="${esc(s.call)}">${esc(s.call)}</span> ${esc(s.name||"")} <span class="muted small">${esc([s.city,s.state].filter(Boolean).join(", "))}${s.times?` · took part ${s.times}×, last ${esc(fmtDay(s.last))}`:""}</span></li>`).join("");
+  const nets=d.nets.map(n=>n.scheduled?`<li class="sr"><b>${esc(n.name)}</b> <span class="muted small">${esc(n.summary)}</span> <button data-goto="analysis" data-net="${esc(n.net_id)}">Who takes part</button> <button data-goto="history" data-net="${esc(n.net_id)}">History</button></li>`
+     :`<li class="sr"><button class="linkish" data-mins="${esc(n.key)}">${esc(n.name)} · ${esc(fmtWhen(n.start))}</button> <span class="muted small">${n.stations} stations</span></li>`).join("");
+  const its=d.items.map(i=>`<li class="sr"><span class="badge">${esc(KIND1[i.kind]||i.kind)}</span> ${snip(i.snippet)} <span class="muted small">${esc(i.inst_name||"Conversation")} · ${esc(fmtDay(i.occ_date||i.inst_start))}${i.status!=="open"?" · "+esc(i.status):""}</span> <button data-mins="${esc(i.inst)}">Minutes ›</button></li>`).join("");
+  const grp=(t,n,body,more="")=>n?`<section class="srg"><h4>${t} <span class="muted">(${n})</span></h4><ul class="srl">${body}</ul>${more}</section>`:"";
+  const none=!d.tx.length&&!d.stations.length&&!d.nets.length&&!d.items.length;
+  box.innerHTML=none?`<div class="empty">Nothing found for <b>${esc(SR.q||SR.call)}</b>${SR.net||SR.radio||SR.from||SR.to||SR.call?" with these filters":""}. Try fewer words or the start of a callsign.</div>`
+    :grp("Stations",d.stations.length,st)+grp("Nets",d.nets.length,nets)+grp("Minutes",d.items.length,its)+
+     grp("Transmissions",d.tx_total,tx,d.tx_total>d.tx.length?`<p class="small muted">Showing the newest ${d.tx.length} of ${d.tx_total}. Add words or filters to narrow it.</p>`:"")+
+     (d.fts?"":'<p class="small muted">Simple search (this PC\'s SQLite has no full-text index).</p>');
+}
+$("searchForm").addEventListener("submit",e=>{e.preventDefault();openSearch($("q").value.trim())});
+$("searchClose").onclick=()=>$("searchDlg").close();
+// ---------- the pre-net alert (station/alerts.py): banner on the radio's column + the header, chime, title, notification ----------
+let CHIME=true;try{CHIME=localStorage.getItem("hamnet.chime")!=="0"}catch(e){}
+const SEEN_ALERTS=new Set();let AUDIO=null,FLASH=null,BASE_TITLE=document.title;
+function chime(){if(!CHIME)return;try{AUDIO=AUDIO||new (window.AudioContext||window.webkitAudioContext)();const t=AUDIO.currentTime;
+  [[880,0],[1175,.18],[880,.36]].forEach(([f,d])=>{const o=AUDIO.createOscillator(),g=AUDIO.createGain();o.frequency.value=f;o.type="sine";
+    g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.25,t+d+.02);g.gain.exponentialRampToValueAtTime(.001,t+d+.3);o.connect(g).connect(AUDIO.destination);o.start(t+d);o.stop(t+d+.32)})}catch(e){}}
+const canNotify=()=>window.isSecureContext&&"Notification" in window;
+function notify(a){if(canNotify()&&Notification.permission==="granted"){try{new Notification("HamNet Station",{body:a.text,tag:a.key})}catch(e){}}}
+function alertWhen(a){return a.phase==="started"?`started at ${hhmm(a.start)}`:a.minutes<=1?`starts in 1 minute (${hhmm(a.start)})`:`starts in ${a.minutes} min (${hhmm(a.start)})`}
+function alertBody(a){
+  const f=a.freq_mhz?mhz(a.freq_mhz,a.mode):"";
+  const msg=a.state==="already"?`Radio already on <b>${f}</b> — ready.`:a.state==="ready"?`Radio set${f?" to <b>"+f+"</b>":""} — ready.`
+    :f?`Set <b>${esc(a.radio_name)}</b> to <b>${f}</b>${a.radio_freq_mhz?` <span class="muted">(logged now: ${mhz(a.radio_freq_mhz,a.radio_mode)})</span>`:""}.`:`Get <b>${esc(a.radio_name)}</b> ready.`;
+  const o=a.open||{},parts=[["urgent","urgent"],["announcements","announcement"],["upcoming","coming up"],["actions","open action"],["traffic","traffic"]].filter(([k])=>o[k]).map(([k,l])=>`${o[k]} ${l}${o[k]>1&&!l.endsWith("up")?"s":""}`);
+  const ro=parts.length?`<div class="aopen">Still open: ${parts.join(" · ")} <button class="linkish" data-goto="open" data-net="${esc(a.id)}">Read-out for net control ›</button></div>`
+    :a.phase==="started"?`<div class="aopen muted">Nothing still open from earlier times. <button class="linkish" data-mins="${esc(a.key)}">Minutes ›</button></div>`:"";
+  const btns=a.state==="due"?`<button class="primary" data-alert="${esc(a.key)}" data-act="ready">Radio is set</button> <button data-alert="${esc(a.key)}" data-act="snooze">Remind me in 1 min</button> <button data-alert="${esc(a.key)}" data-act="skip">Skip this net</button>`
+    :`<button class="primary" data-alert="${esc(a.key)}" data-act="dismiss">OK</button> <button data-alert="${esc(a.key)}" data-act="skip">Skip this net</button>`;
+  return `<div class="ah"><b>⏰ ${esc(a.name)}</b> ${alertWhen(a)}${a.moved?" · moved":""}${a.note?" · "+esc(a.note):""}</div><div class="am">${msg}</div>${ro}<div class="abtn">${btns} <button class="quiet chimeb" data-chime title="${CHIME?"Chime on: click to mute":"Chime muted: click to turn on"}" aria-label="${CHIME?"Mute the chime":"Turn the chime on"}">${CHIME?"🔔":"🔕"}</button></div>`}
+function renderAlerts(){
+  const list=S.alerts||[];
+  $("alerts").innerHTML=list.map(a=>`<button class="astrip ${a.state}" data-ar="${esc(a.radio)}">⏰ <b>${esc(a.name)}</b> ${alertWhen(a)} on ${esc(a.radio_name)}${a.state==="due"&&a.freq_mhz?" · set "+mhz(a.freq_mhz,a.mode):a.state!=="due"?" · ready":""} ›</button>`).join("");
+  for(const r of S.radios){const box=document.getElementById("ab-"+r.id);if(!box)continue;const mine=list.filter(a=>a.radio===r.id);
+    box.innerHTML=mine.map(a=>`<div class="alertb ${a.state} ${a.phase}" role="status">${alertBody(a)}</div>`).join("");box.hidden=!mine.length}
+  const fresh=list.filter(a=>a.state==="due"&&a.phase==="soon"&&!SEEN_ALERTS.has(a.key));
+  if(fresh.length){chime();fresh.forEach(notify)}
+  SEEN_ALERTS.clear();list.filter(a=>a.state==="due").forEach(a=>SEEN_ALERTS.add(a.key));
+  const due=list.find(a=>a.state==="due");
+  clearInterval(FLASH);document.title=BASE_TITLE;
+  if(due){let on=false;FLASH=setInterval(()=>{on=!on;document.title=on?`⏰ ${due.name} ${due.phase==="started"?"now":"in "+due.minutes+" min"}`:BASE_TITLE},1000)}
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-alert]");if(b){b.disabled=true;try{const d=await post(`/api/alerts/${enc(b.dataset.alert)}/${b.dataset.act}`,{});S.alerts=d.alerts;renderAlerts()}catch(err){alert(err.message);b.disabled=false}return}
+  if(e.target.closest("[data-chime]")){CHIME=!CHIME;try{localStorage.setItem("hamnet.chime",CHIME?"1":"0")}catch(err){}if(CHIME)chime();renderAlerts();return}
+  const s=e.target.closest("[data-ar]");if(s){selectRadio(s.dataset.ar);const box=$("ab-"+s.dataset.ar);if(box)box.scrollIntoView({block:"nearest"})}
+});
+// ---------- the Urgent board (emergency nets): pinned above the log of the radio it was heard on ----------
+const URG_FOLD=new Set();
+function renderUrgent(){
+  const u=S.urgent||[];
+  for(const r of S.radios){const box=document.getElementById("urg-"+r.id);if(!box)continue;const mine=u.filter(i=>i.radio===r.id);
+    if(!mine.length){box.innerHTML="";box.hidden=true;continue}
+    box.hidden=false;const f=URG_FOLD.has(r.id);
+    box.innerHTML=`<div class="uh"><b>⚠ Urgent · ${mine.length} open</b> <span class="small">${esc([...new Set(mine.map(i=>i.inst_name||"Conversation"))].join(", "))}</span> <button class="quiet" data-urgfold="${esc(r.id)}" aria-expanded="${!f}">${f?"Show":"Hide"}</button></div>
+     ${f?"":`<ul>${mine.map(i=>`<li><span class="cat">${esc(i.category||"urgent")}</span> <span class="ut">${esc(i.text)}</span> <span class="small">${hhmm(i.tx_start)}${i.by?" · "+esc(i.by):""}${i.place?" · "+esc(i.place):""}${(i.people||[]).filter(p=>p!==i.by).length?" · "+esc(i.people.filter(p=>p!==i.by).join(", ")):""}</span>
+       <span class="ub"><button data-istatus="${i.id}" data-v="handled">Handled</button> <button data-src="${esc(i.tx_id||"")}" data-sinst="${esc(i.inst)}" data-radio="${esc(i.radio)}">Show ›</button></span></li>`).join("")}</ul>`}`}
+}
+document.addEventListener("click",e=>{const f=e.target.closest("[data-urgfold]");if(f){const id=f.dataset.urgfold;URG_FOLD.has(id)?URG_FOLD.delete(id):URG_FOLD.add(id);renderUrgent()}});
+// Settings: the alert chime and system notifications
+function renderAlertSettings(){
+  const box=$("alertSet");if(!box)return;
+  const why=!("Notification" in window)?"This browser cannot show notifications."
+    :!window.isSecureContext?"Not available on this address: browsers allow notifications only on the station PC itself (http://localhost:8091) or over https. On a phone the banner works while the page is open; the chime needs one tap on the page first."
+    :Notification.permission==="granted"?"On: alerts also appear as notifications when this window is in the background."
+    :Notification.permission==="denied"?"Blocked in this browser's site settings. Allow notifications for this page there to turn them on.":"";
+  box.innerHTML=`<label class="chk"><input type="checkbox" id="setChime"${CHIME?" checked":""}> Chime when a net alert comes up (remembered in this browser)</label>
+   <div class="small">${canNotify()&&Notification.permission==="default"?'<button type="button" id="setNotif">Allow notifications</button> ':""}<span class="muted">${why}</span></div>`;
+  $("setChime").onchange=e=>{CHIME=e.target.checked;try{localStorage.setItem("hamnet.chime",CHIME?"1":"0")}catch(err){}if(CHIME)chime();renderAlerts()};
+  const n=$("setNotif");if(n)n.onclick=async()=>{await Notification.requestPermission();renderAlertSettings()};
+}
+
 connect();
 // "Open on phone": QR codes for the addresses a phone can reach (made by the station, works offline)
 $("openPhone").addEventListener("click",async()=>{

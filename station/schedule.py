@@ -273,8 +273,10 @@ class NetSchedule:
                 if what == "skip":
                     ex[occ] = {"cancel": True} | ({"note": body["note"]} if body.get("note") else {})
                 else:
-                    ex[occ] = {k: body[k] for k in ("date", "start", "duration_min", "freq_mhz", "mode", "note")
+                    ex[occ] = {k: body[k] for k in ("start", "duration_min", "freq_mhz", "mode", "note")
                                if body.get(k) not in (None, "")}
+                    if body.get("to_date"):                          # moved to another day
+                        ex[occ]["date"] = body["to_date"]
             n["exceptions"] = recur.normalize_exceptions(ex, MODES)
             if not n["exceptions"]:
                 n.pop("exceptions")
@@ -283,13 +285,18 @@ class NetSchedule:
         return self.list()
 
     def preview(self, body: dict) -> dict:
-        """The editor's live preview of a net being typed (nothing saved)."""
-        v = validate(body, self.st.radios)
+        """The editor's live preview of a net being typed (nothing saved). A rule still being typed is not a failed
+        request: its problem comes back as {"error"} so the editor can show it in place."""
+        try:
+            v = validate(body, self.st.radios)
+        except ValueError as e:
+            return {"error": str(e)}
         return preview(v, self.st.clock())
 
     def post(self, path: str, body: dict) -> dict:
         """POST /api/schedule (add), /api/schedule/preview, /api/schedule/<id> (replace), /api/schedule/<id>/delete,
-        /api/schedule/<id>/skip|move|restore ({"date": the occurrence's own date, ...})."""
+        /api/schedule/<id>/skip|move|restore ({"date": the occurrence's own date; move: to_date, start, freq_mhz,
+        mode, duration_min, note})."""
         m = re.fullmatch(r"/api/schedule(?:/([\w-]+)(?:/(delete|skip|move|restore))?)?", path)
         if not m:
             raise NoSuchNet(path)
