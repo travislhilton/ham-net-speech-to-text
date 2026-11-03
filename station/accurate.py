@@ -116,12 +116,12 @@ class AccuratePass:
             if j and j["state"] in ("queued", "running"):
                 j["end"] = max(j["end"], end)          # a manual run of a net still going: extend it
                 return dict(j)
-            prev = j if j and j["state"] == "done" else {"done": 0, "audio_done_s": 0.0}
+            prev = j if j and j["state"] == "done" and not force else {"done": 0, "audio_done_s": 0.0}
             j = {"key": key, "radio": rid, "start": start, "end": end, "state": "queued", "auto": auto,
                  "total": prev["done"] + len(todo), "done": prev["done"], "failed": 0,
                  "audio_s": round(prev["audio_done_s"] + sum(t.get("duration_s") or 0 for t in todo), 1),
                  "audio_done_s": prev["audio_done_s"], "queued_at": datetime.now().isoformat(timespec="seconds"),
-                 "started_at": None, "finished_at": None, "eta_s": None, "error": None, "model": None}
+                 "started_at": None, "finished_at": None, "eta_s": None, "error": None, "model": None, "force": force}
             if not todo:
                 j.update(state="done", finished_at=j["queued_at"])
             j["eta_s"] = self._eta(j)
@@ -192,12 +192,12 @@ class AccuratePass:
                 self.retry_at[key] = time.time() + 120
             self._publish()
             return
-        prompt = self.st.prompt_for(j["radio"])
+        prompt = self.st.prompt_for(j["radio"], own_call=False)       # no call in it: large-v3 echoes it
         hp = self.st.highpass_for(j["radio"])
         tried = set()
         while True:                                            # the net may grow while this runs
             with self.st.lock:
-                todo = [t for t in self._pending(j["radio"], j["start"], j["end"]) if t["id"] not in tried]
+                todo = [t for t in self._pending(j["radio"], j["start"], j["end"], j.get("force")) if t["id"] not in tried]
             if not todo:
                 break
             with self.lock:

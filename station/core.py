@@ -705,12 +705,13 @@ class Station:
     def _find(self, tid):
         return next((t for t in reversed(self.tx) if t["id"] == tid), None)
 
-    def prompt_for(self, rid: str | None) -> str:
+    def prompt_for(self, rid: str | None, own_call=True) -> str:
         """Short on purpose (see engine.make): frequency + the operator's call, spelled phonetically.
-        Measured on W9XYZ-5: fixes 'This is a 79' -> 'This is W9XYZ' with no loops."""
+        Measured on W9XYZ-5: fixes 'This is a 79' -> 'This is W9XYZ' with no loops. The accurate pass gets no
+        call (own_call=False): large-v3 with it wrote W9XYZ into 12 of 161 transmissions of a net W9XYZ was not in."""
         r = self.radios.get(rid) or {}
         parts = [f"Ham radio net on {r['freq_mhz']:.3f} MHz." if r.get("freq_mhz") else "Ham radio net."]
-        if self.me:
+        if self.me and own_call:
             parts.append(f"This is {self.me}, {phonetic(self.me)}. Over.")
         return " ".join(parts)
 

@@ -293,7 +293,7 @@ class FakeRemote:
 
     def transcribe(self, wav, prompt, highpass_hz):
         self.calls += 1
-        assert wav[:4] == b"RIFF" and "W9XYZ" in prompt and highpass_hz == 300
+        assert wav[:4] == b"RIFF" and "W9XYZ" not in prompt and "net" in prompt and highpass_hz == 300
         return {"text": "Net control, this is K7ABC in Springfield, no traffic.", "model": "fake-large", "audio_s": 3.0, "elapsed_s": 0.1}
 
 
@@ -321,6 +321,8 @@ def test_accurate_pass_beside_the_live_text(tmp_path):
             kinds.add(q.get()[0])
         assert "accurate" in kinds
         assert st.accurate_now("ftm")["state"] == "done" and st._accurate_remote.calls == 1   # nothing left to do
+        st.accurate_now("ftm", force=True)                                                 # redo on request
+        assert wait_for(lambda: st._accurate_remote.calls == 2 and st.accurate.status()[0]["state"] == "done")
         again = Station(copy.deepcopy(cfg), lambda: engine.FakeEngine(), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
         again.load_today()
         assert again.tx[-1]["accurate"]["text"] == tx["accurate"]["text"]                    # survives a restart
