@@ -51,7 +51,7 @@ def test_relay_card_and_identify_reminder():
     r = h.on_transmission("Net control, I'm unable to copy K7ABC, can anyone relay?", ["K7ABC"], t0)
     assert r["cards"][0]["key"] == "relay"
     assert "W9XYZ, I can relay." in r["cards"][0]["say"]
-    h.on_transmission("Whiskey Nine X-ray Yankee Zulu checking in, no traffic", ["W9XYZ"], t0)
+    h.on_transmission("Whiskey Nine Xray Yankee Zulu checking in, no traffic", ["W9XYZ"], t0)
     assert h.on_transmission("go ahead", [], t0 + timedelta(minutes=5))["reminders"] == []
     rem = h.on_transmission("go ahead", [], t0 + timedelta(minutes=9, seconds=30))["reminders"]
     assert rem and "Identify soon" in rem[0]["text"]
@@ -59,12 +59,12 @@ def test_relay_card_and_identify_reminder():
 
 def test_check_in_card_uses_phonetics():
     r = hints.Hinter("W9XYZ").on_transmission("Any check-ins for the net?", [])
-    assert r["cards"][0]["say"][0].startswith("Whiskey Nine X-ray Yankee Zulu")
+    assert r["cards"][0]["say"][0].startswith("Whiskey Nine Xray Yankee Zulu")
 
 
 def test_net_recognition_emergency_wins():
     h = hints.Hinter()
-    h.on_transmission("This is net control for the Springfield Valley ARES net, taking check-ins", [])
+    h.on_transmission("This is net control for the Example County ARES net, taking check-ins", [])
     assert h.classify()["type"] in ("ares_races", "directed", "check_in")
     r = h.on_transmission("Break break, emergency traffic, there is a fire at the church", [])
     assert r["net"]["type"] == "emergency" and r["cards"][0]["key"] == "emergency"

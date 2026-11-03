@@ -50,9 +50,12 @@ def make_handler(station):
         def do_GET(self):
             u = urlparse(self.path)
             if u.path in ("/help", "/card"):         # the printable two-sided reference card (station/static/card.html)
-                page = b'<!doctype html><html lang="en"><head><meta charset="utf-8">' \
-                       b'<meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + \
-                       (STATIC / "card.html").read_bytes() + b"</body></html>"
+                from . import phone
+                page = '<!doctype html><html lang="en"><head><meta charset="utf-8">' \
+                       '<meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + \
+                       phone.card_with_download((STATIC / "card.html").read_text(encoding="utf-8"),
+                                                station.cfg.get("download_url")) + "</body></html>"
+                page = page.encode("utf-8")
                 return self._send(200, page, "text/html; charset=utf-8")
             if u.path in ("/", "/index.html"):
                 return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
@@ -75,8 +78,8 @@ def make_handler(station):
                     return self._json({"error": "bad callsign"}, 400)
                 return self._json(station.callbook.card(call, qrz_network=station.cfg.get("qrz_online", True)))
             if u.path == "/api/test":
-                from .wer import TEST_TEXT
-                return self._json({"text": TEST_TEXT, "history": station.test_history()})
+                from .wer import test_text
+                return self._json({"text": test_text(station.cfg.get("callsign")), "history": station.test_history()})
             if u.path == "/api/settings":
                 return self._json(station.operator())
             if u.path == "/api/schedule":                        # schedule: the nets, for the editor

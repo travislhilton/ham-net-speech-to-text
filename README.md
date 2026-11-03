@@ -36,6 +36,14 @@ What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing
   desktop, and opens port 8091 to your home network and Tailscale only;
 - lists the audio inputs it can record from.
 
+## Your own settings stay on your PC
+
+Everything personal is kept in files the repository never contains (they are git-ignored and the installer
+never overwrites them): your callsign, name and grid and the radios in `config\station.yaml`; your area, repeaters
+and roster in `config\local.yaml`; the accurate-pass server's address in `station.yaml` (`accurate: urls:`) and its
+key in `config\secrets.env`; the QRZ.com password in Windows Credential Manager; SSH public keys for remote
+management in `deploy\windows\ssh-keys.txt`. The server keeps its settings in `~/.config/emcomm-stt/env`.
+
 ## Connecting a radio
 
 Each radio needs its receive audio on a PC sound input of its own (never the one a digital mode
@@ -111,7 +119,7 @@ you chose is remembered. Each column shows:
   never rewritten; delete schedule.json to start again from station.yaml).
   Per radio, **Listen only during scheduled nets**: the station resumes that radio 1 minute before each of its
   nets and pauses it 5 minutes after the net ends, so nothing between nets is recorded. The card says why it is
-  paused ("Paused until Springfield Valley ARES net at 20:00" or "Paused by you"). Pause and Resume still work; the next
+  paused ("Paused until Example County ARES net at 20:00" or "Paused by you"). Pause and Resume still work; the next
   net start or end takes over again. Optionally, **when a net starts, log the radio at the net's frequency and
   mode** (you still tune the radio yourself; the retune warning stays). Kept across restarts in `data\operator.json`.
 - **Nets and conversations**: each radio's log is split into nets/conversations (a new one starts after 15
@@ -168,7 +176,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Repeaters / carrier that stays up between speakers: split at speech pauses (>= 0.8 s) | working (`split_pause_ms`, carrier-gate radios) |
 | Sub-audible tone + mains hum removed before Whisper (high-pass 300 Hz on FM data-jack radios) | working (`highpass_hz`) |
 | Whisper's noise phrases ("So.", "We'll be right back.") shown greyed as probable noise, left out of the ICS-309 | working |
-| Icom IC-705 via Icom Remote Utility (voice gate) | working on W9XYZ-5; frequency read from the radio planned |
+| Icom IC-705 via Icom Remote Utility (voice gate) | working on the test PC; frequency read from the radio planned |
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
@@ -253,7 +261,7 @@ When the station is on the home network it can upload each transmission to the h
 (`transcribe/`, FastAPI + mlx-whisper) for the accurate pass, which stores nets and transmissions in
 PostgreSQL; `analyze/` uses LLMs on the LLM server for structuring and summaries, and falls back to
 rules when the LLM server is unreachable. `python -m tools.net start|stop|status` opens and closes a net.
-Details: `docs/ARCHITECTURE.md`, deploy: `deploy/home-server/`.
+Details: `docs/ARCHITECTURE.md`, deploy: `deploy/my-server/`.
 
 ## Development
 

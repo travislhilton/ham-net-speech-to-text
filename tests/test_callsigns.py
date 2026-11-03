@@ -37,7 +37,7 @@ def test_roster_picks_up_written_callsigns():
 
 def test_split_and_international_calls_with_a_validator():
     known = {"W9XYZ", "EA8AB", "VE7CC", "K7ABC"}
-    text, found = normalize("This is W9-XYZ, heard EA8AB and V E 7 C C, also W-9-T-L-H again; 146.94 MHz",
+    text, found = normalize("This is W9-XYZ, heard EA8AB and V E 7 C C, also W-9-X-Y-Z again; 146.94 MHz",
                             validate=known.__contains__)
     assert found == ["W9XYZ", "EA8AB", "VE7CC"]
     assert "W9XYZ, heard EA8AB and VE7CC, also W9XYZ again" in text and "146.94" in text

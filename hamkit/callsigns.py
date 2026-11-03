@@ -28,7 +28,7 @@ _ANY = re.compile(r"^(?=[A-Z0-9]{3,8}$)[A-Z0-9]{0,2}[A-Z]\d{1,2}[A-Z]{1,4}$|^\d[
 _LET = [w for w, v in PHON.items() if v.isalpha()]
 _DIGW = [w for w, v in PHON.items() if v.isdigit()]
 _MIX = re.compile(r"\b([AKNW][A-Z]?)[- ]?(\d|(?i:" + "|".join(_DIGW) + r"))((?:[\s,-]+(?i:" + "|".join(_LET) + r")){1,3})\b")
-# Whisper splits written calls: "W9-XYZ", "W9 XYZ", "W-9-T-L-H", "W9-T-L-H".
+# Whisper splits written calls: "W9-XYZ", "W9 XYZ", "W-9-X-Y-Z", "W9-X-Y-Z".
 _SPLIT = re.compile(r"\b([A-Z0-9]{1,3}(?:[-. ][A-Z0-9]{1,3}){1,5})\b")
 # large-v3 hearing a whole turn writes the call as it is spoken, prefix and suffix apart: "KK7, XKG, Eli",
 # "KB7, XLG Marvin", "KK-7, XKE" (11-02 442.100 net). Joined only when the joined call is known.

@@ -8,7 +8,7 @@ import numpy as np
 from . import callsigns
 
 MODEL = os.environ.get("STT_MODEL", "mlx-community/whisper-large-v3-turbo")
-HOST = "home-server"
+HOST = __import__("socket").gethostname().split(".")[0].lower()
 
 
 def load_audio(path: Path):

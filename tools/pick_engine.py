@@ -1,7 +1,7 @@
 """Benchmark the Whisper engines this PC can run and choose the live configuration.
 
 Windows stations differ (Intel iGPU, NVIDIA, AMD, CPU only), so the installer measures rather
-than assumes. Clip: install/windows/bench.wav (8.5 s, W9XYZ on the FTM-150R, 2026-11-02).
+than assumes. Clip: install/windows/bench.wav (a synthetic voice, band-limited like a radio, saying K7ABC).
 
 Choice: FINAL = fastest engine running large-v3-turbo at <= 0.6x real time (accuracy matched the
 home server in testing); else small.en. PARTIAL (words while someone is still talking) = base.en if
@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 from hamkit.callsigns import initial_prompt, normalize  # noqa: E402  (same prompt + normalizer as live)
 PROMPT = initial_prompt()
 CLIP = ROOT / "install" / "windows" / "bench.wav"
-EXPECT = "W9XYZ"
+EXPECT = "K7ABC"
 
 
 def openvino_runner(model_dir: Path, device: str):
@@ -47,7 +47,7 @@ def has_nvidia() -> bool:
 
 def openvino_devices() -> list[str]:
     """Ask in a child process. An openvino.Core that enumerated the GPU, plus a GPU WhisperPipeline in
-    the same process, hangs that process forever at exit (W9XYZ-5, Intel UHD, driver 32.0.101.7088,
+    the same process, hangs that process forever at exit (test PC, Intel UHD, driver 32.0.101.7088,
     OpenVINO 2026.4.1; either alone exits cleanly). The live service must never create a Core either."""
     r = subprocess.run([sys.executable, "-c", "import openvino as o; print(','.join(o.Core().available_devices))"],
                        capture_output=True, text=True, timeout=120)
@@ -109,7 +109,7 @@ def main():
 
 def hard_exit(rc: int):
     """Leave without running library unload code. OpenVINO's GPU plugin deadlocks while unloading on
-    Windows (W9XYZ-5, 2026-11-02): normal exit AND os._exit both spun one core for 10+ minutes after
+    Windows (test PC, 2026-11-02): normal exit AND os._exit both spun one core for 10+ minutes after
     engine.yaml was written, because ExitProcess still calls every DLL's detach routine.
     TerminateProcess skips them."""
     sys.stdout.flush(); sys.stderr.flush()

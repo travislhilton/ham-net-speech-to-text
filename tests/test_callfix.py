@@ -16,7 +16,7 @@ LICENCES = [("K7XVG", "A", "WAVERLY", "ID"), ("K7XDB", "A", "SPOKANE", "WA"),
             ("KA7XP", "A", "CYPRESS CREEK", "IL"), ("KA7XT", "E", "FAIRVIEW", "AZ"),
             ("KA7ST", "A", "OGDENVILLE", "IL"), ("KD7XYA", "A", "DUNMORE", "ID"),
             ("KB0XHR", "A", "PLAINVIEW", "CO"), ("KD0XHR", "E", "LAKEVIEW", "MN"),
-            ("W9XYZ", "A", "SHELBYVILLE", "IL"), ("W7XYM", "A", "OGDENVILLE", "IL"),
+            ("W9XYZ", "A", "NORTH HAVERBROOK", "IL"), ("W7XYM", "A", "OGDENVILLE", "IL"),
             ("WA7CXW", "A", "HARLAN", "OR"), ("WA7DXW", "A", "MESA", "AZ"),
             ("KE7ABC", "A", "SPRINGFIELD", "IL"), ("KG7ABC", "A", "CAPITAL CITY", "IL")]
 

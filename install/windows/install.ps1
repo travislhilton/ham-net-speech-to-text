@@ -82,7 +82,7 @@ Step "Program files -> $InstallDir"
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 if ($Src -ne (Resolve-Path $InstallDir).Path) {
   foreach ($d in 'capture','hamkit','station','config','tools','install','docs') {
-    if (Test-Path "$Src\$d") { robocopy "$Src\$d" "$InstallDir\$d" /MIR /XD __pycache__ .venv /XF local.yaml station.yaml engine.yaml secrets.env /NFL /NDL /NJH /NJS /NP | Out-Null }
+    if (Test-Path "$Src\$d") { robocopy "$Src\$d" "$InstallDir\$d" /MIR /XD __pycache__ .venv /XF local.yaml station.yaml engine.yaml secrets.env config.yaml ssh-keys.txt /NFL /NDL /NJH /NJS /NP | Out-Null }
   }
   Copy-Item "$Src\README.md" $InstallDir -Force
 }

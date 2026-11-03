@@ -8,8 +8,7 @@
 # puts tacticals and stations last. Keep `phrases` tight.
 
 area: >-
-  Springfield Valley EMCOMM amateur radio voice net. Springfield County Illinois and Shelbyville County Indiana.
-  Springfield, Shelbyville, Ogdenville, Brockway, North Haverbrook, Capital City. Springfield Amateur Radio Club ARES.
+  Amateur radio voice net. Put your county, towns, club and EOC names in config/local.yaml.
 
 phrases:
   - net control
@@ -52,32 +51,17 @@ phrases:
 
 tacticals:
   - Net Control
-  - Springfield County EOC
-  - Springfield County EOC
-  - Springfield County Sheriff
   - Shelbyville EOC
   - Shelbyville County EOC
   - Stake Center EOC
   - Satellite EOC
   - Area EOC
   - Council Area EOC
-  - Springfield Regional
-  - Shelbyville Station
 
-# Repeaters likely heard on the net (callsign IDs and frequencies). Public data from
-# the state VHF society / RepeaterBook; see winlink-forms docs/research.
-repeaters:
-  - callsign: WA7XQZ
-    output_mhz: 146.940
-    note: Mount Springfield, primary ARES system, linked to 442.125
-  - callsign: K7NET
-    output_mhz: 145.410
-    note: Springfield, Ogdenville to Brockway
-  - callsign: WA7XQY
-    output_mhz: 146.820
-    note: Springfield County Sheriff's Office site, SARC
-
-roster:            # known station callsigns; the real net roster goes here or in config/local.yaml
-  - W9XYZ          # Pat — station / net control
-  - W9XYZ-10       # Winlink VARA FM gateway, 145.070, Shelbyville
-  - W9XYZ-3        # EOC Winlink station
+# Repeaters likely heard on the net (callsign IDs and frequencies) and the net's roster: yours go in
+# config/local.yaml (git-ignored, same keys), for example:
+#   repeaters:
+#     - {callsign: K7ABC, output_mhz: 146.940, note: main ARES repeater}
+#   roster: [K7ABC, W9XYZ]
+repeaters: []
+roster: []

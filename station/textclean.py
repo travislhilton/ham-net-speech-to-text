@@ -1,5 +1,5 @@
 """Whisper repetition-loop guard. On weak audio Whisper can repeat a phrase until it runs out of tokens
-(seen on W9XYZ-5 and the home server, 2026-11-02, a 20 s weak clip). We cap tokens by audio length and
+(seen on the test PC and the home server, 2026-11-02, a 20 s weak clip). We cap tokens by audio length and
 collapse any phrase repeated 3+ times in a row to a single copy."""
 import re
 

@@ -1,7 +1,7 @@
 # Copy to config/station.yaml (the installer creates it with your callsign) and edit.
 # The installer never overwrites station.yaml. Restart the station after editing:
 #   Task Scheduler > HamNet Station > End, then Run (or sign out and back in).
-callsign: W9XYZ
+callsign: N0CALL
 qrz_online: true            # look up new callsigns on QRZ.com when online (needs hamkit.qrz set-login)
 port: 8091
 callfix: true               # correct near-miss callsigns ('WB6BQW' -> WB6DQW heard in this net); what was heard is kept
@@ -30,7 +30,7 @@ radios:                     # one entry per radio; each needs its own sound inpu
 # list is no longer read (delete data\schedule.json to start again from here). "Listen only during
 # scheduled nets" is a per-radio switch in that dialog (kept in data\operator.json).
 schedule:
-  - name: Springfield Valley ARES net
+  - name: Example County ARES net
     radio: ftm150           # a radio id from radios: above
     freq_mhz: 146.940       # optional; the dashboard warns when the radio is set to something else
     # mode: FM              # optional; FM, USB, LSB, AM, CW or DIG (used by "log at the net's frequency")
@@ -40,10 +40,13 @@ schedule:
     ncs: WA7XQZ             # net control station: suggested phrases, and the speaker of its acknowledgements
 
 accurate:                   # the accurate second pass on the home server (optional; home network only)
-  urls: [http://192.168.1.54:8090, http://home-server:8090]   # tried in order
+  urls: [http://192.168.1.20:8090, http://my-server:8090]   # your accurate-pass server(s), tried in order
   live: true                # re-transcribe each transmission as soon as its live text is done (provisional text,
                             # heard with the ~25 s of the net before it)
   context: true             # hear transmissions in their place in the net (an older Mac service: one at a time)
   final_after_min: 5        # the final text for the whole net, this many quiet minutes after it
   auto_after_min: 15        # catch-up for anything missed, this many quiet minutes after a net; 0 = off
   # the key goes in config\secrets.env as EMCOMM_STT_KEY=... (never in this file; kept across updates)
+
+# The download link printed on the reference card (Help) with its QR code, for people you train.
+# download_url: https://github.com/OWNER/ham-net-speech-to-text

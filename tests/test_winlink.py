@@ -150,7 +150,7 @@ def test_session_bounds_and_drafts():
     people = ics.participants(span, {"W9XYZ"}, {"K7ABC": {"card": {"name": "Pat", "sources": ["FCC"]}}})
     assert [p["call"] for p in people] == ["WA7XQZ", "K7ABC"] and people[1]["confirmed"] and not people[0]["confirmed"]
     d = ics.drafts(span, {"freq_mhz": 145.9, "mode": "FM"}, {"callsign": "W9XYZ", "name": "Pat", "winlink_account": "W9XYZ-5"},
-                   people, "check_in", "Springfield Valley net")
+                   people, "check_in", "Example County net")
     assert [x["form"] for x in d] == ["ics309", "ics213"]
     v = d[0]["values"]
     assert v["Time2"] == "2026-11-02 16:31" and v["From2"] == "W9XYZ" and v["To2"] == "WA7XQZ" and v["Time30"] == ""

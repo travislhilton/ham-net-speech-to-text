@@ -30,7 +30,7 @@ def client(tmp_path_factory):
 
     def fake(wav):
         return {"text": f"heard {wav.name}", "callsigns": ["K7ABC"], "segments": [],
-                "model": "stub", "host": "home-server", "elapsed_s": 0.0, "wav": str(wav)}
+                "model": "stub", "host": "my-server", "elapsed_s": 0.0, "wav": str(wav)}
     server.engine.transcribe = fake
     from fastapi.testclient import TestClient
     c = TestClient(server.app, headers={"X-API-Key": "test-key"})
@@ -71,7 +71,7 @@ def test_net_lifecycle_assigns_and_backfills(client):
     before = upload(client, "before.wav", "2026-11-01T01:59:00Z", 146.94)
     assert before["net_id"] is None
 
-    n = client.post("/nets/start", json={"name": "Springfield Valley ARES", "frequency_mhz": 146.94,
+    n = client.post("/nets/start", json={"name": "Example County ARES", "frequency_mhz": 146.94,
                                          "net_control": "W9XYZ", "started_utc": "2026-11-01T02:00:00Z"}).json()
     assert client.get("/nets", params={"open": True}).json()[0]["id"] == n["id"]
 
@@ -131,7 +131,7 @@ def test_retranscribe_updates_stale_rows_and_clears_structure(client, monkeypatc
         def __init__(self): pass
         def transcribe(self, wav):
             return {"text": "K7ABC checking in", "callsigns": ["K7ABC"], "segments": [],
-                    "model": "stub", "host": "home-server", "elapsed_s": 0.0, "wav": str(wav)}
+                    "model": "stub", "host": "my-server", "elapsed_s": 0.0, "wav": str(wav)}
     monkeypatch.setattr(eng_mod, "Engine", NewVocab)
 
     retranscribe.main(["--id", str(out["id"]), "--dry-run"])
@@ -140,7 +140,7 @@ def test_retranscribe_updates_stale_rows_and_clears_structure(client, monkeypatc
     retranscribe.main(["--stale"])
     with Session() as s:
         t = s.get(Transmission, out["id"])
-        assert (t.text, t.host, t.model, t.structured) == ("K7ABC checking in", "home-server", "stub", None)
+        assert (t.text, t.host, t.model, t.structured) == ("K7ABC checking in", "my-server", "stub", None)
     assert "changed" in capsys.readouterr().out
 
 

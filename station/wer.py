@@ -1,10 +1,20 @@
 """The over-the-air test: the operator reads a fixed text and the station scores what it heard (word error rate),
 for the live text and the accurate pass. Numbers and callsigns are compared digit by digit and letter by letter, so
-"145.9", "one four five point nine" and "W9XYZ" / "W 9 T L H" all compare the same."""
+"145.9", "one four five point nine" and "W9XYZ" / "W 9 X Y Z" all compare the same."""
 import re
 
-TEST_TEXT = ("This is W9XYZ, Whiskey Nine X-ray Yankee Zulu, testing speech to text on one four five point nine. "
-             "The quick brown fox jumps over the lazy dog. W9XYZ clear.")
+TEMPLATE = ("This is {call}, {phonetic}, testing speech to text on one four five point nine. "
+            "The quick brown fox jumps over the lazy dog. {call} clear.")
+
+
+def test_text(call: str | None) -> str:
+    """The text the operator reads, with their own callsign (from config/station.yaml)."""
+    from hamkit.hints import phonetic
+    call = (call or "N0CALL").upper()
+    return TEMPLATE.format(call=call, phonetic=phonetic(call))
+
+
+TEST_TEXT = test_text("W9XYZ")   # an example; the station uses test_text(its callsign)
 DIGITS = "zero one two three four five six seven eight nine".split()
 ITU = {w: w[0] for w in ("alfa alpha bravo charlie delta echo foxtrot golf hotel india juliett juliet kilo lima mike "
                          "november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu").split()}

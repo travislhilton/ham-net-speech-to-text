@@ -240,7 +240,7 @@ def test_post_radio_requires_json(station):
 
 def test_short_prompt_carries_frequency_and_phonetic_call(station):
     p = station.prompt_for("ftm")
-    assert p == "Ham radio net on 146.940 MHz. This is W9XYZ, Whiskey Nine X-ray Yankee Zulu. Over." and len(p) < 120
+    assert p == "Ham radio net on 146.940 MHz. This is W9XYZ, Whiskey Nine Xray Yankee Zulu. Over." and len(p) < 120
     station.set_radio("ftm", 145.9)
     assert "145.900 MHz" in station.prompt_for("ftm")
 
@@ -350,7 +350,7 @@ def test_accurate_pass_unreachable_and_auto(tmp_path):
 
 def test_wer_compares_numbers_and_callsigns():
     from station.wer import TEST_TEXT, wer, words
-    assert words("145.9 W9XYZ") == words("one four five point nine W 9 T L H")
+    assert words("145.9 W9XYZ") == words("one four five point nine W 9 X Y Z")
     assert wer(TEST_TEXT, TEST_TEXT, "W9XYZ")["wer"] == 0
     r = wer(TEST_TEXT, "This is W9XOZ testing speech to text on 145.9. The quick brown fox jumps over the lazy dog.", "W9XYZ")
     assert 0.2 < r["wer"] < 0.4 and r["words"] == len(words(TEST_TEXT, "W9XYZ"))

@@ -51,7 +51,7 @@ def _maybe_local(wav: Path):
         from faster_whisper import WhisperModel
         _local = WhisperModel(fb["model"], device="cpu", compute_type="int8")
     # Decode ourselves: faster-whisper 1.2.1's path decoding calls PyAV with an argument newer
-    # PyAV rejects ("metadata_errors"), seen on W9XYZ-5 2026-11-02.
+    # PyAV rejects ("metadata_errors"), seen on the test PC 2026-11-02.
     import soundfile as sf
     audio, _sr = sf.read(str(wav), dtype="float32")
     segs, _ = _local.transcribe(audio, language="en", vad_filter=False)

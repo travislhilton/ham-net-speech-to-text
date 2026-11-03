@@ -123,7 +123,10 @@ def main():
     a = ap.parse_args()
     if a.list_devices:
         list_devices(); return
-    cfg = yaml.safe_load(open(a.config))
+    cfg_path = Path(a.config)
+    if not cfg_path.exists() and cfg_path.name == "config.yaml":     # first run: start from the example
+        cfg_path = cfg_path.with_name("config.example.yaml")
+    cfg = yaml.safe_load(open(cfg_path))
     uploader.start(cfg)
     Recorder(cfg).run()
 

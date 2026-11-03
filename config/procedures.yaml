@@ -79,7 +79,7 @@ cards:
       - "If the DX station works 'split', transmit where they say they're listening (QSX), not on their frequency."
     say:
       - "{me_phonetic}."
-      - "<call>, {me}, thanks, you're five nine in Illinois, name Pat, back to you."
+      - "<call>, {me}, thanks, you're five nine in Illinois, name <your name>, back to you."
 reminders:
   identify:
     rule: "FCC 97.119: identify at the end of each contact and at least every 10 minutes during it."

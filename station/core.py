@@ -626,11 +626,11 @@ class Station:
             t = dict(fin[-1])
         me = self.cfg.get("callsign")
         row = {"tx": t["id"], "radio": rid, "start": t["start"], "freq_mhz": t.get("freq_mhz"),
-               "duration_s": t.get("duration_s"), "live": {**wer.wer(wer.TEST_TEXT, t.get("text", ""), me),
+               "duration_s": t.get("duration_s"), "live": {**wer.wer(wer.test_text(me), t.get("text", ""), me),
                                                            "text": t.get("text", ""), "model": t.get("model")}}
         if t.get("accurate"):
             a = t["accurate"]
-            row["accurate"] = {**wer.wer(wer.TEST_TEXT, a.get("text", ""), me), "text": a.get("text", ""), "model": a.get("model")}
+            row["accurate"] = {**wer.wer(wer.test_text(me), a.get("text", ""), me), "text": a.get("text", ""), "model": a.get("model")}
         elif getattr(self, "accurate", None) and t.get("wav"):
             self.accurate.submit(rid, t["start"], t["start"])
             row["accurate_pending"] = True
@@ -810,7 +810,7 @@ class Station:
 
     def prompt_for(self, rid: str | None, own_call=True) -> str:
         """Short on purpose (see engine.make): frequency + the operator's call, spelled phonetically.
-        Measured on W9XYZ-5: fixes 'This is a 79' -> 'This is W9XYZ' with no loops. The accurate pass gets no
+        Measured on the test PC: fixes 'This is a 79' -> 'This is W9XYZ' with no loops. The accurate pass gets no
         call (own_call=False): large-v3 with it wrote W9XYZ into 12 of 161 transmissions of a net W9XYZ was not in."""
         r = self.radios.get(rid) or {}
         parts = [f"Ham radio net on {r['freq_mhz']:.3f} MHz." if r.get("freq_mhz") else "Ham radio net."]
@@ -821,7 +821,7 @@ class Station:
     # ---------- workers ----------
     @staticmethod
     def _warm(eng):
-        """The first GPU run compiles kernels (+1-2 s on W9XYZ-5); pay that at startup, not on air."""
+        """The first GPU run compiles kernels (+1-2 s on the test PC); pay that at startup, not on air."""
         try:
             if getattr(eng, "warm", True):
                 eng.transcribe(np.zeros(SR * 2, np.float32))

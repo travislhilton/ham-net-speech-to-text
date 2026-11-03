@@ -6,7 +6,6 @@ is reused until it expires. The password is kept in the OS credential store (Win
 Manager / macOS Keychain) via `python -m hamkit.qrz set-login` (hidden prompt). Fallbacks, in
 order: QRZ_USERNAME / QRZ_PASSWORD in the environment, then config/local.yaml qrz.username/password. Every successful lookup is cached in
 <CALLBOOK_DIR>/qrz_cache.sqlite, so a call looked up once is available with no network.
-W9XYZ's account: QRZ Premium with XML Logbook Data enabled (checked 2026-11-02, ends 2027-01-24).
 
     python -m hamkit.qrz set-login      # store username + password in the OS credential store
     python -m hamkit.qrz export-env     # macOS: copy the Keychain login into the private env file

@@ -1,6 +1,6 @@
 """One-tap net control for the transcribe service: start, stop, status.
 
-    python -m tools.net start "Springfield Valley ARES" --freq 146.94 --ncs W9XYZ
+    python -m tools.net start "Example County ARES" --freq 146.94 --ncs W9XYZ
     python -m tools.net stop            # stops the one open net (asks for an id if several)
     python -m tools.net status          # open nets; --all for the recent list
 

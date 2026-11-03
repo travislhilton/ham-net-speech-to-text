@@ -1,6 +1,6 @@
 """Whisper engines for the station, as chosen by tools/pick_engine.py (config/engine.yaml).
 
-Rules learned on W9XYZ-5 (2026-11-02):
+Rules learned on the test PC (2026-11-02):
 - never create an `openvino.Core` in this process: Core + a GPU WhisperPipeline hangs the process at exit;
 - English-only models (*.en) must not be given a language;
 - each pipeline is created and used by ONE thread (the worker that owns it).
@@ -79,7 +79,7 @@ def make(spec: dict | None, models_dir: Path = ROOT / "models", prompt: str | No
     if not spec:
         return None
     # The long vocabulary prompt (~900 chars) sent OpenVINO turbo into repetition loops on real traffic
-    # (W9XYZ-5, 2026-11-02: "TESTING TESTING …"); the station passes a short per-transmission prompt.
+    # (test PC, 2026-11-02: "TESTING TESTING …"); the station passes a short per-transmission prompt.
     p = "" if prompt is None else prompt
     if spec["engine"] == "openvino":
         return OpenVINOEngine(spec["model"], spec["device"], models_dir, p)

@@ -9,3 +9,6 @@ config/local.yaml
 !install/windows/bench.wav
 config/secrets.env
 .claude/
+private/
+deploy/windows/ssh-keys.txt
+capture/config.yaml

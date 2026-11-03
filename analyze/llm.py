@@ -1,4 +1,4 @@
-"""LiteLLM gateway client (OpenAI-compatible). Aliases live in llm-platform.
+"""LiteLLM gateway client (OpenAI-compatible). Aliases live in your LiteLLM gateway config.
 
 The LLM steps run on the LLM server (models already resident there; the aliases add no memory).
 The home server stays the system of record: when the LLM server is unreachable or no key is set,
@@ -25,7 +25,7 @@ def _get_client():
     global _client
     if _client is None:
         from openai import OpenAI
-        _client = OpenAI(base_url=os.environ.get("LITELLM_URL", "http://192.168.1.57:4000/v1"),
+        _client = OpenAI(base_url=os.environ["LITELLM_URL"],
                          api_key=os.environ["LITELLM_KEY"], timeout=TIMEOUT_S, max_retries=1)
     return _client
 

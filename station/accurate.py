@@ -14,7 +14,7 @@ those results count as final.
 
 Config (station.yaml):
     accurate:
-      urls: [http://192.168.1.54:8090, http://home-server:8090]   # tried in order
+      urls: [http://192.168.1.20:8090, http://my-server:8090]   # your server; tried in order
       live: true                # provisional text as each transmission ends
       final_after_min: 5        # the final pass this many quiet minutes after a net's last transmission
       auto_after_min: 15        # catch-up for anything still without the final pass (e.g. the Mac was off); 0 = off
@@ -34,7 +34,7 @@ import wave
 from datetime import datetime, timedelta
 from pathlib import Path
 
-DEFAULT_URLS = ["http://192.168.1.54:8090", "http://home-server:8090"]
+DEFAULT_URLS: list[str] = []   # no default server: config/station.yaml accurate.urls names it
 FIRST_GUESS_RATE = 8.0          # audio seconds per wall second before the first measurement (home server: 11-20x)
 OVERHEAD_S = 0.4                # per transmission: upload + model call
 PROV_CONTEXT_S = 26.0           # provisional: the target + the net before it, up to one Whisper window

@@ -1,13 +1,16 @@
-# Enable OpenSSH Server on the puck (W9XYZ-5) so the Macs can manage it. Idempotent.
+# Enable OpenSSH Server on the station PC so the Macs can manage it. Idempotent.
 # Run ONCE in an elevated PowerShell (Start → type "PowerShell" → Run as administrator):
 #   paste this whole file, or:  powershell -ExecutionPolicy Bypass -File enable-ssh.ps1
-# Key-only login from the home server and dev laptop; port 22 open only to Tailscale + home LAN.
-$ErrorActionPreference = 'Stop'
-$keys = @(
-  'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEKEYEXAMPLEKEYEXAMPLEKEYEXAMPLEKEY you@your-computer',
-  'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEKEYEXAMPLEKEYEXAMPLEKEYEXAMPLEKEY you@your-computer (dev laptop)'
+# Key-only login from the computers in ssh-keys.txt; port 22 open only to Tailscale + this PC's own network.
+param(
+  # One public key per line (from the computers that will manage this PC). Kept out of the repo.
+  [string]$KeysFile = "$PSScriptRoot\ssh-keys.txt"
 )
-$allowFrom = @('100.64.0.0/10', '192.168.1.0/24')   # Tailscale CGNAT range, home LAN
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path $KeysFile)) { throw "Put the managing computers' SSH public keys, one per line, in $KeysFile (not committed)." }
+$keys = @(Get-Content $KeysFile | Where-Object { $_ -match '^ssh-' })
+if (-not $keys) { throw "No ssh- public keys found in $KeysFile" }
+$allowFrom = @('100.64.0.0/10', 'LocalSubnet')   # Tailscale and this PC's own network only
 
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run this in an ADMINISTRATOR PowerShell.' }
@@ -22,7 +25,7 @@ if ($cap.State -ne 'Installed') {
   Write-Host "after install: $($cap.State), restart needed: $($r.RestartNeeded)"
 }
 
-# 2. The sshd service. Seen 2026-11-02 on W9XYZ-5: the feature install returned without error and no
+# 2. The sshd service. Seen 2026-11-02 on the test PC: the feature install returned without error and no
 #    service existed. If sshd.exe is on disk, register the service ourselves; if not, Windows still
 #    has the install pending and only a restart finishes it.
 $sshdExe = "$env:SystemRoot\System32\OpenSSH\sshd.exe"

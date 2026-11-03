@@ -34,7 +34,7 @@ class Callbook:
     def validate(self, call: str) -> bool:
         """True when the callsign is real enough to show: in the roster, licensed by the FCC, or a
         non-US call whose prefix belongs to a country. A US-shaped call the FCC does not know is
-        rejected (Whisper invents those: 'W9THQ' for 'W9XYZ')."""
+        rejected (Whisper invents those: 'W9XZ' for 'W9XYZ')."""
         c = call.upper()
         if c in self.known:
             return self.known[c]

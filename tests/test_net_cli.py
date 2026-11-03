@@ -31,10 +31,10 @@ def _net(i, name="Net"):
 
 def test_start_sends_only_given_fields():
     api, lines = FakeApi(), []
-    assert net.run(["start", "Springfield Valley ARES", "--freq", "146.94", "--ncs", "W9XYZ"], api, lines.append) == 0
+    assert net.run(["start", "Example County ARES", "--freq", "146.94", "--ncs", "W9XYZ"], api, lines.append) == 0
     assert api.calls[-1] == ("POST", "/nets/start",
-                             {"name": "Springfield Valley ARES", "frequency_mhz": 146.94, "net_control": "W9XYZ"})
-    assert "#9 Springfield Valley ARES 146.94 MHz NCS W9XYZ" in lines[0]
+                             {"name": "Example County ARES", "frequency_mhz": 146.94, "net_control": "W9XYZ"})
+    assert "#9 Example County ARES 146.94 MHz NCS W9XYZ" in lines[0]
     assert lines[-1].endswith("stop 9")
 
 

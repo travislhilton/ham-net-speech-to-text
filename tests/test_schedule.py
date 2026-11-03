@@ -16,7 +16,7 @@ from station.server import serve
 CFG = {"callsign": "W9XYZ",
        "radios": [{"id": "ftm", "name": "FTM-150R", "device": "NET-REC", "gate": "carrier", "freq_mhz": 146.94},
                   {"id": "ic705", "name": "IC-705", "device": "IC-705", "gate": "voice", "freq_mhz": 7.185, "mode": "LSB"}],
-       "schedule": [{"name": "Springfield Valley ARES net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+       "schedule": [{"name": "Example County ARES net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
                      "start": "20:00", "duration_min": 60, "ncs": "WA7XQZ"}],
        "port": 0, "bind": "127.0.0.1", "qrz_online": False}
 TUE = datetime(2026, 11, 3)          # a Tuesday
@@ -52,7 +52,7 @@ def test_validate_normalizes_and_refuses():
 
 def test_seeded_from_station_yaml_then_stored_in_data(tmp_path):
     st = make(tmp_path)
-    assert [n["name"] for n in st.cfg["schedule"]] == ["Springfield Valley ARES net"] and st.cfg["schedule"][0]["id"]
+    assert [n["name"] for n in st.cfg["schedule"]] == ["Example County ARES net"] and st.cfg["schedule"][0]["id"]
     assert not (tmp_path / "schedule.json").exists()                     # nothing written until an edit
     q = st.bus.subscribe()
     res = st.nets.add({"name": "HF net", "radio": "ic705", "freq_mhz": 3.915, "mode": "LSB", "days": ["Thu"],
@@ -94,7 +94,7 @@ def test_listen_only_during_nets_pauses_and_resumes(tmp_path):
     st.set_radio("ftm", 145.9, "FM")
     r = st.nets.set_listen("ftm", {"scheduled": True, "tune": True})
     assert r["paused"] and r["paused_by"] == "schedule"                   # no net now: paused at once
-    assert r["listen"]["next"] == {"name": "Springfield Valley ARES net", "start": "2026-11-03T20:00"}
+    assert r["listen"]["next"] == {"name": "Example County ARES net", "start": "2026-11-03T20:00"}
     assert not st.radios["ic705"].get("paused")                             # the other radio is untouched
     clock.t = TUE.replace(hour=19, minute=58)                             # 2 min before: still paused
     st.nets.tick()
@@ -103,7 +103,7 @@ def test_listen_only_during_nets_pauses_and_resumes(tmp_path):
     st.nets.tick()
     assert not st.radios["ftm"]["paused"] and st.radios["ftm"]["paused_by"] is None
     assert st.radios["ftm"]["freq_mhz"] == 146.94                         # logged as the net's frequency
-    assert st.radios["ftm"]["listen"]["now"] == "Springfield Valley ARES net"
+    assert st.radios["ftm"]["listen"]["now"] == "Example County ARES net"
     # the operator pauses during the net: it stays paused (no change of window)
     st.set_paused("ftm", True)
     clock.t = TUE.replace(hour=20, minute=30)

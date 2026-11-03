@@ -1,0 +1,40 @@
+# Copy to capture/config.yaml (not committed) and edit. Example hardware: Yaesu FTM-150R → DATA jack → USB sound card.
+# If a digital-mode station uses the SAME model of sound card, rename this card's recording endpoint in
+# Windows Sound settings to "NET-REC" and match on that — never on "USB Audio Device".
+# Radio: Set 45 DATA BAND = A-BAND FIX (tune band A to the net), 46 DATA SPEED = 1200
+# (the 1200 pin is de-emphasized voice-band audio; the 9600 pin is flat discriminator audio).
+device_name: "NET-REC"               # substring match; run `recorder.py --list-devices`
+sample_rate: 16000
+channels: 1
+frequency_mhz: 146.520               # label only
+net_name: "Example County EMCOMM"
+station: "N0CALL"
+out_dir: "recordings"
+queue_dir: "queue"
+
+vad:
+  mode: "carrier"                    # carrier | silero | cos. carrier = software noise squelch on the
+                                     # DATA jack's unsquelched hiss (gates.py; measured 35-48 dB drop)
+  threshold: 0.5
+  min_speech_ms: 400                 # ignore squelch tails / kerchunks
+  hangover_ms: 900                   # silence before a transmission is closed
+  max_tx_s: 180                      # hard split for very long transmissions
+  preroll_ms: 250                    # audio kept from just before the gate opens
+carrier:
+  band_hz: [4500, 7500]              # above the voice band: hiss only
+  open_db: 15                        # open when the band drops this far below the hiss floor
+  close_db: 8                        # close when it comes back within this
+cos:
+  port: "COM5"                       # serial CTS from Digirig; used when mode=cos
+  invert: false
+
+upload:
+  url: "http://192.168.1.20:8090/transcribe"   # your transcription server
+  api_key_env: "EMCOMM_STT_KEY"
+  timeout_s: 60
+  retry_interval_s: 30
+
+fallback:
+  enabled: true
+  model: "medium"                    # faster-whisper, int8 on CPU
+  after_failures: 3

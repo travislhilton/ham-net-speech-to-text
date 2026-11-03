@@ -2,7 +2,7 @@
 
 CarrierGate is a software noise squelch for a radio DATA jack, which outputs UNSQUELCHED
 discriminator audio: with no signal it is loud flat hiss; when a carrier arrives the hiss above
-the voice band collapses. Measured on W9XYZ-5 (FTM-150R -> DRA-50M), 2026-11-02: the 4.5-7.5 kHz
+the voice band collapses. Measured on the test PC (FTM-150R -> DRA-50M), 2026-11-02: the 4.5-7.5 kHz
 band dropped 35-48 dB under a carrier. The gate tracks the open-squelch hiss level and opens when
 the band falls `open_db` below it; it closes when the band comes back within `close_db`."""
 import numpy as np

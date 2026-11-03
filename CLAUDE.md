@@ -1,30 +1,21 @@
 # ham-net-speech-to-text — working notes for Claude
 
-- Transcription host is the **home server** (mlx-whisper), NOT the LLM server. LLM server is reached only via
-  LiteLLM `:4000` aliases `emcomm/structure` (light/Nemotron) and `emcomm/summarize` (heavy/Qwen).
-  Register those aliases in `llm-platform/deploy/llm-server/litellm_config.yaml` as standalone
-  groups per that repo's rules (never a fallback target to cloud).
-- Capture never shares the VARA FM audio device. Second interface only.
-- Every transcript row records `model` and `host` so puck-fallback transcripts can be re-run on
-  the home server later (`analyze/retranscribe.py`). Whisper runs only through `transcribe/engine.py`.
-- Tests: `.venv/bin/python -m pytest -q` from the repo root (161 green 2026-11-03).
-- Keep the raw WAV forever (NAS warm tier). Transcripts are derived data.
-- Callsign vocabulary: `config/vocab.yaml` (ITU phonetics, tacticals, EOC names, roster). Whisper
-  `initial_prompt` is built from it; `callsigns.py` normalizes phonetic spellings back to callsigns.
-- Deploy like the rest of the house: edit here → commit → push → pull on home server; launchd plist
-  copied from `deploy/home-server/`, never edited in `~/Library/LaunchAgents` directly.
-
-- **The product is a standalone Windows 11 station** (owner, 2026-11-02): any PC, any GPU/CPU, one or
-  more radios, works offline. The home server/LLM server are an optional accurate second pass.
-- **README + installer evolve with every change** (owner): update README "Status" and the install
-  steps in the same commit as the feature; `install/windows/install.ps1` must stay idempotent.
+- **The product is a standalone Windows 10/11 station**: any PC, any GPU/CPU, one or more radios, works offline.
+  A home server (Apple silicon, mlx-whisper, `transcribe/`) is an optional accurate second pass.
+- **No personal details in this repo** (owner, 2026-11-03): no owner callsign, name, addresses, home-network or
+  Tailscale IPs, host or user names, emails, SSH or other keys, or home-area place names — in code, tests, docs or
+  examples. They live in config that is never committed: `config/station.yaml`, `config/local.yaml`,
+  `config/secrets.env`, `capture/config.yaml`, `deploy/windows/ssh-keys.txt` (station) and
+  `~/.config/emcomm-stt/env` (server). Examples use W9XYZ / K7ABC / N0CALL, Springfield, 192.168.1.20.
+- **Owner's private notes:** if `private/` exists (a separate private repo cloned there, git-ignored), read
+  `private/CLAUDE.md` and `private/continuation-prompt.md` first. Commit and push them in that repo.
+- **README + installer evolve with every change**: update README "Status" and the install steps in the same
+  commit as the feature; `install/windows/install.ps1` must stay idempotent.
+- Tests: `.venv/bin/python -m pytest -q` from the repo root (167 green 2026-11-03).
+- Whisper runs only through `transcribe/engine.py` on the server; the station's engines are in `station/engine.py`.
 - OpenVINO on Windows: never create an `openvino.Core` in a process that runs a GPU WhisperPipeline — the
-  process hangs forever at exit (W9XYZ-5, 11-02). List devices in a child process (`tools/pick_engine.py`).
-- The station (`station/`) runs on W9XYZ-5 as task "HamNet Station" in the desktop session (audio +
-  Credential Manager need it); restart it after code changes. Dashboard :8091.
+  process hangs forever at exit. List devices in a child process (`tools/pick_engine.py`).
+- The station (`station/`) runs as task "HamNet Station" in the desktop session (audio + Credential Manager
+  need it); restart it after code changes. Dashboard :8091.
 - Windows over SSH: scp a script and run it with `-File` (piped stdin drops multi-line blocks).
-
-## Resume here
-Read `continuation-prompt.md` first (current state, hosts, next steps), then `docs/HANDOFF.md`
-(the design conversation), `docs/ARCHITECTURE.md` and `README.md`. Update the continuation
-prompt at the end of every session.
+- Capture never shares the digital-mode (VARA) audio device.

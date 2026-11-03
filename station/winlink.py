@@ -1,6 +1,6 @@
 """Winlink Express (formerly RMS Express) outbox writer for ICS forms.
 
-Format learned from Winlink Express 1.8.0.0 on W9XYZ-5 (2026-11-02, the owner's test ICS-213 and Form 309
+Format learned from Winlink Express 1.8.0.0 on the test PC (2026-11-02, the owner's test ICS-213 and Form 309
 posted to the Outbox, then read back):
   <install>\\<account>\\Messages\\<MID>.mime   RFC-822 message, CRLF; multipart/mixed:
         text/plain iso-8859-1 quoted-printable (the template's Msg: section, filled)

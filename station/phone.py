@@ -62,3 +62,17 @@ def addresses(host_header: str | None, port: int, ips: list[str] | None = None) 
 def qr_svg(text: str) -> str:
     import segno
     return segno.make(text, error="m").svg_inline(scale=5, border=2, dark="#000", light="#fff", omitsize=True)
+
+
+def card_with_download(html: str, url: str | None) -> str:
+    """The reference card with this station's download link (config/station.yaml `download_url`) and its QR code.
+    Without one, the card asks the reader to get the link from whoever runs the training."""
+    import html as h
+    if url:
+        try:
+            qr = qr_svg(url)
+        except ImportError:
+            qr = ""
+        return html.replace("<!--DOWNLOAD_QR-->", qr).replace("<!--DOWNLOAD_URL-->", h.escape(url))
+    return html.replace("<!--DOWNLOAD_QR-->", "").replace(
+        "<!--DOWNLOAD_URL-->", "Ask the instructor for the download link, or set download_url in config\\station.yaml")

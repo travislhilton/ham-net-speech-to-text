@@ -18,11 +18,11 @@ WEEKLY = _zip(
         "HD|300|||W9XYZ|A|HV|10/19/2021|10/19/2031||"],
     EN=["EN|100|||K7ABC|L|L1|Old, Name|Old||Name|||||1 Old St|Springfield|IL|62701|||000|0000000001|I|",
         "EN|200|||K7ABC|L|L2|Doe, Jane Q|Jane|Q|Doe||||j@example.org|2 Main St|Springfield|IL|62701|||000|0000000002|I|",
-        "EN|300|||W9XYZ|L|L3|Sample, Pat Q|Pat|Q|Sample|||||100 Main St|Capital City|IL|62701|||000|0000000003|I|"],
-    AM=["AM|200|||K7ABC|E|C|7||||||E||K7OLD|T|", "AM|300|||W9XYZ|G|C|7||||||E||KI7XQX|T|"])
+        "EN|300|||W9XYZ|L|L3|Sample, Pat Q|Pat|Q|Sample|||||1 Test Rd|Springfield|IL|62701|||000|0000000003|I|"],
+    AM=["AM|200|||K7ABC|E|C|7||||||E||K7OLD|T|", "AM|300|||W9XYZ|G|C|7||||||E||KI7AAA|T|"])
 DAILY = _zip(HD=["HD|300|||W9XYZ|A|HV|10/19/2021|10/19/2031||"],
-             EN=["EN|300|||W9XYZ|L|L3|Sample, Pat Q|Pat|Q|Sample|||||100 Main St|Springfield|IL|62701|||000|0000000003|I|"],
-             AM=["AM|300|||W9XYZ|E|C|7||||||E||KI7XQX|G|"])
+             EN=["EN|300|||W9XYZ|L|L3|Sample, Pat Q|Pat|Q|Sample|||||1 Test Rd|Springfield|IL|62701|||000|0000000003|I|"],
+             AM=["AM|300|||W9XYZ|E|C|7||||||E||KI7AAA|G|"])
 
 
 def test_weekly_then_daily(tmp_path):
@@ -33,7 +33,7 @@ def test_weekly_then_daily(tmp_path):
            (200, "Jane Q Doe", "Amateur Extra", "Active", "j@example.org")
     assert k["grant_date"] == "2020-05-06" and k["valid"] and k["previous_call"] == "K7OLD"
     w = fcc.lookup(con, "W9XYZ")
-    assert (w["class_name"], w["city"]) == ("General", "Capital City")
+    assert (w["class_name"], w["city"]) == ("General", "Springfield")
     fcc.load_zip(con, DAILY)                                    # upgrade + move
     w = fcc.lookup(con, "W9XYZ")
     assert (w["class_name"], w["city"]) == ("Amateur Extra", "Springfield")
