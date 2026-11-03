@@ -26,8 +26,13 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   #radios{min-height:0;overflow-y:auto;align-items:stretch;grid-auto-rows:minmax(100%,auto)}
   .rcol{min-height:0}.rcol>section{flex:1;min-height:0;display:flex;flex-direction:column}
   .feed{flex:1;min-height:0;max-height:none}
-  main>div:last-child{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  .rcol>.guide{max-height:34vh;overflow-y:auto;overscroll-behavior:contain;flex:none}
 }
+.guide>h2,.logbox>.tabs{margin-bottom:6px}.guide .empty{margin:0}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}.pane[hidden]{display:none}
+.sch{margin-top:4px;font-size:13px}.sch .now{font-weight:700;color:var(--ok)}.cardbtns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+#q{width:150px;text-transform:uppercase}
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 .radio .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.radio .top .nm{flex:1}
 .rx{font-weight:700;color:var(--muted);font-size:13px}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
@@ -52,7 +57,7 @@ details{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6
 table.log{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}table.log td,table.log th{border-top:1px solid var(--line);padding:3px 4px;text-align:left;vertical-align:top}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}input[type=datetime-local]{width:auto;text-transform:none}
 .err{color:var(--bad);font-size:13px}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
-main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;padding:10px 16px 24px}
+main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding:10px 16px 24px}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}main{padding-left:12px;padding-right:12px}}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
 section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px}
@@ -82,21 +87,13 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   <span id="nettype" class="badge">Net type: listening…</span>
   <span class="clock" id="clock"></span>
   <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
+  <span class="small"><input id="q" placeholder="look up a callsign" maxlength="12" aria-label="Callsign to look up"> <button id="go">Look up</button></span>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
 </header>
 <main>
   <div id="radios"></div>
-  <div>
-    <section><h2>What you can do now</h2><div id="rem"></div><div id="hints"><p class="muted small">Guidance appears here when something calls for it: a relay request, emergency traffic, check-ins, formal messages.</p></div></section>
-    <section><h2>Stations heard</h2>
-      <div class="small" style="margin-bottom:6px">Look up <input id="q" placeholder="callsign" maxlength="12"> <button id="go">Look up</button></div>
-      <div id="lookup"></div><div id="heard"><p class="muted small">None yet.</p></div></section>
-    <section><h2>Winlink messages</h2>
-      <p class="small muted" style="margin:0 0 6px">After a net or conversation: an ICS-309 log and an ICS-213 summary, filled out, addressed to everyone who took part. You review them first; they go to your Winlink Express Outbox and are sent the next time you connect.</p>
-      <div class="small"><select id="wlRadio"></select> <button id="wlPrep">Prepare messages…</button></div></section>
-    <section><h2>Schedule</h2><div id="sched" class="small"></div></section>
-  </div>
 </main>
+<dialog id="callDlg"><div id="lookup"></div><div class="row"><button onclick="$('callDlg').close()">Close</button></div></dialog>
 <dialog id="settings"><form method="dialog" id="setForm">
   <h3>Settings</h3>
   <label>Your callsign <input name="callsign" maxlength="11" required></label>
@@ -151,6 +148,7 @@ function upsertTx(t){
   if(i>=0)S.tx[i]=t;else S.tx.push(t);
   const el=$("tx-"+t.id);
   if(el){el.outerHTML=txHtml(t)}else renderFeed(t.radio);
+  if(t.status==="final")renderHeard(t.radio);
 }
 // ---------- radio cards: built once, updated in place (the waterfall canvas must survive updates) ----------
 const LUT=(()=>{const st=[[0,[8,12,40]],[.35,[20,60,160]],[.55,[0,170,200]],[.72,[240,220,40]],[.88,[240,110,20]],[1,[255,255,255]]];
@@ -179,11 +177,16 @@ function ensureCard(r){
    <div class="mrow"><span class="ml">Signal</span><div class="bar">${zones(m)}<i class="fill"></i><i class="pk"></i></div><span class="mv lv">—</span></div>
    <div class="mrow"><span class="ml">SNR</span><div class="bar">${snrZones(m)}<i class="fill"></i></div><span class="mv sv">—</span></div>
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
-   <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>`;
+   <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>
+   <div class="sch"></div>
+   <div class="cardbtns"><button data-wl="${esc(r.id)}" title="ICS-309 log + ICS-213 summary of this radio's last net or conversation, to everyone who took part">Winlink messages…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
-  const sec=document.createElement("section");
-  sec.innerHTML=`<h2>On the air · ${esc(r.name)}</h2><div class="feed" id="feed-${esc(r.id)}"><p class="muted">Waiting for the first transmission.</p></div>`;
-  col.append(el,sec);$("radios").appendChild(col);renderFeed(r.id);return el}
+  const guide=document.createElement("section");guide.className="guide";guide.id="guide-"+r.id;
+  const sec=document.createElement("section");sec.className="logbox";const id=esc(r.id);
+  sec.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="feed" data-rid="${id}" role="tab">On the air</button><button data-tab="heard" data-rid="${id}" role="tab">Stations heard <span class="hn"></span></button></div>
+    <div class="feed pane" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>
+    <div class="feed pane" id="heard-${id}" hidden><p class="muted small">None yet.</p></div>`;
+  col.append(el,guide,sec);$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
 function renderRadios(){
   const box=$("radios");
   if(!S.radios.length){box.innerHTML='<div class="radio">No radios set up yet. Add one to <code>config\\station.yaml</code> (see README, "Connecting a radio").</div>';return}
@@ -202,6 +205,8 @@ function renderRadios(){
         <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.</div></form>`:"";
     }
     el.querySelector(".cap").textContent=wfCaption(r);
+    const cur=(S.net||{}).current,nets=(S.schedule||[]).filter(n=>n.radio===r.id);
+    el.querySelector(".sch").innerHTML=nets.length?"Nets: "+nets.map(n=>`<span class="${cur&&cur.name===n.name?"now":""}">${cur&&cur.name===n.name?"now: ":""}${esc(n.name)} ${esc((n.days||[]).join(", ")||"daily")} ${esc(n.start)}${n.freq_mhz?" · "+esc(n.freq_mhz)+" MHz":""}</span>`).join("; "):'<span class="muted">No nets scheduled on this radio.</span>';
     el.querySelector(".err").textContent=r.error||"";
     if(r.state!=="listening"){el.querySelector(".rx").textContent=r.state==="error"?"no audio":r.state;el.querySelector(".rx").className="rx"}
   }
@@ -239,12 +244,15 @@ function renderHints(){
   const types=Object.values(H).map(h=>h.net).filter(n=>n&&n.type&&n.type!=="unknown");
   const nt=$("nettype");nt.textContent=types.length===1?types[0].label:types.length>1?`${types.length} nets heard`:"Net type: listening…";
   nt.className="badge "+(emerg.length?"emergency":types.length===1?types[0].type:"");
-  const multi=Object.keys(H).length>1;
-  $("rem").innerHTML=Object.values(H).flatMap(h=>h.reminders||[]).filter((r,i,a)=>a.findIndex(x=>x.text===r.text)===i).map(r=>`<div class="rem">${esc(r.text)}</div>`).join("");
-  const html=Object.entries(H).filter(([id,h])=>(h.cards||[]).length).map(([id,h])=>(multi?`<div class="small muted" style="margin:4px 0">${esc(name(id))}</div>`:"")+
-    h.cards.map(c=>`<div class="card ${c.priority==="high"?"high":""}"><h3>${esc(c.title)}</h3><ol>${(c.steps||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ol>${(c.say||[]).map(s=>`<div class="say"><span>${esc(s)}</span></div>`).join("")}</div>`).join("")).join("");
-  $("hints").innerHTML=html||'<p class="muted small">Guidance appears here when something calls for it: a relay request, emergency traffic, check-ins, formal messages.</p>';
+  for(const r of S.radios)renderGuide(r.id);
   renderRadios();
+}
+function renderGuide(rid){
+  const g=document.getElementById("guide-"+rid);if(!g)return;
+  const h=(S.hints||{})[rid]||{};
+  const rem=(h.reminders||[]).map(r=>`<div class="rem">${esc(r.text)}</div>`).join("");
+  const cards=(h.cards||[]).map(c=>`<div class="card ${c.priority==="high"?"high":""}"><h3>${esc(c.title)}</h3><ol>${(c.steps||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ol>${(c.say||[]).map(s=>`<div class="say"><span>${esc(s)}</span></div>`).join("")}</div>`).join("");
+  g.innerHTML=`<h2>What you can do now</h2>${rem}${cards||'<p class="muted small empty">Guidance appears here when something on this radio calls for it: a relay request, emergency traffic, check-ins, formal messages.</p>'}`;
 }
 function cardHtml(c,e){
   const rows=[["Name",c.name],["Location",[c.city,c.state,c.country].filter(Boolean).join(", ")],["License",c.license_class?`${c.license_class}${c.license_status&&c.license_status!=="Active"?" ("+c.license_status+")":""}${c.expires?", expires "+c.expires:""}`:""],
@@ -253,7 +261,19 @@ function cardHtml(c,e){
    <dl class="st">${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join("")}</dl>
    <div class="small muted">${(c.sources||[]).join(" · ")||"not found in the callbooks"}${c.qrz_url?` · <a href="${esc(c.qrz_url)}" target="_blank" rel="noopener">QRZ page</a>`:""}</div></div>`;
 }
-function renderHeard(){$("heard").innerHTML=S.heard.length?S.heard.map(e=>cardHtml(e.card||{call:e.call},e)).join(""):'<p class="muted small">None yet.</p>'}
+function renderHeard(rid){
+  const cards=Object.fromEntries((S.heard||[]).map(e=>[e.call,e.card]));
+  for(const r of S.radios){
+    if(rid&&r.id!==rid)continue;
+    const box=document.getElementById("heard-"+r.id);if(!box)continue;
+    const seen={};
+    for(const t of S.tx){if(t.radio!==r.id||t.status!=="final")continue;
+      for(const c of t.callsigns||[]){const s=seen[c]||(seen[c]={call:c,count:0,last:t.start});s.count++;if(t.start>s.last)s.last=t.start}}
+    const list=Object.values(seen).sort((a,b)=>b.last.localeCompare(a.last));
+    box.innerHTML=list.length?list.map(e=>cardHtml(cards[e.call]||{call:e.call},e)).join(""):'<p class="muted small">None yet.</p>';
+    const n=document.querySelector(`#col-${CSS.escape(r.id)} .hn`);if(n)n.textContent=list.length?`(${list.length})`:"";
+  }
+}
 
 // ---------- settings ----------
 let OP=null;
@@ -277,7 +297,6 @@ $("setSave").onclick=async e=>{
   OP=d;$("me").textContent=d.callsign+" station";$("settings").close();
 };
 // ---------- Winlink ----------
-function wlRadios(){const s=$("wlRadio"),v=s.value;s.innerHTML=S.radios.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");if(v)s.value=v}
 let WL=null;
 async function wlPreview(body){
   $("wlBody").innerHTML='<p>Preparing…</p>';if(!$("wl").open)$("wl").showModal();
@@ -286,7 +305,6 @@ async function wlPreview(body){
   if(!r.ok){$("wlBody").innerHTML=`<p class="bad">${esc(d.error||"could not prepare")}</p><button onclick="$('wl').close()">Close</button>`;return}
   WL=d;renderWl();
 }
-$("wlPrep").onclick=()=>wlPreview({radio:$("wlRadio").value});
 function renderWl(){
   const d=WL,op=d.operator;
   const warn=!op.winlink_dir?'<p class="bad">Set your Winlink Express folder in Settings first.</p>':op.express_running?'<p class="rem">Winlink Express is open. Close it before putting messages in the Outbox.</p>':"";
@@ -315,18 +333,19 @@ function renderWl(){
     m.className="ok";m.textContent=`${res.written.length} message(s) are in the ${res.account} Outbox. Open Winlink Express to check them, then connect to send.`;
   };
 }
-function renderSched(){
-  $("sched").innerHTML=(S.schedule||[]).length?S.schedule.map(n=>`<div>${esc(n.name)} — ${esc((n.days||[]).join(", ")||"daily")} ${esc(n.start)} · ${esc(n.freq_mhz||"")} MHz${n.radio?" · "+esc(n.radio):""}</div>`).join(""):'<span class="muted">No nets scheduled. Add them to <code>config\\station.yaml</code>.</span>';
-}
 function renderEngine(e){if(!e)return;$("engine").textContent=e.status==="ready"?"· "+e.final:e.status==="loading"?"· loading speech models…":"· "+(e.status||"")+" "+(e.final||e.final_error||"")}
-function all(){wlRadios();renderRadios();renderNet();renderHints();renderHeard();renderFeed();renderSched()}
+function all(){renderRadios();renderNet();renderHints();renderHeard();renderFeed()}
 async function lookup(call){
   call=call.trim().toUpperCase();if(!call)return;
-  $("lookup").innerHTML='<p class="muted small">Looking up…</p>';
+  $("lookup").innerHTML='<p class="muted small">Looking up…</p>';if(!$("callDlg").open)$("callDlg").showModal();
   try{const r=await fetch("/api/lookup?call="+encodeURIComponent(call));const c=await r.json();$("lookup").innerHTML=c.error?`<p class="bad small">${esc(c.error)}</p>`:cardHtml(c)}catch(e){$("lookup").innerHTML='<p class="bad small">Lookup failed.</p>'}
 }
 document.addEventListener("click",e=>{
   const c=e.target.closest("[data-call]");if(c){$("q").value=c.dataset.call;lookup(c.dataset.call)}
+  const w=e.target.closest("[data-wl]");if(w)wlPreview({radio:w.dataset.wl});
+  const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
+    col.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
+    col.querySelector("#feed-"+CSS.escape(tb.dataset.rid)).hidden=tb.dataset.tab!=="feed";col.querySelector("#heard-"+CSS.escape(tb.dataset.rid)).hidden=tb.dataset.tab!=="heard"}
   const p=e.target.closest("[data-play]");if(p){new Audio("/audio/"+p.dataset.play).play()}
   const tu=e.target.closest("[data-tune]");if(tu){editing=tu.dataset.tune;renderRadios();const i=document.querySelector(".tuneform input");if(i){i.focus();i.select()}}
   if(e.target.closest("[data-cancel]")){editing=null;document.activeElement.blur();renderRadios()}
