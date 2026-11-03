@@ -231,7 +231,7 @@ function accHtml(rid,fin,latest){
   if(st.last&&st.last.state==="unreachable")return `<div class="acc"><span class="bad">Accurate pass waiting: the home server is not reachable</span> <span class="muted">(tries again every 2 min)</span> ${run("Try now")}</div>`;
   if(st.last&&st.last.state==="error")return `<div class="acc"><span class="bad">Accurate pass failed: ${esc(st.last.error||"")}</span> ${run("Try again")}</div>`;
   const n=st.missing.length;
-  return `<div class="acc"><span class="muted">${n} of ${fin.length} with live text only. ${latest?"The accurate pass starts by itself 15 min after the last transmission":"Accurate pass"}: ${dur(st.est)}.</span> ${run(latest?"Run now":"Run accurate pass")}</div>`;
+  return `<div class="acc"><span class="muted">${n} of ${fin.length} with live text only. ${latest?"The accurate pass follows each transmission":"Accurate pass"}: ${dur(st.est)}.</span> ${run(latest?"Run now":"Run accurate pass")}</div>`;
 }
 function wlAccNote(){
   const box=$("wlAcc");if(!box||!WL)return;

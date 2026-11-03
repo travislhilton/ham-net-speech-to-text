@@ -790,6 +790,8 @@ class Station:
         self.bus.publish("tx", tx)
         self.bus.publish("hints", self.hints)
         self.bus.publish("heard", {"heard": self.heard_list()})
+        if getattr(self, "accurate", None):
+            self.accurate.on_final(tx)                           # the accurate pass follows the live text
         if new and self.callbook and self.callbook.qrz and self.cfg.get("qrz_online", True):
             threading.Thread(target=self._qrz_refresh, args=(new,), daemon=True).start()
 

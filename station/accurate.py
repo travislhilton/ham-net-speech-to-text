@@ -7,7 +7,9 @@ the Winlink messages now (live text) or wait.
 Config (station.yaml):
     accurate:
       urls: [http://192.168.1.54:8090, http://home-server:8090]   # tried in order
-      auto_after_min: 15        # a net/conversation is over after this many quiet minutes; 0 = only on request
+      live: true                # re-transcribe each transmission as soon as its live text is done
+      auto_after_min: 15        # catch-up: anything still without the pass this many quiet minutes after a net
+                                # (e.g. the home server was unreachable); 0 = off
 The key: EMCOMM_STT_KEY in the environment or in config/secrets.env (KEY=value lines; never committed).
 """
 import json
@@ -79,6 +81,7 @@ class AccuratePass:
         cfg = cfg or {}
         self.st = station
         self.auto_after = timedelta(minutes=float(cfg.get("auto_after_min", 15)))
+        self.live = bool(cfg.get("live", True))
         self.remote = remote or Remote(cfg.get("urls", DEFAULT_URLS), read_key(station.root))
         self.jobs: dict[str, dict] = {}          # key "radio|start" -> status
         self.q: queue.Queue = queue.Queue()
@@ -113,9 +116,11 @@ class AccuratePass:
             if j and j["state"] in ("queued", "running"):
                 j["end"] = max(j["end"], end)          # a manual run of a net still going: extend it
                 return dict(j)
+            prev = j if j and j["state"] == "done" else {"done": 0, "audio_done_s": 0.0}
             j = {"key": key, "radio": rid, "start": start, "end": end, "state": "queued", "auto": auto,
-                 "total": len(todo), "done": 0, "failed": 0, "audio_s": round(sum(t.get("duration_s") or 0 for t in todo), 1),
-                 "audio_done_s": 0.0, "queued_at": datetime.now().isoformat(timespec="seconds"),
+                 "total": prev["done"] + len(todo), "done": prev["done"], "failed": 0,
+                 "audio_s": round(prev["audio_done_s"] + sum(t.get("duration_s") or 0 for t in todo), 1),
+                 "audio_done_s": prev["audio_done_s"], "queued_at": datetime.now().isoformat(timespec="seconds"),
                  "started_at": None, "finished_at": None, "eta_s": None, "error": None, "model": None}
             if not todo:
                 j.update(state="done", finished_at=j["queued_at"])
@@ -125,6 +130,23 @@ class AccuratePass:
             self.q.put(key)
         self._publish()
         return dict(j)
+
+    def on_final(self, tx: dict):
+        """A transmission's live text is done: queue it under its net/conversation's job right away."""
+        if not self.live or not tx.get("wav"):
+            return
+        from . import ics
+        with self.st.lock:
+            ss = ics.sessions(list(self.st.tx), tx["radio"])
+        s = next((x for x in reversed(ss) if x["start"] <= tx["start"] <= x["end"]), None)
+        if not s:
+            return
+        key = f"{tx['radio']}|{s['start']}"
+        with self.lock:
+            j = self.jobs.get(key)
+            if j and j["state"] == "unreachable" and time.time() < self.retry_at.get(key, 0):
+                return                                          # offline: the sweep retries later
+        self.submit(tx["radio"], s["start"], s["end"], auto=True)
 
     def tick(self, now: datetime | None = None):
         """Called every few seconds: queue each net/conversation that has gone quiet and still lacks the pass."""
@@ -170,14 +192,30 @@ class AccuratePass:
                 self.retry_at[key] = time.time() + 120
             self._publish()
             return
-        with self.st.lock:
-            todo = self._pending(j["radio"], j["start"], j["end"])
-        with self.lock:                                        # the net may have grown since it was queued
-            j["total"] = j["done"] + j["failed"] + len(todo)
-            j["audio_s"] = round(j["audio_done_s"] + sum(t.get("duration_s") or 0 for t in todo), 1)
         prompt = self.st.prompt_for(j["radio"])
         hp = self.st.highpass_for(j["radio"])
+        tried = set()
+        while True:                                            # the net may grow while this runs
+            with self.st.lock:
+                todo = [t for t in self._pending(j["radio"], j["start"], j["end"]) if t["id"] not in tried]
+            if not todo:
+                break
+            with self.lock:
+                j["total"] = j["done"] + j["failed"] + len(todo)
+                j["audio_s"] = round(j["audio_done_s"] + sum(t.get("duration_s") or 0 for t in todo), 1)
+            self._transcribe_all(j, todo, tried, prompt, hp)
+            if self.st.stop.is_set():
+                return
+        with self.lock:
+            j.update(state="done" if j["done"] or not j["failed"] else "error", eta_s=0,
+                     finished_at=datetime.now().isoformat(timespec="seconds"))
+        if not j["auto"] or self.st.stop.is_set():
+            print(f"{datetime.now():%H:%M:%S} accurate pass {key}: {j['done']} of {j['total']} done, {j['failed']} failed", flush=True)
+        self._publish()
+
+    def _transcribe_all(self, j, todo, tried, prompt, hp):
         for t in todo:
+            tried.add(t["id"])
             if self.st.stop.is_set():
                 return
             try:
@@ -196,8 +234,3 @@ class AccuratePass:
                 j["audio_done_s"] += t.get("duration_s") or 0
                 j["eta_s"] = self._eta(j)
             self._publish()
-        with self.lock:
-            j.update(state="done" if j["done"] or not j["failed"] else "error", eta_s=0,
-                     finished_at=datetime.now().isoformat(timespec="seconds"))
-        print(f"{datetime.now():%H:%M:%S} accurate pass {key}: {j['done']} of {j['total']} done, {j['failed']} failed", flush=True)
-        self._publish()

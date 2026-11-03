@@ -34,5 +34,6 @@ schedule:                   # nets: which radio, which frequency, when (local ti
 
 accurate:                   # the accurate second pass on the home server (optional; home network only)
   urls: [http://192.168.1.54:8090, http://home-server:8090]   # tried in order
-  auto_after_min: 15        # runs by itself this many quiet minutes after a net/conversation; 0 = only on request
+  live: true                # re-transcribe each transmission as soon as its live text is done
+  auto_after_min: 15        # catch-up for anything missed, this many quiet minutes after a net; 0 = off
   # the key goes in config\secrets.env as EMCOMM_STT_KEY=... (never in this file; kept across updates)

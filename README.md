@@ -93,9 +93,10 @@ you chose is remembered. Each column shows:
   any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
   connect. Close Winlink Express first; the station refuses while it is open and backs up Winlink's message
   list before each write.
-- **Accurate pass** (home network, optional): 15 quiet minutes after a net or conversation ends, the station
-  sends its recordings to the home server (Whisper large-v3) and puts the result beside the live text; **Run now**
-  on a net's header starts it at once. The header shows what it is doing: how many are done, a progress bar
+- **Accurate pass** (home network, optional): as soon as each transmission's live text is done, the station
+  sends its recording to the home server (Whisper large-v3, about 1 s per transmission) and puts the result beside
+  the live text, so a net's accurate text is ready seconds after its last transmission. Anything missed (home server
+  unreachable) is caught up 15 quiet minutes after the net; **Run now** on a net's header starts that at once. The header shows what it is doing: how many are done, a progress bar
   and about how long is left, then **✓ Accurate text for all N**. Corrected transmissions show the new text,
   with the live text a click away. The Winlink window says the same thing: send now with the live text, or
   wait; when the pass finishes it offers **Load the accurate text** (the forms then use it). If the home server is

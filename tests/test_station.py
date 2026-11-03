@@ -330,7 +330,7 @@ def test_accurate_pass_beside_the_live_text(tmp_path):
 
 def test_accurate_pass_unreachable_and_auto(tmp_path):
     from datetime import datetime, timedelta
-    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 15}
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 15, "live": False}
     st = Station(cfg, lambda: engine.FakeEngine(["Testing, this is W9XYZ."]), callbook=FakeBook({}), data_dir=tmp_path)
     st._accurate_remote = FakeRemote(ok=False)
     st.start(listen=False)
@@ -356,7 +356,7 @@ def test_wer_compares_numbers_and_callsigns():
 
 def test_score_test_and_history(tmp_path):
     from station.wer import TEST_TEXT
-    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 0}
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 0, "live": False}     # the score-first path
     st = Station(cfg, lambda: engine.FakeEngine([TEST_TEXT.replace("lazy", "lacy")]), callbook=FakeBook({"W9XYZ": "T"}), data_dir=tmp_path)
     st._accurate_remote = FakeRemote()
     with pytest.raises(ValueError):
@@ -372,5 +372,22 @@ def test_score_test_and_history(tmp_path):
         assert "accurate" in r2 and r2["accurate"]["wer"] > 0.5            # the fake Mac text is a different sentence
         h = st.test_history()
         assert len(h) == 1 and "accurate" in h[0]                          # the re-score replaced the first
+    finally:
+        st.stop.set()
+
+
+def test_accurate_pass_follows_each_transmission(tmp_path):
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 0}           # live is the default
+    st = Station(cfg, lambda: engine.FakeEngine(["Net control this is K7-ABC, over.", "W9XYZ, go ahead."]),
+                 callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
+    st._accurate_remote = FakeRemote()
+    st.start(listen=False)
+    try:
+        for _ in range(2):
+            st.inject("ftm", np.zeros(16000 * 3, np.float32))
+            assert wait_for(lambda: st.tx and st.tx[-1]["status"] == "final" and st.tx[-1].get("accurate"))
+        jobs = st.accurate.status()
+        assert len(jobs) == 1 and jobs[0]["state"] == "done" and jobs[0]["done"] == jobs[0]["total"] == 2   # one job per net
+        assert st._accurate_remote.calls == 2
     finally:
         st.stop.set()
