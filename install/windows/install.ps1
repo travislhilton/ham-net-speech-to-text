@@ -35,8 +35,8 @@ $os = Get-CimInstance Win32_OperatingSystem
 Write-Host "  $($os.Caption) $($os.Version), $([math]::Round($os.TotalVisibleMemorySize/1MB)) GB memory"
 $drive = (Split-Path -Qualifier $InstallDir)
 $freeGB = [math]::Round((Get-PSDrive ($drive.TrimEnd(':'))).Free / 1GB, 1)
-if (-not (Test-Path "$InstallDir\.venv") -and $freeGB -lt 6) {
-  throw "Only $freeGB GB free on $drive; the first install needs about 6 GB (Python packages, Whisper models, FCC database)."
+if (-not (Test-Path "$InstallDir\.venv") -and $freeGB -lt 8) {
+  throw "Only $freeGB GB free on $drive; the first install needs about 8 GB (Python packages, Whisper models, FCC database)."
 }
 Write-Host "  $freeGB GB free on $drive"
 $online = $false

@@ -19,7 +19,7 @@ second pass and net reports (ICS-309 / ICS-213).
    models, the FCC license database) and takes 10–20 minutes. Re-run `install.cmd` after every update.
 
 What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing needs to be installed beforehand:
-- checks the PC first (64-bit Windows 10/11, about 6 GB free, internet for the first install) and says what is missing;
+- checks the PC first (64-bit Windows 10/11, about 8 GB free, internet for the first install) and says what is missing;
 - installs the Microsoft Visual C++ runtime if it is missing (OpenVINO, PyTorch and faster-whisper need it);
 - installs Python 3.12 for all users (winget, or straight from python.org when winget is missing) and a private
   environment in `C:\ham-net-speech-to-text\.venv` with every Python package the station uses;
