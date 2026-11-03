@@ -18,12 +18,19 @@ second pass and net reports (ICS-309 / ICS-213).
 3. Type your callsign when asked. The first run downloads about 2.5 GB (Python packages, Whisper
    models, the FCC license database) and takes 10–20 minutes. Re-run `install.cmd` after every update.
 
-What the installer does (`install/windows/install.ps1`, safe to re-run):
-- installs Python 3.12 for all users (winget) and a private environment in `C:\ham-net-speech-to-text\.venv`;
+What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing needs to be installed beforehand:
+- checks the PC first (64-bit Windows 10/11, about 6 GB free, internet for the first install) and says what is missing;
+- installs the Microsoft Visual C++ runtime if it is missing (OpenVINO, PyTorch and faster-whisper need it);
+- installs Python 3.12 for all users (winget, or straight from python.org when winget is missing) and a private
+  environment in `C:\ham-net-speech-to-text\.venv` with every Python package the station uses;
 - downloads three Whisper models in Intel OpenVINO format and **benchmarks this PC** to choose the
   live engine (`tools/pick_engine.py` → `config/engine.yaml`): Intel graphics, NVIDIA (CUDA) or CPU;
 - downloads the FCC amateur license database and the world country file, and schedules a daily
   update (task "HamNet Callbook Update", 04:15, only when online);
+- asks (once, optional) for a QRZ.com login: Enter skips it. It checks the login and says in plain words what the
+  account gives (full records need QRZ's "XML Logbook Data" subscription; without it only names and countries; US
+  callsigns are covered by the FCC database either way). The password goes to Windows Credential Manager;
+- reports the graphics card and driver (Intel/NVIDIA graphics are used only with a current driver);
 - keeps your settings (`config/station.yaml`, `config/engine.yaml`, `config/local.yaml`) across updates;
 - starts the station at every sign-in (task "HamNet Station"), puts a **HamNet Station** shortcut on the
   desktop, and opens port 8091 to your home network and Tailscale only;
