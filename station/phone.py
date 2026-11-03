@@ -10,6 +10,7 @@ import ipaddress
 import socket
 
 TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
+LABEL = {"tailscale": "Tailscale (the phone needs the Tailscale app on)", "network": "Same Wi-Fi or network as this PC"}
 
 
 def kind(ip: str) -> str | None:
@@ -46,13 +47,11 @@ def addresses(host_header: str | None, port: int, ips: list[str] | None = None) 
     if host_header:
         h = host_header.rsplit(":", 1)[0].strip("[]")
         if h and h.lower() not in ("localhost", "127.0.0.1", "::1") and (kind(h) or not h[0].isdigit()):
-            out.append({"url": f"http://{host_header}/", "label": "The address this browser is using"})
+            out.append({"url": f"http://{host_header}/", "label": LABEL.get(kind(h), "The address this browser is using")})
     for ip in (local_ipv4() if ips is None else ips):
         k = kind(ip)
         if k:
-            out.append({"url": f"http://{ip}:{port}/",
-                        "label": "Tailscale (phone has the Tailscale app on)" if k == "tailscale"
-                        else "Same Wi-Fi or network as this PC"})
+            out.append({"url": f"http://{ip}:{port}/", "label": LABEL[k]})
     seen, uniq = set(), []
     for a in out:
         if a["url"] not in seen:
@@ -62,4 +61,4 @@ def addresses(host_header: str | None, port: int, ips: list[str] | None = None) 
 
 def qr_svg(text: str) -> str:
     import segno
-    return segno.make(text, error="m").svg_inline(scale=5, border=2, dark="#000", light="#fff")
+    return segno.make(text, error="m").svg_inline(scale=5, border=2, dark="#000", light="#fff", omitsize=True)
