@@ -444,3 +444,18 @@ def test_template_loop():
     assert template_loop("I'm a lawyer, I'm a tester, I'm an exercise, I'm a speech-to-text, I'm a machine, I'm a computer, I'm a computer")
     assert not template_loop("Net control, this is K7ABC in Springfield, no traffic, thank you, over.")
     assert not template_loop("Good evening, good signal there. Got you now. KW7, Dale and Norma, thanks.")
+
+
+def test_accurate_available_flag(tmp_path, monkeypatch):
+    monkeypatch.delenv("EMCOMM_STT_KEY", raising=False)
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 0}
+    st = Station(cfg, lambda: engine.FakeEngine(["Testing."]), callbook=FakeBook({}), data_dir=tmp_path)
+    st._accurate_remote = FakeRemote(ok=False)
+    st.start(listen=False)
+    try:
+        assert st.accurate.available()                                   # on, not yet known to be down
+        st.inject("ftm", np.zeros(16000 * 2, np.float32))
+        assert wait_for(lambda: st.accurate.status() and st.accurate.status()[0]["state"] == "unreachable")
+        assert not st.accurate.available() and st.snapshot()["accurate_available"] is False   # nothing to wait for
+    finally:
+        st.stop.set()

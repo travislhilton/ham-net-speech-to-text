@@ -90,14 +90,19 @@ class AccuratePass:
         self.rate = FIRST_GUESS_RATE
         self.lock = threading.Lock()
         self.retry_at: dict[str, float] = {}
+        self.reach: bool | None = None          # the home server at the last try (None = not tried yet)
 
     # ----- status -----
     def status(self) -> list[dict]:
         with self.lock:
             return [dict(j) for j in self.jobs.values()]
 
+    def available(self) -> bool:
+        """Will waiting help? On, with a key, and the home server not known to be down."""
+        return bool(self.enabled and (self.live or self.auto_after > timedelta(0)) and self.reach is not False)
+
     def _publish(self):
-        self.st.bus.publish("accurate", {"sessions": self.status()})
+        self.st.bus.publish("accurate", {"sessions": self.status(), "available": self.available()})
 
     def _eta(self, j) -> int:
         left = j["audio_s"] - j["audio_done_s"]
@@ -194,7 +199,8 @@ class AccuratePass:
                          finished_at=datetime.now().isoformat(timespec="seconds"))
             self._publish()
             return
-        if not self.remote.reachable():
+        self.reach = self.remote.reachable()
+        if not self.reach:
             with self.lock:
                 j.update(state="unreachable", error="home server not reachable", finished_at=datetime.now().isoformat(timespec="seconds"))
                 self.retry_at[key] = time.time() + 120

@@ -960,4 +960,5 @@ class Station:
             return {"callsign": self.me, "radios": list(self.radios.values()), "tx": self._recent_tx(),
                     "heard": self.heard_list(), "hints": self.hints, "net": self.schedule_now(),
                     "schedule": self.cfg.get("schedule", []), "engines": self.engines,
-                    "accurate": self.accurate.status() if getattr(self, "accurate", None) else []}
+                    "accurate": self.accurate.status() if getattr(self, "accurate", None) else [],
+                    "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False}

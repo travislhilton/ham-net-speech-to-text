@@ -70,6 +70,11 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .sess .sbody{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
 .sess:not([open]){padding-top:4px;padding-bottom:4px}
 .sess+.tx{border-top:0}
+/* a transmission the accurate pass is still working on: a thin pulsing bar + "improving…" */
+.tx.pending{box-shadow:inset 3px 0 0 var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 7%,transparent),transparent 45%);animation:accpulse 1.6s ease-in-out infinite}
+.tx.pending .who::after{content:"improving…";font-size:11px;color:var(--muted);margin-left:4px}
+@keyframes accpulse{50%{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 35%,transparent)}}
+@media (prefers-reduced-motion:reduce){.tx.pending{animation:none}}
 .sess .acc{flex-basis:100%;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .acc .bar{flex:1 1 120px;max-width:220px;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
 .acc .bar i{display:block;height:100%;background:var(--accent,#2b6cb0)}
@@ -262,7 +267,8 @@ function txHtml(t0){
   const radio="";
   if(a&&t0.status==="final")body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span> · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
-  return `<div class="tx" id="tx-${esc(t.id)}"><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
+  const pend=S.accurate_available&&t0.status==="final"&&t0.wav&&!t0.accurate&&!t0.accurate_echo;   // waiting may improve it
+  return `<div class="tx${pend?" pending":""}" id="tx-${esc(t.id)}"${pend?' title="Improving: the accurate pass on the home server is working on this. Wait a moment for a better transcript."':""}><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
 }
 // A net or conversation = a run of transmissions on one frequency with no quiet gap over 15 minutes
 // (the same rule as station/ics.py sessions(), which builds the Winlink messages).
@@ -698,7 +704,7 @@ function connect(){
   es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
   es.addEventListener("schedule",e=>{const d=JSON.parse(e.data);S.schedule=d.schedule;S.net=d.net;renderRadios();renderNet();if($("netsDlg").open)renderNets(false)});
-  es.addEventListener("accurate",e=>{S.accurate=JSON.parse(e.data).sessions;renderFeed();wlAccNote()});
+  es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;renderFeed();wlAccNote()});
 }
 // ---------- schedule: the Nets dialog (data/schedule.json) + listen only during scheduled nets ----------
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
