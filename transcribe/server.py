@@ -72,13 +72,41 @@ def _open_nets(s, at: datetime):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "model": MODEL, "db": bool(_db)}
+    return {"ok": True, "model": MODEL, "accurate_model": ACCURATE_MODEL, "db": bool(_db)}
 
 
 @app.post("/reload-vocab", dependencies=[Depends(auth)])
 def reload_vocab():
     engine.reload()
     return {"ok": True, "roster": len(engine.roster)}
+
+
+ACCURATE_MODEL = os.environ.get("STT_ACCURATE_MODEL", "mlx-community/whisper-large-v3-mlx")
+_accurate_lock = __import__("threading").Lock()
+
+
+@app.post("/accurate", dependencies=[Depends(auth)])
+def accurate(audio: UploadFile = File(...), prompt: str = Form(""), highpass_hz: int = Form(300)):
+    """The station's accurate second pass: one transmission in (16 kHz mono 16-bit WAV), text out. Nothing is
+    stored here; the station keeps the result beside its live text. A plain def: FastAPI runs it in a worker
+    thread, and the lock keeps one Whisper on the GPU at a time."""
+    import io, time, wave
+    import numpy as np
+    import mlx_whisper
+    with wave.open(io.BytesIO(audio.file.read())) as w:
+        if w.getnchannels() != 1 or w.getframerate() != 16000 or w.getsampwidth() != 2:
+            raise HTTPException(415, "send 16 kHz mono 16-bit WAV")
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+    if highpass_hz and len(x) > 64:                       # sub-audible tone + mains hum off an FM data jack
+        f = np.fft.rfftfreq(len(x), 1 / 16000)
+        g = 0.5 - 0.5 * np.cos(np.pi * np.clip((f - (highpass_hz - 100)) / 100, 0, 1))
+        x = np.fft.irfft(np.fft.rfft(x.astype(np.float64)) * g, len(x)).astype(np.float32)
+    t0 = time.time()
+    with _accurate_lock:
+        r = mlx_whisper.transcribe(x, path_or_hf_repo=ACCURATE_MODEL, language="en", initial_prompt=prompt or None,
+                                   condition_on_previous_text=False, temperature=0)
+    return {"text": r["text"].strip(), "model": ACCURATE_MODEL.split("/")[-1], "audio_s": round(len(x) / 16000, 2),
+            "elapsed_s": round(time.time() - t0, 2)}
 
 
 @app.post("/transcribe", dependencies=[Depends(auth)])

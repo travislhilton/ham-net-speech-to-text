@@ -93,6 +93,17 @@ you chose is remembered. Each column shows:
   any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
   connect. Close Winlink Express first; the station refuses while it is open and backs up Winlink's message
   list before each write.
+- **Accurate pass** (home network, optional): 15 quiet minutes after a net or conversation ends, the station
+  sends its recordings to the home server (Whisper large-v3) and puts the result beside the live text; **Run now**
+  on a net's header starts it at once. The header shows what it is doing: how many are done, a progress bar
+  and about how long is left, then **✓ Accurate text for all N**. Corrected transmissions show the new text,
+  with the live text a click away. The Winlink window says the same thing: send now with the live text, or
+  wait; when the pass finishes it offers **Load the accurate text** (the forms then use it). If the home server is
+  unreachable the header says so and the station tries again every 2 minutes. The upload key goes in
+  `config\secrets.env` as `EMCOMM_STT_KEY=…` (kept across updates, never in git).
+- **Test transcription…** (on each radio card): someone reads a fixed text over the air; **Score** shows how
+  many words the live text and the accurate pass got wrong (0% = all right) and keeps a history, so a change
+  to the radio, the cable or the settings can be judged by a number (`data\tests.jsonl`).
 - **Settings** (top right): your callsign, name and grid; which Winlink Express folder (found
   automatically: `C:\\RMS Express` and any other install) and which callsign account sends.
 
@@ -131,7 +142,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
 | Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; Outbox format matched against Winlink Express 1.8 messages (one and two recipients); first real write to be checked |
 | Net schedule with radio, frequency and band | working, edited in `config/station.yaml`; an editor in the dashboard is next |
-| Accurate second pass + ICS-309/213 reports (home network: home server + LLM server) | server side working |
+| Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml; 3.915 net: 42 → 59 callsigns found) |
+| Over-the-air transcription test with word-error score and history | working |
 
 ## Editing the knowledge
 

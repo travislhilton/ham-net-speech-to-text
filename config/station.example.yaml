@@ -31,3 +31,8 @@ schedule:                   # nets: which radio, which frequency, when (local ti
     start: "20:00"
     duration_min: 60
     ncs: WA7XQZ             # net control station, used in suggested phrases
+
+accurate:                   # the accurate second pass on the home server (optional; home network only)
+  urls: [http://192.168.1.54:8090, http://home-server:8090]   # tried in order
+  auto_after_min: 15        # runs by itself this many quiet minutes after a net/conversation; 0 = only on request
+  # the key goes in config\secrets.env as EMCOMM_STT_KEY=... (never in this file; kept across updates)

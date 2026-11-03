@@ -142,3 +142,24 @@ def test_retranscribe_updates_stale_rows_and_clears_structure(client, monkeypatc
         t = s.get(Transmission, out["id"])
         assert (t.text, t.host, t.model, t.structured) == ("K7ABC checking in", "home-server", "stub", None)
     assert "changed" in capsys.readouterr().out
+
+
+def test_accurate_pass_endpoint(client, monkeypatch):
+    """The station's second pass: WAV in, text out, nothing stored; auth required; wrong format refused."""
+    import sys, types
+    seen = {}
+
+    def fake_transcribe(x, **kw):
+        seen.update(kw, n=len(x))
+        return {"text": " Net control, this is K7ABC. "}
+    monkeypatch.setitem(sys.modules, "mlx_whisper", types.SimpleNamespace(transcribe=fake_transcribe))
+    r = client.post("/accurate", files={"audio": ("a.wav", _wav(), "audio/wav")}, data={"prompt": "Ham radio net."})
+    assert r.status_code == 200 and r.json()["text"] == "Net control, this is K7ABC." and r.json()["audio_s"] == 0.1
+    assert seen["initial_prompt"] == "Ham radio net." and seen["n"] == 1600 and seen["temperature"] == 0
+    from fastapi.testclient import TestClient
+    import transcribe.server as server
+    assert TestClient(server.app).post("/accurate", files={"audio": ("a.wav", _wav())}).status_code == 401
+    b = io.BytesIO()
+    with wave.open(b, "wb") as w:
+        w.setnchannels(2); w.setsampwidth(2); w.setframerate(44100); w.writeframes(b"\0\0\0\0" * 100)
+    assert client.post("/accurate", files={"audio": ("s.wav", b.getvalue())}).status_code == 415

@@ -42,6 +42,9 @@ def make_handler(station):
                 if not re.fullmatch(r"[A-Z0-9/]{3,12}", call) or not station.callbook:
                     return self._json({"error": "bad callsign"}, 400)
                 return self._json(station.callbook.card(call, qrz_network=station.cfg.get("qrz_online", True)))
+            if u.path == "/api/test":
+                from .wer import TEST_TEXT
+                return self._json({"text": TEST_TEXT, "history": station.test_history()})
             if u.path == "/api/settings":
                 return self._json(station.operator())
             if u.path.startswith("/audio/"):
@@ -58,7 +61,7 @@ def make_handler(station):
         def do_POST(self):
             u = urlparse(self.path)
             m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear))?", u.path)
-            routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send"}
+            routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test"}
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
             if not (m or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json({"error": "not found"}, 404)
@@ -72,6 +75,11 @@ def make_handler(station):
                                                               body.get("title")))
                 if u.path == "/api/winlink/send":
                     return self._json(station.winlink_send(body))
+                if u.path == "/api/test":
+                    return self._json(station.score_test(body.get("radio"), body.get("tx")))
+                if u.path == "/api/accurate":
+                    return self._json(station.accurate_now(body.get("radio"), body.get("start"), body.get("end"),
+                                                           bool(body.get("force"))))
                 if m.group(2) == "pause":
                     return self._json(station.set_paused(m.group(1), bool(body.get("paused", True))))
                 if m.group(2) == "clear":

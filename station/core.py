@@ -126,6 +126,7 @@ class Station:
         self.cfg, self.clock = config, clock
         self.me = (config.get("callsign") or "").upper()
         self.data = Path(data_dir)
+        self.root = Path(__file__).resolve().parent.parent
         self.bus = Bus()
         self.callbook = callbook
         self.roster = load_roster() | {self.me} - {""}
@@ -165,9 +166,19 @@ class Station:
             for r in self.cfg["radios"]:
                 threading.Thread(target=self._listen, args=(r,), daemon=True, name=f"radio-{r['id']}").start()
         threading.Thread(target=self._ticker, daemon=True, name="ticker").start()
+        from .accurate import AccuratePass
+        self.accurate = AccuratePass(self, self.cfg.get("accurate"), getattr(self, "_accurate_remote", None))
+        threading.Thread(target=self.accurate.run, args=(self.stop,), daemon=True, name="accurate").start()
 
     def _ticker(self):
+        n = 0
         while not self.stop.wait(1.0):
+            n += 1
+            if n % 15 == 0 and getattr(self, "accurate", None):
+                try:
+                    self.accurate.tick()
+                except Exception as e:  # noqa: BLE001 — never let the pass stop the station
+                    print(f"accurate tick: {type(e).__name__}: {e}", flush=True)
             with self.lock:
                 radios = list(self.radios.values())
             self.bus.publish("radios", {"radios": radios, "net": self.schedule_now()})
@@ -258,7 +269,14 @@ class Station:
         net = (self.hints.get(rid) or {}).get("net") or {}
         sched = self._current_by_radio(datetime.fromisoformat(start)).get(rid) or {}
         d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), title or sched.get("name"))
+        acc = None
+        if getattr(self, "accurate", None):
+            acc = next((j for j in self.accurate.status() if j["radio"] == rid and start <= j["start"] <= end), None)
+        with self.lock:
+            waiting = sum(1 for t in ics.select(list(self.tx), rid, start, end, include_noise=True)
+                          if t.get("wav") and not t.get("accurate"))
         return {"radio": rid, "start": start, "end": end, "count": len(span), "to": people, "drafts": d,
+                "accurate": acc, "accurate_missing": waiting,
                 "operator": {k: op[k] for k in ("callsign", "name", "winlink_dir", "winlink_account", "express_running")}}
 
     def winlink_send(self, body: dict) -> dict:
@@ -327,7 +345,7 @@ class Station:
         for tx in self.tx:
             if tx.get("status") != "final":
                 continue
-            for c in tx.get("callsigns", []):
+            for c in (tx.get("accurate") or tx).get("callsigns", []):
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"],
                                               "card": (old.get(c) or {}).get("card")})
                 e["count"] += 1; e["last"] = tx["start"]
@@ -422,12 +440,97 @@ class Station:
                          split_pause_ms=r.get("split_pause_ms", 800 if r["gate"] == "carrier" else 0),
                          min_split_s=r.get("min_split_s", 2.0))
 
+    def _recent_tx(self, per_radio=1500) -> list[dict]:
+        """Each radio's day (up to `per_radio`), so every net reaches the dashboard whole: its header counts, the
+        accurate pass status and the Winlink time span all need the net's first transmission."""
+        out, n = [], {}
+        for t in reversed(self.tx):
+            r = t.get("radio")
+            if n.get(r, 0) < per_radio:
+                n[r] = n.get(r, 0) + 1
+                out.append(t)
+        return out[::-1]
+
+    def highpass_for(self, rid) -> int:
+        r = self.radio_cfg.get(rid) or {}
+        return int(r.get("highpass_hz", 300 if r.get("gate") == "carrier" else 0))
+
+    def apply_accurate(self, tid: str, res: dict):
+        """Keep the home server's text beside the live text (never replacing it), log it, show it."""
+        validate = self.callbook.validate if self.callbook else None
+        text, calls = normalize(res.get("text", ""), roster=self.roster, validate=validate)
+        acc = {"text": text, "callsigns": calls, "speaker": speaker_of(text, calls), "noise": probably_noise(text, calls),
+               "model": res.get("model"), "at": datetime.now().isoformat(timespec="seconds")}
+        with self.lock:
+            tx = self._find(tid)
+            if not tx:
+                return
+            tx["accurate"] = acc
+            new = [c for c in calls if c not in self.heard]
+            self._rebuild_heard()
+            for c in new:
+                if c in self.heard and not self.heard[c].get("card"):
+                    self.heard[c]["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
+            tx = dict(tx)
+        self._log({"update": tid, "accurate": acc})
+        self.bus.publish("tx", tx)
+        self.bus.publish("heard", {"heard": self.heard_list()})
+
+    def accurate_now(self, rid: str, start: str | None = None, end: str | None = None, force=False) -> dict:
+        from . import ics
+        if rid not in self.radios:
+            raise KeyError(rid)
+        if not (start and end):
+            with self.lock:
+                b = ics.session_bounds(list(self.tx), rid)
+            if not b:
+                raise ValueError("no transcribed transmissions on this radio yet")
+            start, end = b
+        return self.accurate.submit(rid, start, end, force=force)
+
+    # ---------- the over-the-air test (station/wer.py) ----------
+    def _tests_path(self) -> Path:
+        return self.data / "tests.jsonl"
+
+    def test_history(self, n=20) -> list[dict]:
+        try:
+            rows = [json.loads(x) for x in self._tests_path().read_text(encoding="utf-8").splitlines() if x.strip()]
+        except OSError:
+            return []
+        latest = {}
+        for r in rows:
+            latest[r["tx"]] = r                                  # a re-score (after the accurate pass) replaces
+        return sorted(latest.values(), key=lambda r: r["start"], reverse=True)[:n]
+
+    def score_test(self, rid: str, tid: str | None = None) -> dict:
+        """Score the radio's last transmission (or `tid`) against the test text; queue the accurate pass for it."""
+        from . import wer
+        with self.lock:
+            fin = [t for t in self.tx if t.get("radio") == rid and t.get("status") == "final"
+                   and (t["id"] == tid if tid else True)]
+            if not fin:
+                raise ValueError("no transmission to score yet: read the test text over the air first")
+            t = dict(fin[-1])
+        me = self.cfg.get("callsign")
+        row = {"tx": t["id"], "radio": rid, "start": t["start"], "freq_mhz": t.get("freq_mhz"),
+               "duration_s": t.get("duration_s"), "live": {**wer.wer(wer.TEST_TEXT, t.get("text", ""), me),
+                                                           "text": t.get("text", ""), "model": t.get("model")}}
+        if t.get("accurate"):
+            a = t["accurate"]
+            row["accurate"] = {**wer.wer(wer.TEST_TEXT, a.get("text", ""), me), "text": a.get("text", ""), "model": a.get("model")}
+        elif getattr(self, "accurate", None) and t.get("wav"):
+            self.accurate.submit(rid, t["start"], t["start"])
+            row["accurate_pending"] = True
+        row["scored_at"] = datetime.now().isoformat(timespec="seconds")
+        with open(self._tests_path(), "a", encoding="utf-8") as f:
+            f.write(json.dumps(row) + "\n")
+        return row
+
     def clean(self, rid, audio: np.ndarray) -> np.ndarray:
         """What Whisper hears: the radio's audio with everything under `highpass_hz` removed. An FM data jack
         passes the repeater's sub-audible tone (67-254 Hz) and any mains hum (60/120/180/240 Hz) along with the
         voice; on the 145.900 net they were the strongest sounds in the recording."""
-        r = self.radio_cfg.get(rid) or {}
-        hz = r.get("highpass_hz", 300 if r.get("gate") == "carrier" else 0)
+        hz = self.highpass_for(rid)
         if not hz or len(audio) < 64:
             return audio
         # FFT high-pass with a 100 Hz cosine ramp (numpy only; segments are seconds to a few minutes long)
@@ -721,6 +824,11 @@ class Station:
                 tx = json.loads(line)
             except ValueError:
                 continue
+            if "update" in tx:                                # the accurate pass, added after the live text
+                for t in self.tx:
+                    if t.get("id") == tx["update"]:
+                        t["accurate"] = tx.get("accurate")
+                continue
             cut = (self.radios.get(tx.get("radio")) or {}).get("cleared_at")
             if cut and tx.get("start", "") < cut:
                 continue
@@ -730,6 +838,7 @@ class Station:
                 e["count"] += 1; e["last"] = tx["start"]
             self.hinters.setdefault(tx.get("radio"), Hinter(self.me)).on_transmission(
                 tx.get("text", ""), tx.get("callsigns", []), at=datetime.fromisoformat(tx["start"]))
+        self._rebuild_heard()                                 # counts by the accurate callsigns where there are some
         for c, e in self.heard.items():
             e["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
         for rid, h in self.hinters.items():
@@ -739,6 +848,7 @@ class Station:
 
     def snapshot(self) -> dict:
         with self.lock:
-            return {"callsign": self.me, "radios": list(self.radios.values()), "tx": self.tx[-200:],
+            return {"callsign": self.me, "radios": list(self.radios.values()), "tx": self._recent_tx(),
                     "heard": self.heard_list(), "hints": self.hints, "net": self.schedule_now(),
-                    "schedule": self.cfg.get("schedule", []), "engines": self.engines}
+                    "schedule": self.cfg.get("schedule", []), "engines": self.engines,
+                    "accurate": self.accurate.status() if getattr(self, "accurate", None) else []}

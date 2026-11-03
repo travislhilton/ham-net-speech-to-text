@@ -60,6 +60,15 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .sess{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
   background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:8px 0 2px}
 .sess+.tx{border-top:0}
+.sess .acc{flex-basis:100%;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.acc .bar{flex:1 1 120px;max-width:220px;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.acc .bar i{display:block;height:100%;background:var(--accent,#2b6cb0)}
+.acc.ok{color:var(--ok)}.acc .muted{color:var(--muted)}
+.wlacc{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:14px}
+.wlacc.run{background:var(--chip)}.wlacc.ok{border-color:var(--ok)}
+details.livetext{font-size:12px;color:var(--muted);border:0;padding:0;margin:2px 0 0;background:none}details.livetext summary{cursor:pointer;padding:0}
+.testref{border-left:3px solid var(--line);padding:4px 10px;margin:6px 0;font-size:16px}
+table.hist{border-collapse:collapse;font-size:13px}table.hist td,table.hist th{padding:2px 8px;border-bottom:1px solid var(--line);text-align:left}
 /* splitter between the tab group and the conversation: shown on the guidance and stations tabs */
 .split{display:none;flex:none;height:12px;margin:-11px 0;cursor:row-resize;touch-action:none;position:relative;z-index:1}
 .split::before{content:"";position:absolute;left:50%;top:4px;width:56px;height:4px;margin-left:-28px;border-radius:2px;background:var(--muted);opacity:.6}
@@ -146,9 +155,10 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
+<dialog id="testDlg"><div id="testBody"></div></dialog>
 <script>
 let editing=null;
-const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[]};
+const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[]};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hhmm=iso=>iso?iso.slice(11,16):"";
@@ -164,7 +174,8 @@ function markTerms(text,terms){
   }
   return h;
 }
-function txHtml(t){
+function txHtml(t0){
+  const a=t0.accurate,t=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise}:t0;
   const calls=(t.callsigns||[]).map(c=>`<span class="call${c===t.speaker?" spk":""}" data-call="${esc(c)}" title="${c===t.speaker?"likely speaker":"mentioned"}">${esc(c)}</span>`).join("");
   let body;
   if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
@@ -174,6 +185,7 @@ function txHtml(t){
     (t.terms&&t.terms.length?`<div class="terms gloss">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
     (t.looped?`<div class="terms">Weak signal: repeated words were removed.</div>`:"");
   const radio="";
+  if(a&&t0.status==="final")body+=`<details class="livetext"><summary>✓ accurate pass (${esc(a.model||"home server")}) · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
   return `<div class="tx" id="tx-${esc(t.id)}"><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${calls}${play}</div>${body}</div></div>`;
 }
@@ -196,17 +208,91 @@ function sessHtml(rid,s,latest){
   const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"")+(latest?" (continuing)":"");
   const fq=s.freq_mhz?` · ${Number(s.freq_mhz).toFixed(3)} MHz`:"";
   const btn=fin.length?`<button data-wls="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}" title="ICS-309 log + ICS-213 summary of this ${title.toLowerCase()}, addressed to everyone who took part">Winlink messages…</button>`:"";
-  return `<div class="sess"><div><b>${esc(title)}</b> <span class="muted small">${span}${fq} · ${fin.length} transmission${fin.length===1?"":"s"} · ${calls.size} station${calls.size===1?"":"s"}</span></div>${btn}</div>`;
+  return `<div class="sess"><div><b>${esc(title)}</b> <span class="muted small">${span}${fq} · ${fin.length} transmission${fin.length===1?"":"s"} · ${calls.size} station${calls.size===1?"":"s"}</span></div>${btn}${accHtml(rid,fin,latest)}</div>`;
+}
+// ---------- the accurate pass (home server) ----------
+const dur=s=>s<60?`about ${Math.max(5,Math.round(s/5)*5)} s`:`about ${Math.round(s/60)} min`;
+const GUESS_RATE=8;   // audio seconds per second on the home server, until the station has measured it
+function accState(rid,fin){ // what the pass has done for these transmissions
+  if(!fin.length)return null;
+  const a=Date.parse(fin[0].start),b=Date.parse(fin[fin.length-1].start);
+  const jobs=(S.accurate||[]).filter(j=>j.radio===rid&&Date.parse(j.start)<=b+1000&&Date.parse(j.end)>=a-1000);   // overlaps
+  const active=jobs.find(j=>j.state==="queued"||j.state==="running");
+  const missing=fin.filter(t=>t.wav&&!t.accurate);
+  const last=jobs.sort((x,y)=>(x.queued_at||"").localeCompare(y.queued_at||"")).pop();
+  return {active,missing,last,est:missing.reduce((n,t)=>n+(t.duration_s||0),0)/GUESS_RATE+missing.length*0.4};
+}
+function accHtml(rid,fin,latest){
+  const st=accState(rid,fin);if(!st)return "";
+  const run=(label,cls="")=>`<button class="${cls}" data-acc="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}">${label}</button>`;
+  if(st.active){const j=st.active,pct=j.total?Math.round((j.done+j.failed)/j.total*100):0;
+    return `<div class="acc"><b>Accurate pass ${j.state==="queued"?"queued":"running"}</b> <span class="bar"><i style="width:${pct}%"></i></span> ${j.done+j.failed} of ${j.total} · ${j.eta_s!=null?dur(j.eta_s)+" left":""}</div>`}
+  if(!st.missing.length)return `<div class="acc ok">✓ Accurate text for all ${fin.length}${st.last&&st.last.model?` (${esc(st.last.model)})`:""}. The Winlink messages use it.</div>`;
+  if(st.last&&st.last.state==="unreachable")return `<div class="acc"><span class="bad">Accurate pass waiting: the home server is not reachable</span> <span class="muted">(tries again every 2 min)</span> ${run("Try now")}</div>`;
+  if(st.last&&st.last.state==="error")return `<div class="acc"><span class="bad">Accurate pass failed: ${esc(st.last.error||"")}</span> ${run("Try again")}</div>`;
+  const n=st.missing.length;
+  return `<div class="acc"><span class="muted">${n} of ${fin.length} with live text only. ${latest?"The accurate pass starts by itself 15 min after the last transmission":"Accurate pass"}: ${dur(st.est)}.</span> ${run(latest?"Run now":"Run accurate pass")}</div>`;
+}
+function wlAccNote(){
+  const box=$("wlAcc");if(!box||!WL)return;
+  const a=Date.parse(WL.start),b=Date.parse(WL.end);
+  const fin=S.tx.filter(t=>t.radio===WL.radio&&t.status==="final"&&Date.parse(t.start)>=a&&Date.parse(t.start)<=b);
+  const st=accState(WL.radio,fin);if(!st){box.innerHTML="";box.className="wlacc";return}
+  const reload=`<button id="wlAccLoad" class="primary">Load the accurate text</button> <span class="small muted">(replaces edits made in this window)</span>`;
+  if(st.active){const j=st.active;box.className="wlacc run";
+    box.innerHTML=`<b>The accurate pass is running for this net</b>: ${j.done+j.failed} of ${j.total} done, ${j.eta_s!=null?dur(j.eta_s)+" left":"starting"}. You can put the messages in the Outbox now with the live text, or wait. This box tells you when it is done.`}
+  else if(!st.missing.length&&WL.accurate_missing>0){box.className="wlacc ok";box.innerHTML=`<b>✓ The accurate pass is done.</b> ${reload}`}
+  else if(!st.missing.length){box.className="wlacc ok";box.innerHTML="✓ These forms use the accurate text from the home server."}
+  else {box.className="wlacc";const un=st.last&&st.last.state==="unreachable";
+    box.innerHTML=`${st.missing.length} of ${fin.length} transmissions have only the live text${un?"; the home server is not reachable right now":""}. Send now, or <button id="wlAccRun">Run the accurate pass</button> (${dur(st.est)}) and wait for it.`}
+  const l=$("wlAccLoad");if(l)l.onclick=()=>wlPreview({radio:WL.radio,start:WL.start,end:WL.end});
+  const r=$("wlAccRun");if(r)r.onclick=()=>runAcc(WL.radio,WL.start,WL.end);
+}
+async function runAcc(radio,start,end){
+  const r=await fetch("/api/accurate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({radio,start,end})});
+  const d=await r.json();if(!r.ok){alert(d.error||"Could not start the accurate pass");return}
+  const i=S.accurate.findIndex(j=>j.key===d.key);if(i>=0)S.accurate[i]=d;else S.accurate.push(d);renderFeed(radio);wlAccNote();
+}
+// ---------- the over-the-air transcription test ----------
+let TEST=null;
+async function openTest(rid){
+  const d=await (await fetch("/api/test")).json();TEST={rid,text:d.text,history:d.history,result:null,msg:""};
+  renderTest();if(!$("testDlg").open)$("testDlg").showModal();
+}
+const pctw=x=>x?`${Math.round(x.wer*100)}%`:"";
+function renderTest(){
+  const T=TEST,r=T.result,rn=(S.radios.find(x=>x.id===T.rid)||{}).name||T.rid;
+  const res=!r?"":`<h4>Your last transmission (${hhmm(r.start)}, ${Math.round(r.duration_s||0)} s)</h4>
+   <p><b>Live (${esc(r.live.model||"")}): ${pctw(r.live)} wrong</b> (${r.live.errors} of ${r.live.words} words)<br><span class="small">${esc(r.live.text)}</span></p>
+   <p>${r.accurate?`<b>Accurate pass (${esc(r.accurate.model||"")}): ${pctw(r.accurate)} wrong</b> (${r.accurate.errors} of ${r.accurate.words})<br><span class="small">${esc(r.accurate.text)}</span>`
+      :r.accurate_pending?'<span class="muted">Accurate pass running on the home server… the score appears here when it is done.</span>':'<span class="muted">No accurate pass (the home server is not set up or not reachable).</span>'}</p>`;
+  const hist=T.history.length?`<h4>Earlier tests</h4><table class="hist"><tr><th>When</th><th>Radio</th><th>MHz</th><th>Live</th><th>Accurate</th></tr>${T.history.map(h=>`<tr><td>${esc(h.start.slice(5,16).replace("T"," "))}</td><td>${esc(h.radio)}</td><td>${h.freq_mhz?Number(h.freq_mhz).toFixed(3):""}</td><td>${pctw(h.live)}</td><td>${h.accurate?pctw(h.accurate):""}</td></tr>`).join("")}</table>`:"";
+  $("testBody").innerHTML=`<h3>Transcription test · ${esc(rn)}</h3>
+   <p class="small">1. Have someone transmit (or key a second radio) and read this at a normal pace, about 3 cm across the microphone:</p>
+   <div class="testref">${esc(T.text)}</div>
+   <p class="small">2. After they unkey and the text appears under On the air, press Score. Lower is better: 0% = every word right.</p>
+   <div class="row"><button id="tScore" class="primary">Score the last transmission</button> <button onclick="$('testDlg').close()">Close</button> <span class="bad small">${esc(T.msg)}</span></div>
+   ${res}${hist}`;
+  $("tScore").onclick=()=>scoreTest();
+}
+async function scoreTest(tx){
+  const r=await fetch("/api/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({radio:TEST.rid,tx})});
+  const d=await r.json();if(!r.ok){TEST.msg=d.error||"could not score";renderTest();return}
+  TEST.msg="";TEST.result=d;TEST.history=(await (await fetch("/api/test")).json()).history;renderTest();
+}
+function testOnTx(t){ // the pending accurate pass for the scored transmission came back: score it again
+  if(TEST&&TEST.result&&TEST.result.accurate_pending&&t.id===TEST.result.tx&&t.accurate&&$("testDlg").open)scoreTest(t.id);
 }
 function renderFeed(rid){ // one transcript per radio, grouped into nets / conversations, newest first
   for(const r of S.radios){
     if(rid&&r.id!==rid)continue;
     const f=document.getElementById("feed-"+r.id);if(!f)continue;
-    const mine=S.tx.filter(t=>t.radio===r.id).slice(-300);
+    const mine=S.tx.filter(t=>t.radio===r.id);
     if(!mine.length){f.innerHTML='<p class="muted">Waiting for the first transmission.</p>';continue}
-    const ss=groupSessions(mine),now=Date.now();
-    f.innerHTML=ss.map((s,i)=>({s,i})).reverse().map(({s,i})=>sessHtml(r.id,s,i===ss.length-1&&now-Date.parse(s.end)<GAP_MS)+
-      [...s.tx].reverse().map(txHtml).join("")).join("");
+    const ss=groupSessions(mine),now=Date.now();let rows=0,html="";
+    for(let i=ss.length-1;i>=0&&(rows<300||i===ss.length-1);i--){const s=ss[i];rows+=s.tx.length;   // whole nets, newest first
+      html+=sessHtml(r.id,s,i===ss.length-1&&now-Date.parse(s.end)<GAP_MS)+[...s.tx].reverse().map(txHtml).join("")}
+    f.innerHTML=html;
   }
 }
 function upsertTx(t){
@@ -215,6 +301,7 @@ function upsertTx(t){
   const el=$("tx-"+t.id);
   if(el&&t.status!=="final"){el.outerHTML=txHtml(t)}else renderFeed(t.radio);   // a final one can change its net's header
   if(t.status==="final")renderHeard(t.radio);
+  wlAccNote();testOnTx(t);
 }
 // ---------- radio cards: built once, updated in place (the waterfall canvas must survive updates) ----------
 const LUT=(()=>{const st=[[0,[8,12,40]],[.35,[20,60,160]],[.55,[0,170,200]],[.72,[240,220,40]],[.88,[240,110,20]],[1,[255,255,255]]];
@@ -245,7 +332,7 @@ function ensureCard(r){
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
    <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>
    <div class="sch"></div>
-   <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button></div>`;
+   <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
   top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button></div>
@@ -433,7 +520,7 @@ function renderWl(){
     const body=f.form==="ics213"?`<label>Subject <input data-i="${i}" data-k="Subjectline" value="${esc(f.values.Subjectline)}" style="text-transform:none;width:100%"></label><label>Message<textarea data-i="${i}" data-k="Message" rows="9">${esc(f.values.Message)}</textarea></label>`
       :`<label>Title <input data-i="${i}" data-k="Title" value="${esc(f.values.Title)}" style="text-transform:none;width:100%"></label><table class="log"><tr><th>Time</th><th>From</th><th>To</th><th>Subject</th></tr>${f.rows.map(r=>`<tr><td>${esc(r.time.slice(11))}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td><td>${esc(r.sub)}</td></tr>`).join("")}</table>`;
     return `<details open><summary><label class="chk"><input type="checkbox" name="form" value="${i}" checked> ${esc(f.label)}</label></summary>${body}</details>`}).join("");
-  $("wlBody").innerHTML=`<h3>Winlink messages</h3>${warn}
+  $("wlBody").innerHTML=`<h3>Winlink messages</h3>${warn}<div id="wlAcc" class="wlacc"></div>
    <div class="small">From <input type="datetime-local" step="1" id="wlS" value="${esc(d.start)}"> to <input type="datetime-local" step="1" id="wlE" value="${esc(d.end)}"> <button id="wlRe">Update</button> <span class="muted">${d.count} transmissions</span></div>
    <p class="small muted">Sending as <b>${esc(op.winlink_account||"?")}</b> from ${esc(op.winlink_dir||"?")}.</p>
    <h4>To <span class="tocount muted small"></span></h4>
@@ -447,7 +534,7 @@ function renderWl(){
   box.querySelector("#toNone").onclick=()=>setAll(()=>false);
   box.querySelector("#toAll").onclick=()=>setAll(()=>true);
   box.querySelector("#toConf").onclick=()=>setAll(x=>!!(d.to.find(p=>p.call===x.value)||{}).confirmed);
-  box.querySelector(".tolist").addEventListener("change",count);count();
+  box.querySelector(".tolist").addEventListener("change",count);count();wlAccNote();
   $("wlRe").onclick=()=>wlPreview({radio:d.radio,start:$("wlS").value,end:$("wlE").value});
   $("wlAddB").onclick=()=>{const c=$("wlAdd").value.trim().toUpperCase();if(!/^[A-Z0-9]{3,8}(-\d{1,2})?$/.test(c))return;
     const keep=new Set(toBoxes().filter(x=>x.checked).map(x=>x.value));keep.add(c);
@@ -479,6 +566,8 @@ document.addEventListener("click",e=>{
   const cl=e.target.closest("[data-clear]");if(cl){const r=S.radios.find(x=>x.id===cl.dataset.clear)||{};
     if(confirm(`Clear the ${r.name||"radio"} log and stations heard from the screen?\n\nThe recordings and log files stay on the station PC.`))
       fetch(`/api/radios/${encodeURIComponent(cl.dataset.clear)}/clear`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})}
+  const ac=e.target.closest("[data-acc]");if(ac)runAcc(ac.dataset.acc,ac.dataset.s,ac.dataset.e);
+  const te=e.target.closest("[data-test]");if(te)openTest(te.dataset.test);
   const w=e.target.closest("[data-wls]");if(w)wlPreview({radio:w.dataset.wls,start:w.dataset.s,end:w.dataset.e});
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
     col.querySelectorAll(".toptabs [data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
@@ -510,6 +599,7 @@ function connect(){
   es.addEventListener("radios",e=>{const d=JSON.parse(e.data);S.radios=d.radios;S.net=d.net;renderRadios();renderNet()});
   es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
+  es.addEventListener("accurate",e=>{S.accurate=JSON.parse(e.data).sessions;renderFeed();wlAccNote()});
 }
 connect();
 </script>

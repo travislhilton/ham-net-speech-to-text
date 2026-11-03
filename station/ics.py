@@ -39,10 +39,17 @@ def session_bounds(tx: list[dict], rid: str, gap_min: int = 15) -> tuple[str, st
     return (s[-1]["start"], s[-1]["end"]) if s else None
 
 
-def select(tx, rid, start, end):
+def view(t: dict) -> dict:
+    """A transmission as the forms see it: the accurate pass's text, callsigns and speaker when there is one."""
+    a = t.get("accurate")
+    return {**t, **{k: a[k] for k in ("text", "callsigns", "speaker", "noise") if k in a}} if a else t
+
+
+def select(tx, rid, start, end, include_noise=False):
     s, e = datetime.fromisoformat(start), datetime.fromisoformat(end)
-    return [t for t in tx if t.get("radio") == rid and t.get("status") == "final" and not t.get("noise")
-            and s <= datetime.fromisoformat(t["start"]) <= e]
+    out = [view(t) for t in tx if t.get("radio") == rid and t.get("status") == "final"
+           and s <= datetime.fromisoformat(t["start"]) <= e]
+    return out if include_noise else [t for t in out if not t.get("noise")]
 
 
 def participants(span, me_calls: set[str], heard: dict) -> list[dict]:

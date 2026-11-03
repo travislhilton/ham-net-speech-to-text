@@ -282,3 +282,95 @@ def test_segmenter_flush_on_pause():
         list(seg.feed(np.full(512, 0.1, np.float32)))
     ev = list(seg.flush())
     assert ev[0][0] == "end" and ev[0][2]["paused"] and not seg.active and list(seg.flush()) == []
+
+
+class FakeRemote:
+    def __init__(self, ok=True):
+        self.ok, self.calls = ok, 0
+
+    def reachable(self):
+        return self.ok
+
+    def transcribe(self, wav, prompt, highpass_hz):
+        self.calls += 1
+        assert wav[:4] == b"RIFF" and "W9XYZ" in prompt and highpass_hz == 300
+        return {"text": "Net control, this is K7ABC in Springfield, no traffic.", "model": "fake-large", "audio_s": 3.0, "elapsed_s": 0.1}
+
+
+def test_accurate_pass_beside_the_live_text(tmp_path):
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 0}
+    st = Station(cfg, lambda: engine.FakeEngine(["Net control this is K7-ABC, over."]), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
+    st._accurate_remote = FakeRemote()
+    st.start(listen=False)
+    try:
+        q = st.bus.subscribe()
+        st.inject("ftm", np.zeros(16000 * 3, np.float32))
+        assert wait_for(lambda: st.tx and st.tx[-1]["status"] == "final")
+        live = st.tx[-1]["text"]
+        j = st.accurate_now("ftm")
+        assert j["total"] == 1 and j["state"] in ("queued", "running", "done")
+        assert wait_for(lambda: st.accurate.status()[0]["state"] == "done")
+        tx = st.tx[-1]
+        assert tx["text"] == live and tx["accurate"]["text"].startswith("Net control, this is K7ABC")   # live kept
+        assert tx["accurate"]["model"] == "fake-large" and st.accurate.status()[0]["done"] == 1
+        p = st.winlink_preview("ftm")
+        assert p["drafts"][0]["rows"][0]["sub"].startswith("Net control, this is K7ABC in Springfield") and p["accurate_missing"] == 0
+        assert p["accurate"]["state"] == "done"
+        kinds = set()
+        while not q.empty():
+            kinds.add(q.get()[0])
+        assert "accurate" in kinds
+        assert st.accurate_now("ftm")["state"] == "done" and st._accurate_remote.calls == 1   # nothing left to do
+        again = Station(copy.deepcopy(cfg), lambda: engine.FakeEngine(), callbook=FakeBook({"K7ABC": "Pat"}), data_dir=tmp_path)
+        again.load_today()
+        assert again.tx[-1]["accurate"]["text"] == tx["accurate"]["text"]                    # survives a restart
+    finally:
+        st.stop.set()
+
+
+def test_accurate_pass_unreachable_and_auto(tmp_path):
+    from datetime import datetime, timedelta
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 15}
+    st = Station(cfg, lambda: engine.FakeEngine(["Testing, this is W9XYZ."]), callbook=FakeBook({}), data_dir=tmp_path)
+    st._accurate_remote = FakeRemote(ok=False)
+    st.start(listen=False)
+    try:
+        st.inject("ftm", np.zeros(16000 * 2, np.float32))
+        assert wait_for(lambda: st.tx and st.tx[-1]["status"] == "final")
+        st.accurate.tick(datetime.now())                                   # not over yet: nothing queued
+        assert st.accurate.status() == []
+        st.accurate.tick(datetime.now() + timedelta(minutes=16))           # 16 quiet minutes: queued by itself
+        assert wait_for(lambda: st.accurate.status() and st.accurate.status()[0]["state"] == "unreachable")
+        assert st.accurate.status()[0]["auto"] and not st.tx[-1].get("accurate")
+    finally:
+        st.stop.set()
+
+
+def test_wer_compares_numbers_and_callsigns():
+    from station.wer import TEST_TEXT, wer, words
+    assert words("145.9 W9XYZ") == words("one four five point nine W 9 T L H")
+    assert wer(TEST_TEXT, TEST_TEXT, "W9XYZ")["wer"] == 0
+    r = wer(TEST_TEXT, "This is W9XOZ testing speech to text on 145.9. The quick brown fox jumps over the lazy dog.", "W9XYZ")
+    assert 0.2 < r["wer"] < 0.4 and r["words"] == len(words(TEST_TEXT, "W9XYZ"))
+
+
+def test_score_test_and_history(tmp_path):
+    from station.wer import TEST_TEXT
+    cfg = copy.deepcopy(CFG); cfg["accurate"] = {"auto_after_min": 0}
+    st = Station(cfg, lambda: engine.FakeEngine([TEST_TEXT.replace("lazy", "lacy")]), callbook=FakeBook({"W9XYZ": "T"}), data_dir=tmp_path)
+    st._accurate_remote = FakeRemote()
+    with pytest.raises(ValueError):
+        st.score_test("ftm")
+    st.start(listen=False)
+    try:
+        st.inject("ftm", np.zeros(16000 * 3, np.float32))
+        assert wait_for(lambda: st.tx and st.tx[-1]["status"] == "final")
+        r = st.score_test("ftm")
+        assert 0 < r["live"]["wer"] < 0.1 and r["accurate_pending"]
+        assert wait_for(lambda: st.tx[-1].get("accurate"))
+        r2 = st.score_test("ftm", st.tx[-1]["id"])
+        assert "accurate" in r2 and r2["accurate"]["wer"] > 0.5            # the fake Mac text is a different sentence
+        h = st.test_history()
+        assert len(h) == 1 and "accurate" in h[0]                          # the re-score replaced the first
+    finally:
+        st.stop.set()

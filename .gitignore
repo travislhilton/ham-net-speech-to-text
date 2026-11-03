@@ -7,3 +7,4 @@ queue/
 config/local.yaml
 .env
 !install/windows/bench.wav
+config/secrets.env

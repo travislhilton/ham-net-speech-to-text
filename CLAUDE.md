@@ -7,7 +7,7 @@
 - Capture never shares the VARA FM audio device. Second interface only.
 - Every transcript row records `model` and `host` so puck-fallback transcripts can be re-run on
   the home server later (`analyze/retranscribe.py`). Whisper runs only through `transcribe/engine.py`.
-- Tests: `.venv/bin/python -m pytest -q` from the repo root (72 green 2026-11-02).
+- Tests: `.venv/bin/python -m pytest -q` from the repo root (83 green 2026-11-02).
 - Keep the raw WAV forever (NAS warm tier). Transcripts are derived data.
 - Callsign vocabulary: `config/vocab.yaml` (ITU phonetics, tacticals, EOC names, roster). Whisper
   `initial_prompt` is built from it; `callsigns.py` normalizes phonetic spellings back to callsigns.
