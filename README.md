@@ -68,7 +68,8 @@ you chose is remembered. Each column shows:
   Grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons
   (the outlined one is the likely speaker), Q-codes and prowords are underlined with their meaning
-  below, and ▶ plays the recording.
+  below (untick **Explain radio terms** at the top to hide the meanings; on by default, remembered per
+  browser), and ▶ plays the recording.
 - **What you can do now** (per radio): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.

@@ -44,7 +44,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
   .feed{flex:1;min-height:0;max-height:none}
   .radio{flex:none}.radio .wf{height:64px;margin-top:6px}.radio .cap{display:none}.radio .axis{height:13px;font-size:10px}
   .radio .sch{display:none}.radio .cardbtns{margin-top:4px}
-  .tabs .lg{display:none}.tabs .sm{display:inline}.toptabs>.tabs{overflow-x:auto;scrollbar-width:none}.toptabs>.tabs button{font-size:12px;padding:4px 7px;white-space:nowrap;letter-spacing:0}
+  .toptabs>.tabs .lg{display:none}.toptabs>.tabs .sm{display:inline}.toptabs>.tabs{overflow-x:auto;scrollbar-width:none}.toptabs>.tabs button{font-size:12px;padding:4px 7px;white-space:nowrap;letter-spacing:0}
 }
 .logbox>h2{margin-bottom:6px}.guide .empty{margin:0}
 /* the top of each column: one tab set (Radio | What you can do now | Stations heard). All three panes share one
@@ -54,6 +54,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .stack>.guide,.stack>.heard{contain:size;overflow-y:auto;overscroll-behavior:contain}
 .stack>.radio{border:0;padding:0;background:none;border-radius:0}
 .tabs .sm{display:none}
+body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inherit}
 .sess{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
   background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:8px 0 2px}
 .sess+.tx{border-top:0}
@@ -124,6 +125,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   <span class="clock" id="clock"></span>
   <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
   <span class="small"><input id="q" placeholder="callsign" maxlength="12" aria-label="Callsign to look up"> <button id="go">Look up</button></span>
+  <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> Explain radio terms</label>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
 </header>
 <nav id="rtabs" role="tablist" aria-label="Radios"></nav>
@@ -166,7 +168,7 @@ function txHtml(t){
   if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
   else if(t.status==="transcribing") body=`<div class="text partial">${esc(t.partial)} <span class="muted">transcribing…</span></div>`;
   else body=`<div class="text">${markTerms(t.text,t.terms)||'<span class="muted">(no words recognized)</span>'}</div>`+
-    (t.terms&&t.terms.length?`<div class="terms">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
+    (t.terms&&t.terms.length?`<div class="terms gloss">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
     (t.looped?`<div class="terms">Weak signal: repeated words were removed.</div>`:"");
   const radio="";
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
@@ -277,6 +279,10 @@ document.addEventListener("pointerdown",e=>{
 document.addEventListener("dblclick",e=>{const sp=e.target.closest(".split");if(!sp)return;
   try{localStorage.removeItem(splitKey(sp.dataset.rid))}catch(err){}
   const tab=($("col-"+sp.dataset.rid).querySelector(".toptabs .on")||{}).dataset?.tab||"guide";applySplit(sp.dataset.rid,tab)});
+// "Explain radio terms" (on by default; remembered per browser)
+(()=>{const cb=$("explain");let on=true;try{on=localStorage.getItem("hamnet.explain")!=="0"}catch(e){}
+  const apply=()=>{document.body.classList.toggle("noterms",!cb.checked);try{localStorage.setItem("hamnet.explain",cb.checked?"1":"0")}catch(e){}};
+  cb.checked=on;apply();cb.onchange=apply})();
 let SEL=null;try{SEL=localStorage.getItem("hamnet.radio")}catch(e){}
 function selectRadio(id){SEL=id;try{localStorage.setItem("hamnet.radio",id)}catch(e){}
   document.querySelectorAll(".rcol").forEach(c=>c.classList.toggle("sel",c.id==="col-"+id));
