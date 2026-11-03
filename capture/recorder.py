@@ -14,7 +14,7 @@ import soundfile as sf
 import yaml
 
 import uploader
-from gates import CarrierGate
+from gates import CarrierGate, SileroGate
 
 FRAME_MS = 32  # 512 samples @16k — Silero's native window
 
@@ -30,19 +30,6 @@ def find_device(name_sub):
         if name_sub.lower() in d["name"].lower() and d["max_input_channels"] > 0:
             return i
     raise SystemExit(f"input device containing '{name_sub}' not found; use --list-devices")
-
-
-class SileroGate:
-    def __init__(self, cfg):
-        from silero_vad import load_silero_vad
-        import torch
-        torch.set_num_threads(2)
-        self.model = load_silero_vad()
-        self.th = cfg["threshold"]
-
-    def is_speech(self, frame16):
-        import torch
-        return float(self.model(torch.from_numpy(frame16), 16000)) >= self.th
 
 
 class CosGate:

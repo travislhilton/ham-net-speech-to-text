@@ -16,7 +16,9 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--chip)}
 .badge.emergency{background:var(--bad);color:#fff;border-color:var(--bad)}.badge.exercise{background:var(--warnbg);color:var(--warn)}
 #alert{display:none;padding:10px 16px;background:var(--bad);color:#fff;font-weight:700;font-size:17px}
-#radios{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px;padding:10px 16px}
+#radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:12px;align-items:start}
+.rcol{display:flex;flex-direction:column;gap:10px;min-width:0}.rcol>section{margin-bottom:0}
+.feed{max-height:calc(100dvh - 120px);overflow-y:auto;overscroll-behavior:contain}
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 .radio .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.radio .top .nm{flex:1}
 .rx{font-weight:700;color:var(--muted);font-size:13px}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
@@ -41,8 +43,8 @@ details{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6
 table.log{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}table.log td,table.log th{border-top:1px solid var(--line);padding:3px 4px;text-align:left;vertical-align:top}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}input[type=datetime-local]{width:auto;text-transform:none}
 .err{color:var(--bad);font-size:13px}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
-main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;padding:0 16px 24px}
-@media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}#radios,main{padding-left:12px;padding-right:12px}}
+main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;padding:10px 16px 24px}
+@media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}main{padding-left:12px;padding-right:12px}}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
 section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px}
 .tx{border-top:1px solid var(--line);padding:9px 2px;display:grid;grid-template-columns:64px minmax(0,1fr);gap:4px 10px}
@@ -70,14 +72,11 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
   <div class="net" id="net"></div>
   <span id="nettype" class="badge">Net type: listening…</span>
   <span class="clock" id="clock"></span>
-  <span id="conn" class="muted">connecting…</span>
+  <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
 </header>
-<div id="radios"></div>
 <main>
-  <div>
-    <section><h2>On the air <span class="muted small" id="engine"></span></h2><div id="feed"><p class="muted">Waiting for the first transmission.</p></div></section>
-  </div>
+  <div id="radios"></div>
   <div>
     <section><h2>What you can do now</h2><div id="rem"></div><div id="hints"><p class="muted small">Guidance appears here when something calls for it: a relay request, emergency traffic, check-ins, formal messages.</p></div></section>
     <section><h2>Stations heard</h2>
@@ -126,20 +125,23 @@ function txHtml(t){
   else body=`<div class="text">${markTerms(t.text,t.terms)||'<span class="muted">(no words recognized)</span>'}</div>`+
     (t.terms&&t.terms.length?`<div class="terms">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
     (t.looped?`<div class="terms">Weak signal: repeated words were removed.</div>`:"");
-  const radio=S.radios.length>1?`<span class="badge">${esc(t.radio_name)}</span>`:"";
+  const radio="";
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
   return `<div class="tx" id="tx-${esc(t.id)}"><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${calls}${play}</div>${body}</div></div>`;
 }
-function renderFeed(){
-  const f=$("feed");
-  if(!S.tx.length){f.innerHTML='<p class="muted">Waiting for the first transmission.</p>';return}
-  f.innerHTML=S.tx.slice(-200).reverse().map(txHtml).join("");
+function renderFeed(rid){ // one transcript per radio, under that radio's card
+  for(const r of S.radios){
+    if(rid&&r.id!==rid)continue;
+    const f=document.getElementById("feed-"+r.id);if(!f)continue;
+    const mine=S.tx.filter(t=>t.radio===r.id);
+    f.innerHTML=mine.length?mine.slice(-200).reverse().map(txHtml).join(""):'<p class="muted">Waiting for the first transmission.</p>';
+  }
 }
 function upsertTx(t){
   const i=S.tx.findIndex(x=>x.id===t.id);
   if(i>=0)S.tx[i]=t;else S.tx.push(t);
   const el=$("tx-"+t.id);
-  if(el){el.outerHTML=txHtml(t)}else renderFeed();
+  if(el){el.outerHTML=txHtml(t)}else renderFeed(t.radio);
 }
 // ---------- radio cards: built once, updated in place (the waterfall canvas must survive updates) ----------
 const LUT=(()=>{const st=[[0,[8,12,40]],[.35,[20,60,160]],[.55,[0,170,200]],[.72,[240,220,40]],[.88,[240,110,20]],[1,[255,255,255]]];
@@ -160,6 +162,7 @@ function wfCaption(r){const m=r.meter||{},sp=m.span_hz||[0,8000];
   return `Receiver audio, ${sp[0]/1000}–${sp[1]/1000} kHz${r.freq_mhz?` · ${Number(r.freq_mhz).toFixed(3)} MHz ${esc(r.mode||"")}`:""}${r.mode==="USB"?" · RF = frequency + audio":r.mode==="LSB"?" · RF = frequency − audio":""}${hint}`}
 function ensureCard(r){
   let el=document.getElementById("r-"+r.id);if(el)return el;
+  const col=document.createElement("div");col.className="rcol";col.id="col-"+r.id;
   el=document.createElement("div");el.className="radio";el.id="r-"+r.id;
   const m=r.meter||{};
   el.innerHTML=`<div class="top"><b class="nm"></b><span class="nb badge"></span><span class="rx">idle</span></div>
@@ -169,12 +172,14 @@ function ensureCard(r){
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
    <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
-  $("radios").appendChild(el);return el}
+  const sec=document.createElement("section");
+  sec.innerHTML=`<h2>On the air · ${esc(r.name)}</h2><div class="feed" id="feed-${esc(r.id)}"><p class="muted">Waiting for the first transmission.</p></div>`;
+  col.append(el,sec);$("radios").appendChild(col);renderFeed(r.id);return el}
 function renderRadios(){
   const box=$("radios");
   if(!S.radios.length){box.innerHTML='<div class="radio">No radios set up yet. Add one to <code>config\\station.yaml</code> (see README, "Connecting a radio").</div>';return}
-  box.querySelectorAll(".radio:not([id])").forEach(x=>x.remove());
-  const ids=new Set(S.radios.map(r=>r.id));box.querySelectorAll(".radio[id]").forEach(x=>{if(!ids.has(x.id.slice(2)))x.remove()});
+  box.querySelectorAll(":scope>.radio").forEach(x=>x.remove());
+  const ids=new Set(S.radios.map(r=>r.id));box.querySelectorAll(".rcol").forEach(x=>{if(!ids.has(x.id.slice(4)))x.remove()});
   for(const r of S.radios){
     const el=ensureCard(r),h=(S.hints||{})[r.id]||{},net=h.net||{};
     el.querySelector(".nm").textContent=r.name;

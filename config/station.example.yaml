@@ -16,7 +16,7 @@ radios:                     # one entry per radio; each needs its own sound inpu
     # waterfall_hz: [0, 8000]   # default 0-8 kHz for FM (carrier gate), 0-4 kHz for voice gate
   # - id: ic705
   #   name: Icom IC-705
-  #   device: "IC-705"      # e.g. the virtual audio input wfview feeds; "file:C:\\path\\to.wav" plays a test file
+  #   device: "IC-705"      # Icom Remote Utility's "IC-705 (Icom Virtual Audio Driver)"; "file:C:\\path\\to.wav" plays a test file
   #   gate: voice
   #   freq_mhz: 7.185
   #   mode: LSB

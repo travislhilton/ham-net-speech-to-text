@@ -40,3 +40,20 @@ class CarrierGate:
                 a = 0.3 if db > self.floor else self.alpha
                 self.floor += a * (db - self.floor)
         return self.carrier
+
+
+class SileroGate:
+    """Voice-activity gate for radios with no carrier to detect (SSB/HF, or already-squelched audio).
+    Silero VAD on 512-sample (32 ms) frames at 16 kHz; torch is imported only when this gate is used."""
+    def __init__(self, cfg: dict):
+        import torch
+        from silero_vad import load_silero_vad
+        torch.set_num_threads(2)
+        self.torch, self.model = torch, load_silero_vad()
+        self.th = float(cfg.get("threshold", 0.5))
+        self.last_prob = 0.0
+
+    def is_speech(self, frame16) -> bool:
+        with self.torch.no_grad():
+            self.last_prob = self.model(self.torch.from_numpy(frame16.astype("float32")), 16000).item()
+        return self.last_prob >= self.th

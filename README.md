@@ -38,7 +38,7 @@ the device → Properties → name, e.g. `NET-REC`.
 | Radio | Interface | Notes |
 |---|---|---|
 | Yaesu FTM-150R (VHF/UHF) | DATA jack (10-pin mini-DIN) → Masters DRA-50M (USB) | Set 45 DATA BAND = A-BAND FIX, tune band A to the net; leave 41 DUAL RECEIVE MODE (a priority scan) OFF. The DATA jack is unsquelched, so the recorder's **carrier gate** detects transmissions from the drop in hiss. Step by step: `docs/FTM-150R-SETUP.txt`. |
-| Icom IC-705 (HF/VHF/UHF, Wi-Fi) | planned | Over Wi-Fi via the radio's network remote (e.g. wfview → a virtual audio input, with frequency/mode read from the radio). SSB has no carrier to detect, so this radio will use the voice-activity gate. |
+| Icom IC-705 (HF/VHF/UHF, Wi-Fi) | Icom **Remote Utility** (connected to the radio) → its virtual sound input `IC-705 (Icom Virtual Audio Driver)` | In `station.yaml`: `device: IC-705`, `gate: voice` (SSB has no carrier to detect). Remote Utility must be running and connected. Set the frequency and mode with **Change** on the radio's card; reading them from the radio (CAT) is planned. |
 
 ## Using it
 
@@ -55,7 +55,7 @@ The dashboard shows:
   like WSJT-X/fldigi). Bounds can be changed per radio in `station.yaml` (`meter:`).
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
   transmission after that is logged with it (kept across restarts in `data\\operator.json`).
-- **On the air**: every transmission as it happens. Grey words appear while the station is still
+- **On the air** (under each radio's card, one transcript per radio): every transmission as it happens. Grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons
   (the outlined one is the likely speaker), Q-codes and prowords are underlined with their meaning
   below, and ▶ plays the recording.
@@ -97,7 +97,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live signal + SNR meters and waterfall per radio; several radios at once | working |
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |
-| Icom IC-705 over Wi-Fi | planned |
+| Icom IC-705 via Icom Remote Utility (voice gate) | working on W9XYZ-5; frequency read from the radio planned |
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |

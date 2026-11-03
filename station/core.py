@@ -349,7 +349,7 @@ class Station:
         if r["gate"] == "carrier":
             from capture.gates import CarrierGate
             return CarrierGate(r.get("carrier", {}), SR)
-        from capture.recorder import SileroGate          # needs torch; HF/SSB radios
+        from capture.gates import SileroGate             # needs torch; HF/SSB radios
         return SileroGate({"threshold": r.get("vad_threshold", 0.5)})
 
     def segmenter(self, r) -> Segmenter:
