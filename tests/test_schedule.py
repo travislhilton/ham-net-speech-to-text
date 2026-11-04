@@ -130,11 +130,40 @@ def test_listen_only_during_nets_pauses_and_resumes(tmp_path):
     again = make(tmp_path, Clock(TUE.replace(hour=22)))
     assert again.radios["ftm"]["listen"]["scheduled"] and again.radios["ftm"]["listen"]["tune"]
     assert again.radios["ftm"]["paused_by"] == "schedule"
-    # turning it off leaves the radio as it is and stops acting
+    # turning it off leaves the radio as it is between nets, but a scheduled net is still always recorded
     st.nets.set_listen("ftm", {"scheduled": False})
-    clock.t = TUE.replace(day=10, hour=20, minute=10)
+    clock.t = TUE.replace(day=10, hour=12)
     st.nets.tick()
     assert st.radios["ftm"]["paused"]
+    clock.t = TUE.replace(day=10, hour=20, minute=10)
+    st.nets.tick()
+    assert not st.radios["ftm"]["paused"]
+
+
+def test_a_scheduled_net_is_recorded_even_when_the_radio_was_paused(tmp_path):
+    clock = Clock(TUE.replace(hour=12))
+    st = make(tmp_path, clock)
+    st.set_paused("ftm", True)                                            # paused by hand, listen-only OFF
+    st.nets.tick()
+    assert st.radios["ftm"]["paused"]
+    clock.t = TUE.replace(hour=19, minute=59)                             # 1 min before the net: resumed
+    st.nets.tick()
+    assert not st.radios["ftm"]["paused"]
+    clock.t = TUE.replace(hour=21, minute=5)                              # net end + grace: paused again, as before
+    st.nets.tick()
+    assert st.radios["ftm"]["paused"] and st.radios["ftm"]["paused_by"] == "schedule"
+    assert not st.radios["ic705"].get("paused")                             # a radio with no net is untouched
+    # the operator's own choice during the net wins: Resume pressed mid-net keeps it listening after the end
+    clock.t = TUE.replace(day=10, hour=19, minute=59)
+    st.nets.tick()
+    st.set_paused("ftm", False)
+    clock.t = TUE.replace(day=10, hour=21, minute=5)
+    st.nets.tick()
+    assert not st.radios["ftm"]["paused"]
+    # a radio that was listening before the net is never paused by it
+    clock.t = TUE.replace(day=17, hour=21, minute=5)
+    st.nets.tick()
+    assert not st.radios["ftm"]["paused"]
 
 
 def test_restart_inside_a_net_keeps_the_operators_pause(tmp_path):

@@ -85,6 +85,9 @@ you chose is remembered. Each column shows:
   transmission after that is logged with it (kept across restarts in `data\\operator.json`).
 - **Pause / Resume** (on each radio card): stop listening to that radio. Its sound input is closed and
   nothing is recorded or transcribed until you press Resume; a transmission in progress is finished first.
+  **A scheduled net is always recorded:** a paused radio is resumed 1 minute before each of its nets and paused
+  again 5 minutes after it (if you press Pause or Resume during the net, your choice stands). "Skip this net" on
+  the pre-net alert is the way to not record one occurrence.
   Remembered across restarts.
 - **Clear log…** (on each radio card): clears that radio's log and stations heard from the screen. The day's
   log file and the recordings stay on the station PC (`data\logs`, `data\recordings`); nothing is deleted.

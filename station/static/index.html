@@ -622,7 +622,7 @@ function renderRadios(){
     el.querySelector(".err").textContent=r.paused?"":(r.error||"");
     el.classList.toggle("paused",!!r.paused);
     const pz=el.querySelector(".pz");pz.textContent=r.paused?"▶ Resume":"⏸ Pause";
-    pz.title=r.paused?"Start listening to this radio again":"Stop listening to this radio: nothing is recorded or transcribed until you resume";
+    pz.title=r.paused?"Start listening to this radio again":"Stop listening to this radio: nothing is recorded or transcribed until you resume. Its scheduled nets are still recorded (resumed 1 min before, paused again after).";
     pz.classList.toggle("primary",!!r.paused);
     if(r.paused){const rx=el.querySelector(".rx");rx.textContent="PAUSED";rx.className="rx paused"}
     if(!r.paused&&r.state!=="listening"){el.querySelector(".rx").textContent=r.state==="error"?"no audio":r.state;el.querySelector(".rx").className="rx"}

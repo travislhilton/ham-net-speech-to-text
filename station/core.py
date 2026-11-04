@@ -364,6 +364,8 @@ class Station:
         with self.lock:
             self.radios[rid]["paused"] = bool(paused)
             self.radios[rid]["paused_by"] = by if paused else None
+            if by == "operator":          # the operator's own Pause/Resume during a net wins over the net's end
+                self.radios[rid].setdefault("listen", {}).pop("resumed_for", None)
             if not paused and self.radios[rid].get("state") == "paused":
                 self.radios[rid]["state"] = "starting"
             saved = self._saved()

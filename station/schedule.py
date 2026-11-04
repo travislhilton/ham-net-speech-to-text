@@ -16,6 +16,8 @@ Station.set_paused(by="schedule"). It acts only when the wanted state changes (a
 closes), so a Pause or Resume pressed by the operator holds until the next start or end. Optionally the
 radio's logged frequency/mode is set to the net's when the net starts (the operator still tunes the radio).
 An occurrence skipped from its alert ("Skip this net") is not listened to.
+Without that switch a scheduled net is still always recorded: a radio paused by hand is resumed for the net and
+paused again after it (unless the operator pressed Pause or Resume during the net).
 """
 import json
 import os
@@ -353,14 +355,24 @@ class NetSchedule:
                 cur, nxt = listen_window(nets, rid, at, skip=skip)
                 L["now"] = cur["name"] if cur else None
                 L["next"] = {"name": nxt["name"], "start": nxt["start"]} if nxt else None
-                if not L.get("scheduled"):
-                    self._want.pop(rid, None)
-                    continue
                 want = cur["key"] if cur else ""                       # which net window (edge = a change)
                 first = rid not in self._want
                 if self._want.get(rid) == want:
                     continue
                 self._want[rid] = want
+                if not L.get("scheduled"):
+                    # A scheduled net is always recorded (owner, 2026-11-03): a radio paused by hand is resumed
+                    # LEAD_MIN before its net and put back to paused GRACE_MIN after it, unless the operator
+                    # pressed Pause/Resume in between (set_paused(by="operator") clears resumed_for).
+                    if want:
+                        if r.get("paused") and not (first and r.get("paused_by") == "operator"):
+                            L["resumed_for"] = want
+                            self.st.set_paused(rid, False, by="schedule")
+                            print(f"{at:%H:%M:%S} {rid} resumed for {cur['name']} (it was paused)", flush=True)
+                    elif L.pop("resumed_for", None) and not r.get("paused"):
+                        self.st.set_paused(rid, True, by="schedule")
+                        print(f"{at:%H:%M:%S} {rid} paused again after its net (as before)", flush=True)
+                    continue
                 if want:
                     # a restart inside a net keeps a pause the operator chose; a net's start always resumes
                     if r.get("paused") and not (first and r.get("paused_by") == "operator"):
