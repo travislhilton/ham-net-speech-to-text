@@ -11,7 +11,7 @@
   `private/CLAUDE.md` and `private/continuation-prompt.md` first. Commit and push them in that repo.
 - **README + installer evolve with every change**: update README "Status" and the install steps in the same
   commit as the feature; `install/windows/install.ps1` must stay idempotent.
-- Tests: `.venv/bin/python -m pytest -q` from the repo root (258 green 2026-11-03).
+- Tests: `.venv/bin/python -m pytest -q` from the repo root (259 green 2026-11-03).
 - Whisper runs only through `transcribe/engine.py` on the server; the station's engines are in `station/engine.py`.
 - OpenVINO on Windows: never create an `openvino.Core` in a process that runs a GPU WhisperPipeline — the
   process hangs forever at exit. List devices in a child process (`tools/pick_engine.py`).

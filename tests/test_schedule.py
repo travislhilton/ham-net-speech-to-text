@@ -216,3 +216,23 @@ def test_schedule_api(tmp_path):
         assert json.loads(urllib.request.urlopen(base + "/api/state").read())["schedule"] == res["schedule"]
     finally:
         srv.shutdown()
+
+
+def test_today_strip_lists_the_rest_of_today_with_the_next_one_marked(tmp_path):
+    cfg = copy.deepcopy(CFG)
+    cfg["schedule"] += [
+        {"name": "Simplex net", "radio": "ftm", "freq_mhz": 147.52, "days": ["Tue"], "start": "20:45", "duration_min": 15},
+        {"name": "Club net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"], "start": "21:00", "duration_min": 70},
+        {"name": "Wednesday net", "radio": "ic705", "freq_mhz": 3.985, "mode": "LSB", "days": ["Wed"], "start": "19:00"}]
+    clock = Clock(TUE.replace(hour=12))
+    st = make(tmp_path, clock, cfg)
+    names = lambda: [(x["name"], x["state"]) for x in st.schedule_now()["today"]]
+    assert names() == [("Example County ARES net", "next"), ("Simplex net", "later"), ("Club net", "later")]
+    clock.t = TUE.replace(hour=20, minute=30)            # one on the air, the next one after it
+    assert names() == [("Example County ARES net", "on"), ("Simplex net", "next"), ("Club net", "later")]
+    today = st.schedule_now()["today"]
+    assert today[1]["freq_mhz"] == 147.52 and today[1]["radio_name"] == "FTM-150R" and today[1]["start"].endswith("20:45")
+    clock.t = TUE.replace(hour=21, minute=5)             # past nets drop off
+    assert names() == [("Club net", "on")]
+    clock.t = TUE.replace(hour=23)
+    assert names() == []

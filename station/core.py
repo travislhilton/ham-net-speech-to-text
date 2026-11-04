@@ -478,7 +478,40 @@ class Station:
                 if o["start"] > at and (nxt is None or o["start"] < nxt[0]):
                     nxt = (o["start"], item(n, o))
         return {"current": deco(run[0]) if run else None, "next": deco(nxt[1]) if nxt else None,
-                "running": [deco(r) for r in run], "by_radio": self._current_by_radio(at)}
+                "running": [deco(r) for r in run], "by_radio": self._current_by_radio(at),
+                "today": [deco(x) for x in self.today_nets(at)]}
+
+    def today_nets(self, at: datetime | None = None) -> list[dict]:
+        """The nets still to come today (and the ones on the air), in start order, each with a state:
+        "on" (on the air), "next" (the first one still to start) or "later"; a net closed early or skipped
+        today is left out once it is over. The header's Today strip."""
+        from . import recur
+        from .schedule import item
+        at = at or self.clock()
+        day0 = at.replace(hour=0, minute=0, second=0, microsecond=0)
+        closer = getattr(self, "closer", None)
+        try:
+            skipped = set(self.nets.alerts.skipped()) if getattr(self, "nets", None) else set()
+        except Exception:  # noqa: BLE001
+            skipped = set()
+        rows = []
+        for n in self.cfg.get("schedule", []) or []:
+            for o in recur.occurrences(n, day0, day0 + timedelta(days=1)):
+                if o["start"].date() != at.date() or o["end"] <= at:
+                    continue
+                it = item(n, o)
+                c = closer.closes.get(it["key"]) if closer and hasattr(closer, "closes") else None
+                if c and c.get("state") == "closed":
+                    continue
+                it["state"] = "on" if o["start"] <= at else "later"
+                it["skipped"] = it["key"] in skipped
+                rows.append(it)
+        rows.sort(key=lambda x: x["start"])
+        for it in rows:
+            if it["state"] == "later" and not it["skipped"]:
+                it["state"] = "next"
+                break
+        return rows
 
     def _current_by_radio(self, at) -> dict:
         from .schedule import running

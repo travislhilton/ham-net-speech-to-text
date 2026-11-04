@@ -161,6 +161,9 @@ you chose is remembered. Each column shows:
   - **Still open** (per net or for all): what net control may read out: urgent issues not handled, announcements still
     valid (until their date passes, or 4 weeks when undated), coming events, open action items and traffic not yet
     handled. Shown again with the pre-net alert and when the net starts.
+- **Nets today**: a strip under the header lists, one line each, the nets still to come today and the one on the
+  air (time, name, frequency, radio). The next one is highlighted; one on the air shows **on the air**, or
+  **radio paused** when its radio is not recording. Tap a line to open it in Nets.
 - **Pre-net alert**: 5 minutes before each net (per net, **Alert, minutes before**), a banner on that radio's column
   and a strip under the header on every open dashboard: "Tuesday Net starts in 5 min (19:00): set FTM-150R to
   146.940 MHz FM", with what is still open for that net. **Radio is set** (also logs the radio at that frequency and

@@ -349,6 +349,16 @@ class NetSchedule:
         except Exception as e:  # noqa: BLE001 — an alert problem never stops listening
             print(f"alerts: {type(e).__name__}: {e}", flush=True)
         skip = self.alerts.skipped()
+        # the header's Today strip: re-send when a net starts, ends, closes or the next one changes (checked each minute)
+        if at.second == 0 or not hasattr(self, "_today_sig"):
+            try:
+                now = self.st.schedule_now(at)
+                sig = [(x["key"], x["state"], x.get("skipped")) for x in now["today"]]
+                if sig != getattr(self, "_today_sig", None):
+                    self._today_sig = sig
+                    self.st.bus.publish("today", {"net": now})
+            except Exception as e:  # noqa: BLE001 — the strip never stops listening
+                print(f"today: {type(e).__name__}: {e}", flush=True)
         closer = getattr(self.st, "closer", None)
         held = lambda rid, key: bool(closer and closer.holds(rid, key))   # a net closed early stays paused
         with self.lock:
