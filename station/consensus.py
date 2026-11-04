@@ -296,7 +296,9 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
     local: a VHF/UHF net (default: from the views' freq_mhz), where a licence in the station's state counts more.
     where: the station's (lat, lon). On a VHF/UHF net with the ZIP centres installed, distance replaces the state:
     a licence within LOCAL_KM is in range, a clipped call goes to the clearly nearest licence (owner, 11-04).
-    -> {"calls": {heard: {"call", "conf", "why", "status", "candidates"?}}, "tx": {id: [calls after agreement]}}"""
+    A licence beyond LOCAL_KM said in one transmission only, with no name, town, history or roster for it, is
+    "distant": its text is kept, but it is left out of the calls and so of every count (owner, 11-04).
+    -> {"calls": {heard: {"call", "conf", "why", "status", "candidates"?, "km"?}}, "tx": {id: [calls after agreement]}}"""
     if local is None:
         f = [v.get("freq_mhz") for v in views if v.get("freq_mhz")]
         local = bool(f) and sum(1 for x in f if x >= 30) * 2 > len(f)
@@ -322,6 +324,7 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
             if k in ("call", "token", "live"):
                 heard[c] += 1
     full = [c for c in heard if US_CALL.match(c) or ANY_CALL.match(c)]
+    in_tx = Counter(c for ev in events for c in {c for _, k, c in ev if k in ("call", "token", "live")})
     texts = [_source_text(v) for v in views]
     noise = [bool(v.get("noise")) for v in views]
 
@@ -531,11 +534,16 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         inf = lic.get(h)
         status = ("verified" if (inf and inf["status"] == "A") or o["strong"] else
                   "lapsed" if inf else "unverified")
+        far = dist(h) if status == "verified" and not o["strong"] and active(h) else None
+        if far is not None and far > LOCAL_KM and in_tx[h] <= 1:
+            status = "distant"      # VHF/UHF: a licence out of range, said once, nothing else for it: not counted
         others = [x["call"] for x in scored if x["call"] != h and x["score"] >= MIN_SCORE
                   and o["score"] - x["score"] < MARGIN][:3]
         e = {"call": h, "status": status, "conf": _conf(o["score"] - max([x["score"] for x in scored
                                                                           if x["call"] != h] + [0.0])),
              "why": "; ".join(o["why"]), "score": o["score"]}
+        if status == "distant":
+            e["km"] = round(far)
         if others:
             e["candidates"] = others
         tops = [x for x in scored if x["call"] != h and best["score"] - x["score"] < MARGIN]
@@ -596,6 +604,10 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                      score=tops[0]["score"])
             e.pop("candidates", None)
 
+    for h, e in decided.items():                         # another reading moved onto it: heard more than once
+        if e["call"] != h and (decided.get(e["call"]) or {}).get("status") == "distant":
+            decided[e["call"]]["status"] = "verified"; decided[e["call"]].pop("km", None)
+
     per_tx = {}
     for v, ev in zip(views, events):
         out = []
@@ -604,7 +616,8 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                 continue
             e = decided.get(c)
             if k == "call":
-                out.append(e["call"] if e else c)
+                if not (e and e["status"] == "distant"):
+                    out.append(e["call"] if e else c)
             elif e and e["status"] == "fixed":           # a token / clipped call only when it was resolved
                 out.append(e["call"])
         per_tx[v.get("id")] = list(dict.fromkeys(out))
@@ -640,11 +653,15 @@ def records(views: list[dict], result: dict, fix_text=None) -> dict[str, dict]:
                 moved.append({"heard": h, "call": e["call"], "conf": e["conf"], "why": e["why"]})
         unverified = [c for c in (v.get("callsigns") or []) if (result["calls"].get(c) or {}).get("status")
                       in ("unverified", "lapsed")]
+        distant = [{"call": c, "km": result["calls"][c].get("km")} for c in (v.get("callsigns") or [])
+                   if (result["calls"].get(c) or {}).get("status") == "distant"]
         rec = {"src": src_hash(text), "callsigns": calls}
         if moved:
             rec["moved"] = moved
         if unverified:
             rec["unverified"] = unverified
+        if distant:
+            rec["distant"] = distant           # kept in the text, left out of the calls and every count
         if fix_text:
             t2, ch = fix_text(text)
             if ch and t2 != text:
@@ -697,8 +714,14 @@ def apply_view(v: dict, rec: dict | None) -> dict:
             v["heard_text"], v["text"] = v.get("text"), rec["text"]
     else:
         v["callsigns"] = list(dict.fromkeys(mapping.get(c, c) for c in v.get("callsigns") or []))
+    far = {d["call"] for d in rec.get("distant") or []}
+    if far:
+        v["callsigns"] = [c for c in v["callsigns"] if c not in far]
+        v["distant"] = list(rec["distant"])
     if v.get("speaker") in mapping and v.get("speaker_how") != "operator":
         v["speaker"] = mapping[v["speaker"]]
+    elif v.get("speaker") in far and v.get("speaker_how") != "operator":
+        v["speaker"], v["speaker_how"] = None, None   # a speaker out of range and said once: not a check-in
     if rec.get("unverified"):
         v["unverified"] = list(rec["unverified"])
     return v

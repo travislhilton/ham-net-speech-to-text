@@ -178,6 +178,7 @@ section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:va
 .spkr{font-weight:700;font-family:ui-monospace,Consolas,monospace;cursor:pointer}.spkr.inf{font-weight:400;color:var(--muted)}
 .spkr.op::after{content:" ✎";color:var(--muted);font-weight:400}.whob{font-size:12px;padding:0 6px;color:var(--muted)}
 .maybe{font-size:12px;color:var(--muted);display:inline-flex;gap:3px;align-items:center;margin-left:4px}.maybe .call{font-size:11px;opacity:.75}
+.call.far{opacity:.5;text-decoration:line-through dotted}
 .call.fixed,.spkr.fixed{text-decoration:underline dotted;text-underline-offset:3px}.text{font-size:16px;overflow-wrap:anywhere}.text.partial{color:var(--partial);font-style:italic}
 .live{color:var(--ok);font-weight:600}.term{border-bottom:2px dotted var(--term);cursor:help}
 .terms{font-size:13px;color:var(--muted)}.terms b{color:var(--term)}
@@ -440,6 +441,7 @@ function txHtml(t0){
   const w=t0.who||null,sp=w&&w.call;
   const calls=(t.callsigns||[]).filter(c=>c!==sp).map(c=>{const f=fx[c],tip="mentioned"+(f?` · heard "${f.heard}", corrected: ${f.why}`:"");
     return `<span class="call${f?" fixed":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("")+
+    ((k&&!c&&k.distant)||[]).map(d=>`<span class="call far" data-call="${esc(d.call)}" title="Heard once, ${d.km} km away: beyond VHF/UHF range, with no name or earlier check-in for it. Probably misheard; not counted as a station. Use ✎ Fix if it was really there.">${esc(d.call)}</span>`).join("")+
     (t.maybe||[]).map(m=>`<span class="maybe" title="Heard &quot;${esc(m.heard)}&quot;; could be ${esc(m.candidates.join(" or "))}. Click one to look it up; use Who? to set the speaker.">${esc(m.heard)}? ${m.candidates.map(c=>`<span class="call" data-call="${esc(c)}">${esc(c)}</span>`).join("")}</span>`).join("");
   const who=t.status!=="final"?"":(w?whoHtml(w,fx[sp]):"")+`<button class="whob" data-who="${esc(t0.id)}" title="Say who was talking (always wins; kept in the log and the ICS-309)">Who?</button>`+
     (editing||c?"":`<button class="fixb" data-fix="${esc(t0.id)}" title="Correct the words: your text is used for the minutes, search and the Winlink messages, and the station learns from it">✎ Fix</button>`);

@@ -906,7 +906,8 @@ class Station:
             self.bus.publish("heard", {"heard": self.heard_list()})
         return {"radio": rid, "start": start, "end": end, "changed": len(changed),
                 "moved": {h: e for h, e in res["calls"].items() if e["call"] != h},
-                "unverified": sorted(h for h, e in res["calls"].items() if e["status"] in ("unverified", "lapsed"))}
+                "unverified": sorted(h for h, e in res["calls"].items() if e["status"] in ("unverified", "lapsed")),
+                "distant": sorted(h for h, e in res["calls"].items() if e["status"] == "distant")}
 
     def agree_recent(self, now: datetime | None = None, hours: float = 12) -> list[dict]:
         """The agreement for every net heard in the last `hours` whose transcript changed since its last run: while a

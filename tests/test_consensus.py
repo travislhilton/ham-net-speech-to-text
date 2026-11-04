@@ -417,6 +417,31 @@ def test_on_vhf_a_licence_in_range_scores_by_its_distance(geolic):
     assert "beyond VHF/UHF range" in K.agree(v, geolic, home_state="IL", where=HOME)["calls"]["KD7QQP"]["why"]
 
 
+def test_on_vhf_a_far_licence_said_once_is_not_counted(geolic):
+    from station import ics
+    def run(texts, f=146.94, **kw):
+        views = [{"id": str(i), "text": t, "callsigns": [w.strip(".,") for w in t.split() if w.strip(".,") in
+                                                         {"KD7QQB", "KD7QQP"}], "freq_mhz": f}
+                 for i, t in enumerate(texts)]
+        return views, K.agree(views, geolic, home_state="IL", where=HOME, **kw)
+    # 170 km away, said once, nothing else for it: kept in the text, left out of the calls
+    views, r = run(["KD7QQB and KD7QQP.", "Thank you."])
+    e = r["calls"]["KD7QQP"]
+    assert e["status"] == "distant" and e["km"] == 170 and r["tx"]["0"] == ["KD7QQB"]
+    rec = K.records(views, r)["0"]
+    assert rec["callsigns"] == ["KD7QQB"] and rec["distant"] == [{"call": "KD7QQP", "km": 170}]
+    tx = {"id": "0", "start": "2026-11-03T20:00:00", "text": "KD7QQB and KD7QQP.",
+          "callsigns": ["KD7QQB", "KD7QQP"], "status": "final", "consensus": rec}
+    assert K.calls_of(tx) == ["KD7QQB"] and ics.view(tx)["distant"][0]["call"] == "KD7QQP"
+    # said twice: counted
+    assert run(["KD7QQP.", "KD7QQP, thank you."])[1]["calls"]["KD7QQP"]["status"] == "verified"
+    # its name said with it, or a prior check-in to this net: counted
+    assert run(["KD7QQP, Hal.", "Thank you."])[1]["calls"]["KD7QQP"]["status"] == "verified"
+    assert run(["KD7QQP.", "Thank you."], prior={"KD7QQP": 1})[1]["calls"]["KD7QQP"]["status"] == "verified"
+    # on HF distance says nothing
+    assert run(["KD7QQP.", "Thank you."], f=3.985)[1]["calls"]["KD7QQP"]["status"] == "verified"
+
+
 def test_grid_squares_and_distances():
     from hamkit.zipgeo import grid_to_latlon, km, parse
     la, lo = grid_to_latlon("EM59")
