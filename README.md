@@ -106,7 +106,8 @@ you chose is remembered. Each column shows:
     time, name, Closed/Ended, ✓ accurate (or the accurate pass's progress), frequency, transmissions and stations.
     They start collapsed; open one for its Minutes, Winlink messages, close and accurate-pass status and every
     transmission (the ones you open stay open in this browser). A net moves here when it is closed or 15 minutes
-    after it goes quiet.
+    after it goes quiet. After a restart the log still holds yesterday's nets as well as today's; older ones are in
+    Nets → History and Search.
   - A paused radio folds its meters and waterfall away, leaving more room for the log.
 
   Each transmission: grey words appear while the station is still

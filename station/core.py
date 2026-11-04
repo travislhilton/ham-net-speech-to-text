@@ -1328,9 +1328,23 @@ class Station:
             print(f"history: {type(e).__name__}: {e}", flush=True)
 
     def load_today(self):
-        p = self._log_path()
-        if not p.exists():
-            return
+        """Yesterday's log, then today's: after a restart the dashboard still shows last night's nets under
+        Completed (an update line for one of yesterday's transmissions may be in today's file, so the order matters)."""
+        today = self._log_path()
+        yday = self._log_path(self.clock() - timedelta(days=1))
+        for p in (yday, today):
+            if p.exists():
+                self._replay(p, live=p == today)
+        self._rebuild_heard()                                 # counts by the accurate callsigns where there are some
+        for c, e in self.heard.items():
+            e["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
+        for rid, h in self.hinters.items():
+            self.hints.setdefault(rid, {"cards": [], "reminders": [], "net": {}})["net"] = h.classify()
+        del self.tx[:-self.KEEP_TX]
+        self.next_id = max([self.next_id] + [int(t["id"]) for t in self.tx if str(t["id"]).isdigit()])
+
+    def _replay(self, p: Path, live: bool):
+        """One day's log into memory. `live`: today's, which also primes the net-type hints."""
         for line in p.read_text(encoding="utf-8").splitlines():
             try:
                 tx = json.loads(line)
@@ -1358,15 +1372,9 @@ class Station:
             for c in tx.get("callsigns", []):
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"], "card": None})
                 e["count"] += 1; e["last"] = tx["start"]
-            self.hinters.setdefault(tx.get("radio"), Hinter(self.me)).on_transmission(
-                tx.get("text", ""), tx.get("callsigns", []), at=datetime.fromisoformat(tx["start"]))
-        self._rebuild_heard()                                 # counts by the accurate callsigns where there are some
-        for c, e in self.heard.items():
-            e["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
-        for rid, h in self.hinters.items():
-            self.hints.setdefault(rid, {"cards": [], "reminders": [], "net": {}})["net"] = h.classify()
-        del self.tx[:-self.KEEP_TX]
-        self.next_id = max([self.next_id] + [int(t["id"]) for t in self.tx if str(t["id"]).isdigit()])
+            if live:
+                self.hinters.setdefault(tx.get("radio"), Hinter(self.me)).on_transmission(
+                    tx.get("text", ""), tx.get("callsigns", []), at=datetime.fromisoformat(tx["start"]))
 
     def snapshot(self) -> dict:
         with self.lock:

@@ -218,3 +218,28 @@ def test_correct_learned_and_accuracy_endpoints(tmp_path):
         assert lv["accepted"][0]["say"] == "Springfield"
     finally:
         srv.shutdown()
+
+
+def test_a_restart_keeps_yesterdays_nets_on_screen(tmp_path):
+    """After a restart the log still shows last night's nets (Completed); an update for one of them that landed in
+    today's file applies; yesterday's talk does not prime today's net-type hints."""
+    from datetime import timedelta
+    write_logs(tmp_path, lines(ARES, DAY, first_id=100))
+    first = lines(ARES, DAY, first_id=100)[0]
+    nxt = DAY + timedelta(days=1)
+    (tmp_path / "logs" / f"{nxt:%Y%m%d}.jsonl").write_text(
+        json.dumps({"update": first["id"], "corrected": {"text": "fixed the next morning", "callsigns": []}}) + "\n",
+        encoding="utf-8")
+    st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path, clock=lambda: nxt)
+    st.load_today()
+    ids = [t["id"] for t in st.tx]
+    assert first["id"] in ids and len(ids) == len(lines(ARES, DAY, first_id=100))
+    assert next(t for t in st.tx if t["id"] == first["id"])["corrected"]["text"] == "fixed the next morning"
+    assert (st.hints.get("ftm", {}).get("net") or {}).get("type", "unknown") == "unknown"   # only today's talk primes them
+    today = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path, clock=lambda: DAY)
+    today.load_today()
+    assert today.hints["ftm"]["net"]["type"] != "unknown"     # the same talk on its own day does
+    # two days later it is gone from the screen (still in the history and search)
+    later = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path, clock=lambda: DAY + timedelta(days=2))
+    later.load_today()
+    assert not [t for t in later.tx if t["id"] == first["id"]]
