@@ -520,10 +520,28 @@ class Station:
             out.setdefault(it["radio"], {"name": it["name"], "ncs": it.get("ncs"), "key": it["key"], "id": it["id"]})
         return out
 
+    def ended_nets(self, rid: str, at: datetime, gap_min: int = 15) -> set[str]:
+        """Occurrence keys on `rid` that are over before `at` even if their scheduled time is not: closed early
+        (station/netclose.py), or already heard and then quiet for more than `gap_min` minutes (the log's rule for a
+        new conversation). A net heard nothing from yet is never "ended": its first transmission may be late."""
+        out, last = set(), {}
+        closer = getattr(self, "closer", None)
+        for k, c in ((closer.closes if closer and hasattr(closer, "closes") else {}) or {}).items():
+            if c.get("radio") == rid and c.get("state") == "closed":
+                out.add(k)
+        for t in self.tx:
+            k = (t.get("net") or {}).get("key")
+            if k and t.get("radio") == rid and t.get("start", "") < at.isoformat():
+                last[k] = max(last.get(k, ""), t["start"])
+        for k, s in last.items():
+            if at - datetime.fromisoformat(s) > timedelta(minutes=gap_min):
+                out.add(k)
+        return out
+
     def net_of(self, rid: str, at: datetime, freq_mhz: float | None = None) -> dict | None:
         """The scheduled occurrence a transmission on `rid` at `at` (heard on `freq_mhz`) belongs to, or None."""
         from .schedule import occurrence_at
-        o = occurrence_at(self.cfg.get("schedule") or [], rid, at, freq_mhz=freq_mhz)
+        o = occurrence_at(self.cfg.get("schedule") or [], rid, at, freq_mhz=freq_mhz, ended=self.ended_nets(rid, at))
         return {"key": o["key"], "id": o["id"], "date": o["date"], "name": o["name"]} if o else None
 
     # ---------- radios ----------

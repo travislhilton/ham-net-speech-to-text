@@ -131,18 +131,21 @@ def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace
 
 
 def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, after=BELONGS_MIN,
-                  freq_mhz: float | None = None) -> dict | None:
+                  freq_mhz: float | None = None, ended=()) -> dict | None:
     """The occurrence on radio `rid` a transmission at `at` belongs to: from `before` minutes before it starts to
     `after` minutes after it ends. When two overlap (back-to-back nets on one radio), in this order: the one on the
     transmission's frequency, then the one whose scheduled time holds `at`, then the nearest start.
     (A tie on the nearest start alone once put a 20:45 simplex net's transmissions at 20:52 into the 21:00 net.)
-    None = not a scheduled net."""
+    `ended`: occurrence keys that are over although their scheduled time is not (closed, or quiet for longer than
+    the gap that ends a conversation): they claim nothing more. None = not a scheduled net."""
     best = None
     for n in nets:
         if n.get("radio") != rid:
             continue
         for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=1)):
             if o["start"] - timedelta(minutes=before) <= at < o["end"] + timedelta(minutes=after):
+                if recur.key(n.get("id"), o["date"]) in ended:
+                    continue
                 f = o.get("freq_mhz") or n.get("freq_mhz")
                 off_freq = bool(freq_mhz and f and abs(float(f) - float(freq_mhz)) > 0.0005)
                 outside = not (o["start"] <= at < o["end"])

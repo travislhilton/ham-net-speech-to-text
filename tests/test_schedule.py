@@ -252,3 +252,28 @@ def test_back_to_back_nets_on_one_radio_keep_their_own_transmissions():
     assert name(at(20, 56), 146.94) == "Club net"             # retuned early for the next net: its frequency wins
     assert name(at(21, 5), 147.52) == "Simplex net"           # a straggler on the simplex frequency after its end
     assert name(at(21, 5), 146.94) == "Club net"
+
+
+def test_a_net_that_closed_or_went_quiet_claims_nothing_more():
+    from station.schedule import occurrence_at
+    nets = [{"id": "ares", "name": "ARES net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+             "start": "20:00", "duration_min": 60},
+            {"id": "club", "name": "Club net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+             "start": "21:00", "duration_min": 70}]
+    at = TUE.replace(hour=20, minute=56)
+    assert occurrence_at(nets, "ftm", at, freq_mhz=146.94)["name"] == "ARES net"          # still running: its own
+    assert occurrence_at(nets, "ftm", at, freq_mhz=146.94, ended={"ares@2026-11-03"})["name"] == "Club net"
+
+
+def test_net_of_skips_a_net_quiet_for_over_15_minutes(tmp_path):
+    cfg = copy.deepcopy(CFG)
+    cfg["schedule"] = [{"id": "ares", "name": "ARES net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+                        "start": "20:00", "duration_min": 60},
+                       {"id": "club", "name": "Club net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+                        "start": "21:00", "duration_min": 70}]
+    st = make(tmp_path, Clock(TUE.replace(hour=20, minute=56)), cfg)
+    key = st.net_of("ftm", TUE.replace(hour=20, minute=10), 146.94)
+    assert key["name"] == "ARES net"
+    st.tx.append({"id": "1", "radio": "ftm", "start": "2026-11-03T20:16:00", "status": "final", "net": key})
+    assert st.net_of("ftm", TUE.replace(hour=20, minute=25), 146.94)["name"] == "ARES net"   # 9 min quiet: still on
+    assert st.net_of("ftm", TUE.replace(hour=20, minute=56), 146.94)["name"] == "Club net"   # 40 min quiet: over
