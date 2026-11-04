@@ -126,6 +126,9 @@ class History:
         for col in ("closed_at", "closed_by", "closed_tx"):        # an index made before net closes were heard
             if col not in have:
                 self.con.execute(f"ALTER TABLE inst ADD COLUMN {col} TEXT")
+        if "corrected" not in {r[1] for r in self.con.execute("PRAGMA table_info(tx)")}:   # before tap-to-correct
+            self.con.execute("ALTER TABLE tx ADD COLUMN corrected TEXT")
+        self.con.execute("CREATE INDEX IF NOT EXISTS tx_corrected ON tx(corrected) WHERE corrected IS NOT NULL")
         self.fts = has_fts5(self.con)
         if self.fts:
             self.con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS tx_fts USING fts5(text, live, calls)")
@@ -178,7 +181,10 @@ class History:
             if not row:
                 return
             raw = json.loads(row["raw"])
-            raw.update({k: v for k, v in e.items() if k in ("accurate", "accurate_echo", "speaker_set", "net", "after")})
+            raw.update({k: v for k, v in e.items() if k in ("accurate", "accurate_echo", "speaker_set", "net", "after",
+                                                            "corrected")})
+            if "corrected" in e and e["corrected"] is None:        # Undo correction
+                raw.pop("corrected", None)
             if "accurate" in e:
                 raw.pop("accurate_echo", None)
             if "accurate_echo" in e:
@@ -206,14 +212,15 @@ class History:
         calls = list(dict.fromkeys(list(v.get("callsigns") or []) + list(raw.get("callsigns") or [])))
         args = (str(raw["id"]), raw.get("radio"), raw["start"], raw.get("freq_mhz"), raw.get("duration_s"),
                 v.get("text") or "", raw.get("text") or "", " " + " ".join(calls) + " ", v.get("speaker"),
-                v.get("speaker_how"), 1 if v.get("noise") else 0, stage, raw.get("wav"), key, json.dumps(raw))
+                v.get("speaker_how"), 1 if v.get("noise") else 0, stage, raw.get("wav"), key, json.dumps(raw),
+                (raw.get("corrected") or {}).get("at"))
         cur = self.con.execute(
             "INSERT INTO tx(id, radio, start, freq_mhz, duration_s, text, live_text, calls, speaker, speaker_how, noise,"
-            " stage, wav, inst, raw) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET"
+            " stage, wav, inst, raw, corrected) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET"
             " radio=excluded.radio, start=excluded.start, freq_mhz=excluded.freq_mhz, duration_s=excluded.duration_s,"
             " text=excluded.text, live_text=excluded.live_text, calls=excluded.calls, speaker=excluded.speaker,"
             " speaker_how=excluded.speaker_how, noise=excluded.noise, stage=excluded.stage, wav=excluded.wav,"
-            " inst=excluded.inst, raw=excluded.raw RETURNING rowid", args)
+            " inst=excluded.inst, raw=excluded.raw, corrected=excluded.corrected RETURNING rowid", args)
         rowid = cur.fetchone()[0]
         if self.fts:
             self.con.execute("DELETE FROM tx_fts WHERE rowid=?", (rowid,))
@@ -537,7 +544,8 @@ class History:
         d = self._inst_dict(r)
         with self.lock:
             d["tx"] = [{k: v.get(k) for k in ("id", "start", "text", "speaker", "speaker_how", "callsigns", "noise",
-                                              "wav", "duration_s", "freq_mhz")} | {"live_text": v.get("live_text")}
+                                              "wav", "duration_s", "freq_mhz", "corrected")}
+                       | {"live_text": v.get("live_text")}
                        for v in self._tx_views(key)]
         names = {s["call"]: dict(s) for s in self._q("SELECT * FROM station WHERE call IN (SELECT call FROM part"
                                                       " WHERE inst=?)", (key,))}
@@ -570,6 +578,26 @@ class History:
             v = ics.view(raw)
             v["live_text"] = raw.get("text")
             out.append(v)
+        return out
+
+    def tx_raw(self, tid: str) -> dict | None:
+        """A transmission as the day log has it (all its updates merged), from any day."""
+        r = self._one("SELECT raw FROM tx WHERE id=?", (str(tid),))
+        return json.loads(r["raw"]) if r else None
+
+    def corrected_rows(self) -> list[dict]:
+        """Every transmission the operator corrected (tap-to-correct), oldest correction first, with its net's name:
+        the ground truth station/corrections.py learns fix-ups from and measures accuracy against."""
+        self.flush()
+        rows = self._q("SELECT tx.raw, inst.name, inst.kind, inst.mode FROM tx LEFT JOIN inst ON inst.key=tx.inst"
+                       " WHERE tx.corrected IS NOT NULL ORDER BY tx.corrected")
+        out = []
+        for r in rows:
+            raw = json.loads(r["raw"])
+            if raw.get("corrected"):
+                raw["_net"] = r["name"] if r["kind"] == "net" else "Conversations"
+                raw["_mode"] = r["mode"]
+                out.append(raw)
         return out
 
     def tx_wav(self, tid: str) -> str | None:

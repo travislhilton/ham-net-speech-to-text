@@ -110,6 +110,22 @@ you chose is remembered. Each column shows:
   pass) and goes into the ICS-309; **Automatic** forgets it. Measured on a fast HF check-in net (3.915 MHz,
   189 transmissions): 22 state their own station, 37 more are net control's words (shown when `ncs:` is in
   the schedule); the rest need a Who?.
+- **Correcting a line** (**✎ Fix** on any finished transmission, in the log and in a net's Minutes → Transcript):
+  the words open in place, ready to edit, with ▶ to listen while you type. **Enter** (or Save) keeps it, **Esc**
+  (or Cancel) leaves it. Your text then wins everywhere: the log, search, the minutes and attendance, the ICS-309 /
+  ICS-213 and the Winlink messages (your text, then the accurate pass, then the live text), and the callsigns and
+  speaker are read again from it. A corrected line shows **✎ corrected**; tap it to change it again or
+  **Undo correction**. It is kept as an update line in the day's log (survives restarts, the accurate pass and a
+  rebuild of the history), other open dashboards update at once, and it works for a net from any day.
+  - **Learned fixes** (Settings): when the same words are corrected the same way in two transmissions ("shelby
+    ville" → Shelbyville), or once into a callsign, the station proposes it as a fix-up. Nothing changes until you
+    press **Accept**: accepted ones go to `data\fixups_learned.yaml` (the `fixups:` format of `config/vocab.yaml`)
+    and correct what the station hears from then on; **Ignore** hides a proposal, **Remove** takes one back out.
+    The number on the Settings button is how many are waiting.
+  - **Accuracy (from your corrections)** (in **Test transcription…**, under the test history): the word error rate
+    of the live text, the accurate pass and the consensus text against everything you corrected, per radio, mode
+    and net, with how many lines it is based on (under 20 is a rough guide; your eye starts from the text shown).
+    The same from a terminal: `python -m tools.accuracy` (or `--data data` with the station stopped).
 - **What you can do now** (per radio): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
@@ -291,6 +307,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | built + measured, not deployed yet (synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
 | Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/NPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | built + measured on an i5-12600H station PC, not deployed yet (see "The accurate pass on this PC") |
 | Over-the-air transcription test with word-error score and history | working |
+| Tap-to-correct (✎ Fix, log + minutes transcript; Enter/Esc; ▶ while editing; Undo correction): corrected > accurate > live in search, minutes, attendance, ICS-309/213, Winlink; Learned fixes proposed from repeats, applied only on Accept (`data/fixups_learned.yaml`); accuracy against the corrections per radio/mode/net (`/api/accuracy`, `python -m tools.accuracy`) | working (`station/corrections.py`); not yet used on a live net |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
 | Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). Code + `python -m tools.voice_eval` kept to re-measure on FM nets |
 

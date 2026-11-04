@@ -94,12 +94,12 @@ def from_text(text: str, calls: list[str], ncs: str | None = None) -> tuple[str 
 
 
 def best(tx: dict) -> tuple[str | None, str | None]:
-    """The speaker the forms and the dashboard should use: operator > stated (the accurate text's, then the live
-    text's) > net control > voice."""
+    """The speaker the forms and the dashboard should use: operator > stated (the corrected text's, the accurate
+    text's, then the live text's) > net control > voice."""
     if tx.get("speaker_set"):
         return tx["speaker_set"], "operator"
     cands = []
-    for src in (tx.get("accurate") or {}, tx):
+    for src in (tx.get("corrected") or {}, tx.get("accurate") or {}, tx):     # the operator's corrected text first
         if not src:
             continue
         if "speaker_how" in src:
@@ -112,7 +112,7 @@ def best(tx: dict) -> tuple[str | None, str | None]:
         cands.append((RANK["voice"], tx["speaker_voice"]["call"], "voice"))
     if not cands:
         return None, None
-    _, call, how = max(cands, key=lambda c: c[0])                # max keeps the first of equals: accurate first
+    _, call, how = max(cands, key=lambda c: c[0])                # max keeps the first of equals: corrected, accurate
     return call, how
 
 

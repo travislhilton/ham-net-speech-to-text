@@ -82,6 +82,10 @@ def make_handler(station):
                 return self._json({"text": test_text(station.cfg.get("callsign")), "history": station.test_history()})
             if u.path == "/api/settings":
                 return self._json(station.operator())
+            if u.path == "/api/learned":                         # Learned fixes (station/corrections.py)
+                return self._json(station.learned())
+            if u.path == "/api/accuracy":                        # accuracy from the operator's corrections
+                return self._json(station.accuracy())
             if u.path == "/api/schedule":                        # schedule: the nets, for the editor
                 return self._json(station.nets.list())
             if u.path.startswith(("/api/search", "/api/history", "/api/nets/", "/api/station/", "/api/alerts")):
@@ -136,14 +140,15 @@ def make_handler(station):
             u = urlparse(self.path)
             m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen))?", u.path)
             who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
+            fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
-                      "/api/history/minutes"}
+                      "/api/history/minutes", "/api/learned"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or sched or who or alert or item or close or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or who or fix or alert or item or close or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 self.close_connection = True                   # its body is unread: never reuse the connection
                 return self._json({"error": "not found"}, 404)
             try:
@@ -175,6 +180,16 @@ def make_handler(station):
                         return self._json(with_who("tx", station.set_speaker(who.group(1), body.get("call"))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
+                if fix:                                         # {"text": ...} or {"undo": true}
+                    try:
+                        return self._json(with_who("tx", station.correct(fix.group(1), body.get("text"),
+                                                                         undo=bool(body.get("undo")))))
+                    except LookupError:
+                        return self._json({"error": "no such transmission"}, 404)
+                if u.path == "/api/learned":                    # {"action": accept|ignore|unignore|remove, heard, say}
+                    return self._json(station.learned(str(body.get("action") or ""), str(body.get("heard") or ""),
+                                                      str(body.get("say") or "")) if body.get("action")
+                                      else station.learned())
                 if u.path == "/api/settings":
                     return self._json(station.set_operator(body))
                 if u.path == "/api/winlink/preview":
