@@ -233,7 +233,7 @@ class History:
         if tag.get("id") and tag.get("date"):
             occ = tag
         elif not after:
-            occ = occurrence_at(self.nets() or [], rid, at)
+            occ = occurrence_at(self.nets() or [], rid, at, freq_mhz=raw.get("freq_mhz"))
         if occ:
             key = recur.key(occ["id"], occ["date"])
             if not self.con.execute("SELECT 1 FROM inst WHERE key=?", (key,)).fetchone():

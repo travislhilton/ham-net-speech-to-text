@@ -236,3 +236,19 @@ def test_today_strip_lists_the_rest_of_today_with_the_next_one_marked(tmp_path):
     assert names() == [("Club net", "on")]
     clock.t = TUE.replace(hour=23)
     assert names() == []
+
+
+def test_back_to_back_nets_on_one_radio_keep_their_own_transmissions():
+    from station.schedule import occurrence_at
+    nets = [{"id": "simplex", "name": "Simplex net", "radio": "ftm", "freq_mhz": 147.52, "days": ["Tue"],
+             "start": "20:45", "duration_min": 15},
+            {"id": "club", "name": "Club net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+             "start": "21:00", "duration_min": 70}]
+    at = lambda h, m, s=0: TUE.replace(hour=h, minute=m, second=s)
+    name = lambda t, f=None: (occurrence_at(nets, "ftm", t, freq_mhz=f) or {}).get("name")
+    # 20:52:40 is nearer 21:00 than 20:45, but it is inside the simplex net's time and on its frequency
+    assert name(at(20, 52, 40), 147.52) == "Simplex net"
+    assert name(at(20, 54), None) == "Simplex net"            # frequency unknown: the net whose time holds it
+    assert name(at(20, 56), 146.94) == "Club net"             # retuned early for the next net: its frequency wins
+    assert name(at(21, 5), 147.52) == "Simplex net"           # a straggler on the simplex frequency after its end
+    assert name(at(21, 5), 146.94) == "Club net"

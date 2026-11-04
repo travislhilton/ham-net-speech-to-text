@@ -475,7 +475,7 @@ class NetCloser:
             for t in self.st.tx:
                 if t.get("radio") == rid and t.get("after") == key:
                     t.pop("after", None)
-                    net = self.st.net_of(rid, datetime.fromisoformat(t["start"]))
+                    net = self.st.net_of(rid, datetime.fromisoformat(t["start"]), t.get("freq_mhz"))
                     if net and net.get("key") == key:
                         t["net"] = net
                     moved.append(dict(t))

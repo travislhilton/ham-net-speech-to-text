@@ -130,18 +130,25 @@ def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace
     return cur, nxt
 
 
-def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, after=BELONGS_MIN) -> dict | None:
+def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, after=BELONGS_MIN,
+                  freq_mhz: float | None = None) -> dict | None:
     """The occurrence on radio `rid` a transmission at `at` belongs to: from `before` minutes before it starts to
-    `after` minutes after it ends (the nearest start wins when two overlap). None = not a scheduled net."""
+    `after` minutes after it ends. When two overlap (back-to-back nets on one radio), in this order: the one on the
+    transmission's frequency, then the one whose scheduled time holds `at`, then the nearest start.
+    (A tie on the nearest start alone once put a 20:45 simplex net's transmissions at 20:52 into the 21:00 net.)
+    None = not a scheduled net."""
     best = None
     for n in nets:
         if n.get("radio") != rid:
             continue
         for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=1)):
             if o["start"] - timedelta(minutes=before) <= at < o["end"] + timedelta(minutes=after):
-                d = abs((at - o["start"]).total_seconds())
-                if best is None or d < best[0]:
-                    best = (d, item(n, o))
+                f = o.get("freq_mhz") or n.get("freq_mhz")
+                off_freq = bool(freq_mhz and f and abs(float(f) - float(freq_mhz)) > 0.0005)
+                outside = not (o["start"] <= at < o["end"])
+                rank = (off_freq, outside, abs((at - o["start"]).total_seconds()))
+                if best is None or rank < best[0]:
+                    best = (rank, item(n, o))
     return best[1] if best else None
 
 

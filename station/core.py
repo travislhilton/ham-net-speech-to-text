@@ -520,10 +520,10 @@ class Station:
             out.setdefault(it["radio"], {"name": it["name"], "ncs": it.get("ncs"), "key": it["key"], "id": it["id"]})
         return out
 
-    def net_of(self, rid: str, at: datetime) -> dict | None:
-        """The scheduled occurrence a transmission on `rid` at `at` belongs to (its net's history), or None."""
+    def net_of(self, rid: str, at: datetime, freq_mhz: float | None = None) -> dict | None:
+        """The scheduled occurrence a transmission on `rid` at `at` (heard on `freq_mhz`) belongs to, or None."""
         from .schedule import occurrence_at
-        o = occurrence_at(self.cfg.get("schedule") or [], rid, at)
+        o = occurrence_at(self.cfg.get("schedule") or [], rid, at, freq_mhz=freq_mhz)
         return {"key": o["key"], "id": o["id"], "date": o["date"], "name": o["name"]} if o else None
 
     # ---------- radios ----------
@@ -866,7 +866,7 @@ class Station:
                   "start": start.isoformat(timespec="seconds"), "status": "live",
                   "partial": "", "text": "", "callsigns": [], "speaker": None, "terms": []}
             try:
-                net = self.net_of(rid, start)               # which scheduled net (and occurrence) it belongs to
+                net = self.net_of(rid, start, r.get("freq_mhz"))   # which scheduled net (and occurrence) it belongs to
             except Exception:  # noqa: BLE001
                 net = None
             after = self.closer.after_close(rid, start, net)   # the net was closed: a new conversation starts
