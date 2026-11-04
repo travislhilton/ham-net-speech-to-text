@@ -62,6 +62,52 @@ STRONG = [
                r"(?:repeater|frequency|machine|channel|system)\s+(?:back\s+)?(?:over\s+)?to\s+(?:its\s+)?"
                r"(?:normal|regular|general|routine|open)\b", re.I),
 ]
+# Net control's goodbye at the end of a net (owner 2026-11-03: a net ended with "Thank you all very much. Thank you
+# for your patience. I want you all to have a safe and wonderful day" and no closing words). Counts only near the
+# scheduled end (or while running over), after FAREWELL_MIN_NET minutes, from net control or addressed to everyone.
+FAREWELL = re.compile(
+    r"\bthank(?:s|\s+you)\s+(?:(?:all|everyone|everybody|y'?all|you\s+all|guys|folks)\s+)?(?:(?:very|so)\s+much\s+)?"
+    r"for\s+(?:your\s+|the\s+|all\s+)?(?:participation|participating|patience|checking\s+in|check-?ins|joining|coming|"
+    r"being\s+(?:here|on|with\s+us)|listening|support|time)\b"
+    r"|\b(?:have|enjoy)\s+a\s+(?:\w+\s+){0,3}?(?:safe|good|great|wonderful|nice|pleasant|blessed|fantastic)\s+"
+    r"(?:\w+\s+){0,2}?(?:evening|night|day|week|weekend|rest\s+of\s+(?:the|your)\s+(?:evening|night|day|week))\b(?!\s+(?:of|at|on|for)\b)"
+    r"|\bgood\s?night,?\s+(?:everyone|everybody|all|y'?all|folks)\b|\b73,?\s+(?:to\s+)?(?:everyone|everybody|all|y'?all)\b",
+    re.I)
+EVERYONE = re.compile(r"\b(?:all|everyone|everybody|y'?all|you\s+all|folks|guys|participation|participating)\b", re.I)
+_FUTURE_BEFORE = re.compile(r"\b(?:we|i|they|you|he|she|it)(?:'ll|\s+will|\s+would|'d|\s+are\s+going\s+to|\s+plan\s+to)\s+$",
+                            re.I)
+FAREWELL_MIN_NET = 20       # minutes of net before a goodbye can close it
+FAREWELL_NEAR_END = 10      # ... and only from this many minutes before its scheduled end
+FAREWELL_TAIL_MIN = 5       # keep recording this long after a goodbye (the last IDs and 73s)
+
+
+def farewell(text: str) -> dict | None:
+    """Net control's goodbye in this transmission -> {"kind": "close", "farewell": True, "phrase", "everyone"} or None.
+    A question or a goodbye to one station ("thank you for checking in, Bob") still matches; accept() decides."""
+    for s in _sentences(text):
+        if s.rstrip().endswith("?") or _QUESTION_START.search(s):
+            continue
+        m = FAREWELL.search(s)
+        if m and not _NEG_BEFORE.search(s[:m.start()]) and not _PLAN_BEFORE.search(s[:m.start()]) \
+                and not _FUTURE_BEFORE.search(s[:m.start()]):
+            return {"kind": "close", "farewell": True, "weak": False, "phrase": m.group(0),
+                    "everyone": bool(EVERYONE.search(text))}     # "thank you ALL ... for your patience": any sentence
+    return None
+
+
+def accept_farewell(det: dict | None, who: str | None, ncs: str | None, minutes_in: float, near_end: bool) -> bool:
+    """A goodbye closes the net only near its end, after a real net, addressed to everyone (a station checking out
+    hears "thanks, have a good night" too), and from net control or a speaker not known to be someone else."""
+    if not det or not det.get("farewell") or not near_end or minutes_in < FAREWELL_MIN_NET:
+        return False
+    if not det.get("everyone"):
+        return False                  # to one station ("thanks for checking in Bob, have a good night"): not the end
+    ncs = (ncs or "").upper() or None
+    if who and ncs:
+        return who == ncs
+    return not who                    # a known speaker who is not net control never closes it
+
+
 # "QRT" / "K7ABC clear" at the end: a close only from net control
 WEAK_QRT = re.compile(r"\b(?:going\s+|now\s+|is\s+)?q\s?r\s?t\b", re.I)
 WEAK_CLEAR = re.compile(r"\b(?P<c>" + _CALL + r")[,.]?\s+(?:is\s+)?(?:now\s+)?(?:clear|clearing|secured|securing|out|"
@@ -299,9 +345,17 @@ class NetCloser:
                 return
             who = v.get("speaker")
             minutes_in = (at - datetime.fromisoformat(s["start"])).total_seconds() / 60
+            near_end = self._near_end(rid, at, o)
+            if o and o.get("start"):                         # a scheduled net: from its start, not the last quiet gap
+                minutes_in = max(minutes_in, (at - datetime.fromisoformat(o["start"])).total_seconds() / 60)
             for text in texts:
                 det = detect(text, ncs)
                 if not det:
+                    fw = farewell(text) if tag.get("key") else None
+                    if fw and accept_farewell(fw, who, ncs, minutes_in, near_end):
+                        self._close(rid, key, tag, o, s, tx, by=who or ncs, how="goodbye", phrase=fw["phrase"],
+                                    tail=max(self.tail, timedelta(minutes=FAREWELL_TAIL_MIN)))
+                        return
                     continue
                 if det["kind"] == "soon":
                     self.soon[rid] = {"key": key, "at": at_s, "phrase": det["phrase"]}
@@ -315,7 +369,15 @@ class NetCloser:
                 self._save()
                 self.publish()
 
-    def _close(self, rid, key, tag, o, s, tx, by, how, phrase, manual=False):
+    def _near_end(self, rid: str, at: datetime, o: dict | None) -> bool:
+        """Within FAREWELL_NEAR_END minutes of the occurrence's scheduled end, past it, or running over."""
+        if not o or not o.get("end"):
+            return False
+        if o.get("overrun"):
+            return True
+        return at >= datetime.fromisoformat(o["end"]) - timedelta(minutes=FAREWELL_NEAR_END)
+
+    def _close(self, rid, key, tag, o, s, tx, by, how, phrase, manual=False, tail=None):
         now = self.st.clock()
         inst = None
         try:
@@ -328,7 +390,7 @@ class NetCloser:
              "at": tx["start"] if tx else now.isoformat(timespec="seconds"), "tx": (tx or {}).get("id"),
              "by": by, "how": how, "phrase": phrase, "manual": manual, "session_start": s["start"] if s else None,
              "detected_at": now.isoformat(timespec="seconds"),
-             "tail_until": (now + (timedelta(0) if manual else self.tail)).isoformat(timespec="seconds"),
+             "tail_until": (now + (timedelta(0) if manual else (tail or self.tail))).isoformat(timespec="seconds"),
              "state": "tail", "paused": False, "final": None}
         self.closes[key] = c
         self.soon.pop(rid, None)

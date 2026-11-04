@@ -221,7 +221,11 @@ you chose is remembered. Each column shows:
   "this concludes tonight's net", "returning the repeater to normal amateur use"; "QRT" and "N7XYZ clear" only from
   net control), the header shows **Closed 20:15** and "Net closed by N7XYZ at 20:15". Questions and plans are not a
   close ("before we close the net, any…?", "we'll close the net at 9"; "the net will close in 5 minutes" shows
-  *closing soon*). Who counts: the schedule's net control; else the station that gave its call while opening the net
+  *closing soon*). **A goodbye to everyone** near the end also closes it ("thank you all for your participation",
+  "I want you all to have a safe and wonderful evening", "good night everyone"): only within 10 minutes of the
+  scheduled end or while it runs over, after 20 minutes of net, from net control (or a speaker not known to be
+  someone else), and never one said to a single station ("thanks for checking in, Bob, have a good night"); the
+  recording then goes on 5 minutes, not 2. Who counts: the schedule's net control; else the station that gave its call while opening the net
   or taking roll ("This is N7XYZ, roll call will begin now"; the header offers **Save N7XYZ as net control for
   <net>**); when nobody can tell who is talking (usual on FM: net control rarely says its call when closing), net
   control's closing words count after 5 minutes of net, inside the scheduled time (start to end + 5 min). The

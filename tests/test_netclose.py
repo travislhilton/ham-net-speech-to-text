@@ -327,3 +327,39 @@ def test_close_detection_can_be_turned_off(tmp_path):
     st = make(tmp_path, TUE.replace(hour=12), close_detect=False)
     play(st)
     assert not st.closer.closes
+
+
+def test_net_controls_goodbye_closes_the_net_near_its_end():
+    from station.netclose import accept_farewell, farewell
+    real = "you Thank all very much. Thank you for your patience. I want you all to have a safe and wonderful day."
+    ok = lambda s, who=None, ncs="K7NET", mins=40, near=True: accept_farewell(farewell(s), who, ncs, mins, near)
+    assert ok(real) and ok(real, who="K7NET") and ok("Thank you for your participation this evening.")
+    assert ok("Good night everyone.")
+    assert not ok(real, near=False)                      # mid-net: not the end
+    assert not ok(real, mins=10)                         # a short net: not enough of one
+    assert not ok(real, who="K7ABC")                     # another station saying it
+    for s in ("73, have a good night.", "Thanks for checking in Bob, have a good night.",   # to one station
+              "Will you have a good weekend?", "We'll have a great day of training on Saturday.",
+              "Have a great day at work tomorrow, Bob."):
+        assert not ok(s), s
+
+
+def test_a_net_that_ends_with_a_goodbye_closes_with_a_longer_tail(tmp_path):
+    st = make(tmp_path, TUE.replace(hour=12))
+    st.set_paused("ftm", True); st.nets.tick()
+    st.nets.tick(at(-1))
+    for (m, s), text, calls in REAL[:5]:
+        say(st, "ftm", at(m, s), text, calls)
+    key = st.tx[-1]["net"]["key"]
+    bye = "you Thank all very much. Thank you for your patience. I want you all to have a safe and wonderful day."
+    say(st, "ftm", at(30), bye)                                # 30 min before the scheduled end: just a goodbye
+    assert key not in st.closer.closes
+    say(st, "ftm", at(52), "K7ABC, thanks for checking in, have a good night.", ["K7ABC"])   # to one station
+    assert key not in st.closer.closes
+    say(st, "ftm", at(58, 31), bye)                           # near the end: the net is over
+    c = st.closer.closes[key]
+    assert c["state"] == "tail" and c["how"] == "goodbye" and c["by"] == "N7XYZ"
+    st.closer.tick(at(61))                                     # 2.5 min later: still the tail (5 min after a goodbye)
+    assert c["state"] == "tail" and not st.accurate.calls
+    st.closer.tick(at(64))
+    assert st.closer.closes[key]["state"] == "closed" and st.radios["ftm"]["paused"] and st.accurate.calls

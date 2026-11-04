@@ -139,19 +139,19 @@ def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, 
     transmission's frequency, then the one whose scheduled time holds `at`, then the nearest start.
     (A tie on the nearest start alone once put a 20:45 simplex net's transmissions at 20:52 into the 21:00 net.)
     `ended`: occurrence keys that are over although their scheduled time is not (closed, or quiet for longer than
-    the gap that ends a conversation): they claim nothing more. None = not a scheduled net."""
+    the gap that ends a conversation): they lose to any other net that could take the transmission (the next net's
+    early check-ins), but a lone net keeps its own after a long quiet spell. None = not a scheduled net."""
     best = None
     for n in nets:
         if n.get("radio") != rid:
             continue
         for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=1)):
             if o["start"] - timedelta(minutes=before) <= at < o["end"] + timedelta(minutes=after):
-                if recur.key(n.get("id"), o["date"]) in ended:
-                    continue
+                over = recur.key(n.get("id"), o["date"]) in ended     # ranks last: wins only when nothing else can
                 f = o.get("freq_mhz") or n.get("freq_mhz")
                 off_freq = bool(freq_mhz and f and abs(float(f) - float(freq_mhz)) > 0.0005)
                 outside = not (o["start"] <= at < o["end"])
-                rank = (off_freq, outside, abs((at - o["start"]).total_seconds()))
+                rank = (over, off_freq, outside, abs((at - o["start"]).total_seconds()))
                 if best is None or rank < best[0]:
                     best = (rank, item(n, o))
     return best[1] if best else None
