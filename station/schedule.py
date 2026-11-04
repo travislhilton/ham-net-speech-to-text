@@ -349,6 +349,8 @@ class NetSchedule:
         except Exception as e:  # noqa: BLE001 — an alert problem never stops listening
             print(f"alerts: {type(e).__name__}: {e}", flush=True)
         skip = self.alerts.skipped()
+        closer = getattr(self.st, "closer", None)
+        held = lambda rid, key: bool(closer and closer.holds(rid, key))   # a net closed early stays paused
         with self.lock:
             for rid, r in list(self.st.radios.items()):
                 L = r.setdefault("listen", {"scheduled": False, "tune": False})
@@ -365,7 +367,8 @@ class NetSchedule:
                     # LEAD_MIN before its net and put back to paused GRACE_MIN after it, unless the operator
                     # pressed Pause/Resume in between (set_paused(by="operator") clears resumed_for).
                     if want:
-                        if r.get("paused") and not (first and r.get("paused_by") == "operator"):
+                        if r.get("paused") and not (first and r.get("paused_by") == "operator") \
+                                and not held(rid, want):
                             L["resumed_for"] = want
                             self.st.set_paused(rid, False, by="schedule")
                             print(f"{at:%H:%M:%S} {rid} resumed for {cur['name']} (it was paused)", flush=True)
@@ -375,7 +378,7 @@ class NetSchedule:
                     continue
                 if want:
                     # a restart inside a net keeps a pause the operator chose; a net's start always resumes
-                    if r.get("paused") and not (first and r.get("paused_by") == "operator"):
+                    if r.get("paused") and not (first and r.get("paused_by") == "operator") and not held(rid, want):
                         self.st.set_paused(rid, False, by="schedule")
                     f, mode = cur.get("freq_mhz"), cur.get("mode")
                     if L.get("tune") and f and (abs(f - (r.get("freq_mhz") or 0)) > 0.0005

@@ -67,7 +67,8 @@ cards:
       - "Listen to the preamble: it tells you the check-in order and how traffic is handled."
   net_close:
     title: "The net is closing"
-    triggers: ["net is now closed", "closing the net", "secure the net", "net is secured", "return the frequency"]
+    triggers: ["net is now closed", "closing the net", "close the net", "secure the net", "net is secured", "return the frequency",
+               "return the repeater", "concludes the net"]   # the close itself: station/netclose.py
     steps:
       - "After the net closes the frequency returns to normal use; identify if you transmit."
   calling_cq:

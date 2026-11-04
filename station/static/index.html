@@ -85,6 +85,10 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .acc .bar{flex:1 1 120px;max-width:220px;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
 .acc .bar i{display:block;height:100%;background:var(--accent,#2b6cb0)}
 .acc.ok{color:var(--ok)}.acc .muted{color:var(--muted)}
+/* the end of a net: closed by net control / ended by the operator, End net with its inline confirmation */
+.sess .nclose,.radio .endnet .nclose{flex-basis:100%;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.nclose.closed{color:var(--ok)}.nclose .muted{color:var(--muted)}.nclose.ask{background:var(--bg,#fff);border:1px solid var(--bad);border-radius:6px;padding:4px 8px}
+.radio .endnet:empty{display:none}.radio .endnet{margin:4px 0}
 .wlacc{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:14px}
 .wlacc.run{background:var(--chip)}.wlacc.ok{border-color:var(--ok)}
 details.livetext{font-size:12px;color:var(--muted);border:0;padding:0;margin:2px 0 0;background:none}details.livetext summary{cursor:pointer;padding:0}
@@ -318,7 +322,7 @@ ol.mtx button{font-size:11px;padding:0 5px}
 </form></dialog>
 <script>
 let editing=null;
-const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[],alerts:[],urgent:[]};
+const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[],alerts:[],urgent:[],netclose:{closes:[],soon:{},learned:{}}};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hhmm=iso=>iso?iso.slice(11,16):"";
@@ -383,14 +387,16 @@ function txHtml(t0){
   return `<div class="tx${pend?" pending":""}" id="tx-${esc(t.id)}"${pend?` title="Improving: the accurate pass ${esc(accOn())} is working on this. Wait a moment for a better transcript."`:""}><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
 }
 // A net or conversation = a run of transmissions on one frequency with no quiet gap over 15 minutes
-// (the same rule as station/ics.py sessions(), which builds the Winlink messages).
+// (the same rule as station/ics.py sessions(), which builds the Winlink messages); a net closed by net control or
+// End net ends there: what is heard after it (`after`) starts a new conversation.
 const GAP_MS=15*60000;
 function groupSessions(list){
   const out=[];
   for(const t of [...list].sort((a,b)=>a.start.localeCompare(b.start))){
     const cur=out[out.length-1],at=Date.parse(t.start);
     const nk=(t.net||{}).key||null;     // a scheduled net's first transmission starts a new one (ics.sessions does the same)
-    if(cur&&at-Date.parse(cur.end)<=GAP_MS&&(t.freq_mhz??null)===(cur.freq_mhz??null)&&(!nk||nk===cur.net)){cur.tx.push(t);if(t.status==="final")cur.end=t.start}
+    const closed=cur&&t.after&&(t.after===cur.net||t.after===t.radio+"@"+cur.start);   // heard after the net was closed
+    if(cur&&!closed&&at-Date.parse(cur.end)<=GAP_MS&&(t.freq_mhz??null)===(cur.freq_mhz??null)&&(!nk||nk===cur.net)){cur.tx.push(t);if(t.status==="final")cur.end=t.start}
     else out.push({start:t.start,end:t.start,freq_mhz:t.freq_mhz??null,tx:[t],net:nk});
   }
   return out;
@@ -409,13 +415,58 @@ function sessHtml(rid,s,latest){
   const title=sn?sn.name:net&&net.type&&net.type!=="unknown"?net.label:(calls.size>2?"Net":"Conversation");
   const kind=sn&&net&&net.type&&net.type!=="unknown"?` <span class="badge ${esc(net.type)}">${esc(net.label)}</span>`:"";
   const ikey=sn?sn.key:`${rid}@${(fin[0]||s.tx[0]).start}`;
-  const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"")+(latest?" (continuing)":"");
+  const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"")+(latest&&!closeOf(rid,ikey)?" (continuing)":"");
   const fq=s.freq_mhz?` · ${Number(s.freq_mhz).toFixed(3)} MHz`:"";
   const btn=fin.length?`<button data-wls="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}" title="ICS-309 log + ICS-213 summary of this ${title.toLowerCase()}, addressed to everyone who took part">Winlink messages…</button>`:"";
   const key=rid+"|"+s.start,open=!SESS_CLOSED.has(key);
   const mins=fin.length?`<button data-mins="${esc(ikey)}" title="Attendance, announcements, schedule, action items, decisions, traffic${sn?"; what is still open":""}">Minutes</button>`:"";
-  return `<details class="sess" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum"><b>${esc(title)}</b>${kind} <span class="muted small">${span}${fq} · ${fin.length} tx · ${calls.size} station${calls.size===1?"":"s"}</span></span></summary><div class="sbody"><span class="sbtn">${mins} ${btn}</span>${accHtml(rid,fin,latest)}</div></details>`;
+  const cl=closeHtml(rid,ikey,fin,latest,sn);
+  return `<details class="sess" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum"><b>${esc(title)}</b>${kind}${cl.badge} <span class="muted small">${span}${fq} · ${fin.length} tx · ${calls.size} station${calls.size===1?"":"s"}</span></span></summary><div class="sbody"><span class="sbtn">${mins} ${btn}</span>${cl.html}${accHtml(rid,fin,latest)}</div></details>`;
 }
+// ---------- the end of a net (station/netclose.py): net control closed it, or End net ----------
+let ENDASK=null;   // "radio|key" whose End net is asking "End the net now?" (inline: confirm() is blocked in some viewers)
+const NC=()=>S.netclose||{closes:[],soon:{},learned:{}};
+const closeOf=(rid,key)=>(NC().closes||[]).find(c=>c.radio===rid&&c.key===key&&c.state!=="open");
+const radioName=rid=>(S.radios.find(r=>r.id===rid)||{}).name||rid;
+function closedWords(c){return c.manual?`Net ended by you at ${hhmm(c.at)}`:`Net closed by ${esc(c.by||"net control")} at ${hhmm(c.at)}`}
+function endAsk(rid,key){return ENDASK===rid+"|"+key
+  ?`<div class="nclose ask"><span>End the net now? It stops recording on ${esc(radioName(rid))} and runs the accurate pass.</span> <button class="primary" data-endnet="${esc(rid)}" data-key="${esc(key)}">End net</button> <button data-endcancel>Cancel</button></div>`
+  :`<button data-endask="${esc(rid)}" data-key="${esc(key)}" title="The net is over: stop recording this radio, run the final accurate pass now and build the Winlink messages from it">End net</button>`}
+// -> {badge (in the title), html (in the header body)} for one net/conversation
+function closeHtml(rid,key,fin,latest,sn){
+  if(!fin.length)return {badge:"",html:""};
+  const c=closeOf(rid,key),n=NC(),out={badge:"",html:""};
+  if(c){
+    out.badge=` <span class="badge">${c.manual?"Ended":"Closed"} ${hhmm(c.at)}</span>`;
+    const undo=`<button data-undo="${esc(rid)}" data-key="${esc(key)}" title="${c.state==="tail"?"Net control did not close the net: keep listening and keep it as one net":"Re-open: the net goes on to its scheduled end"}${c.paused?" (the radio listens again)":""}">${c.state==="tail"?"Keep listening":"Not closed"}</button>`;
+    if(c.state==="tail"){
+      out.html=`<div class="nclose"><b>${closedWords(c)}</b><span class="muted">· recording until ${hhmm(c.tail_until)} for the 73s, then the accurate pass${c.scheduled?" (the radio pauses if the schedule turned it on for this net)":""}</span> ${undo} <button data-endnet="${esc(rid)}" data-key="${esc(key)}" title="Stop recording now">End now</button></div>`;
+      return out}
+    const st=accState(rid,fin),avail=S.accurate_available;
+    const pass=st&&st.active?"accurate pass running":st&&!st.missing.length?"accurate text ready":avail?"accurate pass waiting":"";
+    const ready=!st||!st.active&&(!st.missing.length||!avail);
+    const wl=ready?` <button class="primary" data-wls="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}" title="The ICS-309 log and ICS-213 summary, built from the ${st&&!st.missing.length?"accurate":"live"} text. Nothing is sent until you press Put in Outbox.">Winlink messages ready</button>`:"";
+    out.html=`<div class="nclose closed"><b>${closedWords(c)}</b>${pass?`<span class="muted">· ${pass}</span>`:""}${c.paused?`<span class="muted">· recording stopped</span>`:""}${wl} ${undo}</div>`;
+    return out}
+  const parts=[];
+  const soon=(n.soon||{})[rid];
+  if(latest&&soon&&soon.key===key)parts.push(`<span class="muted">Net control: closing soon (“${esc(soon.phrase)}”, ${hhmm(soon.at)})</span>`);
+  const lc=(n.learned||{})[key],sched=sn&&(S.schedule||[]).find(x=>x.id===sn.id);
+  if(lc&&sched&&!sched.ncs)parts.push(`<span class="muted">Net control ${esc(lc)} (heard opening the net)</span> <button data-savencs="${esc(rid)}" data-key="${esc(key)}" title="Net control then names the speaker of its acknowledgements and closes the net">Save ${esc(lc)} as net control for ${esc(sched.name)}</button>`);
+  if(latest)parts.push(endAsk(rid,key));
+  if(parts.length)out.html=`<div class="nclose">${parts.join(" ")}</div>`;
+  return out}
+// the radio column: End net while this radio's net is on, or what happened to the last one
+function renderEndNet(el,r){
+  const box=el.querySelector(".endnet");if(!box)return;
+  const mine=S.tx.filter(t=>t.radio===r.id),ss=mine.length?groupSessions(mine):[],s=ss[ss.length-1];let h="";
+  if(s){const fin=s.tx.filter(t=>t.status==="final"),sn=(s.tx.find(t=>t.net)||{}).net;
+    if(fin.length){const key=sn?sn.key:`${r.id}@${fin[0].start}`,c=closeOf(r.id,key),live=Date.now()-Date.parse(s.end)<GAP_MS;
+      if(c&&(c.state==="tail"||Date.now()-Date.parse(c.at)<30*60000))h=closeHtml(r.id,key,fin,live,sn).html;
+      else if(live&&!r.paused)h=`<div class="nclose"><span class="muted">${esc(sn?sn.name:"This conversation")}:</span> ${endAsk(r.id,key)}</div>`}}
+  if(box.dataset.h!==h){box.dataset.h=h;box.innerHTML=h}}
+async function closeAct(rid,act,key){
+  try{S.netclose=await post(`/api/netclose/${enc(rid)}/${act}`,{key});ENDASK=null;renderFeed(rid);renderRadios()}catch(err){alert(err.message)}}
 // ---------- the accurate pass (home server, or this PC when there is none) ----------
 const dur=s=>s<60?`about ${Math.max(5,Math.round(s/5)*5)} s`:`about ${Math.round(s/60)} min`;
 const GUESS_RATE=8;   // audio seconds per second on the home server, until the station has sent its own measure
@@ -541,7 +592,7 @@ function ensureCard(r){
    <div class="mrow"><span class="ml">SNR</span><div class="bar">${snrZones(m)}<i class="fill"></i></div><span class="mv sv">—</span></div>
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
    <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>
-   <div class="why"></div><div class="sch"></div>
+   <div class="why"></div><div class="endnet"></div><div class="sch"></div>
    <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-nets="${esc(r.id)}" title="This radio's nets, and listening only while they are on">Nets…</button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
@@ -627,6 +678,7 @@ function renderRadios(){
     if(r.paused){const rx=el.querySelector(".rx");rx.textContent="PAUSED";rx.className="rx paused"}
     if(!r.paused&&r.state!=="listening"){el.querySelector(".rx").textContent=r.state==="error"?"no audio":r.state;el.querySelector(".rx").className="rx"}
     renderWhy(el,r);   // schedule
+    renderEndNet(el,r);   // End net / closed by net control
   }
 }
 function onMeter(d){
@@ -793,6 +845,11 @@ document.addEventListener("click",e=>{
   const ac=e.target.closest("[data-acc]");if(ac)runAcc(ac.dataset.acc,ac.dataset.s,ac.dataset.e);
   const te=e.target.closest("[data-test]");if(te)openTest(te.dataset.test);
   const w=e.target.closest("[data-wls]");if(w)wlPreview({radio:w.dataset.wls,start:w.dataset.s,end:w.dataset.e});
+  const ea=e.target.closest("[data-endask]");if(ea){e.preventDefault();ENDASK=ea.dataset.endask+"|"+ea.dataset.key;renderFeed(ea.dataset.endask);renderRadios()}
+  if(e.target.closest("[data-endcancel]")){e.preventDefault();ENDASK=null;renderFeed();renderRadios()}
+  const en=e.target.closest("[data-endnet]");if(en){e.preventDefault();closeAct(en.dataset.endnet,"end",en.dataset.key)}
+  const un=e.target.closest("[data-undo]");if(un){e.preventDefault();closeAct(un.dataset.undo,"undo",un.dataset.key)}
+  const sv=e.target.closest("[data-savencs]");if(sv){e.preventDefault();closeAct(sv.dataset.savencs,"save_ncs",sv.dataset.key)}
   const fo=e.target.closest("[data-fold]");if(fo){setFold(fo.dataset.fold,!$("col-"+fo.dataset.fold).classList.contains("folded"));return}
   const tb=e.target.closest("[data-tab]");if(tb){const col=$("col-"+tb.dataset.rid);
     if(tb.classList.contains("on")||col.classList.contains("folded")){              // the open tab again: fold / unfold
@@ -835,6 +892,7 @@ function connect(){
       if(POINTER_DOWN||Date.now()-LAST_TOUCH<2000){INST_T=setTimeout(go,1000);return}   // never swap a button under the pointer
       if(NV.tab==="minutes"&&NV.key===d.key)renderMinutes();else if(NV.tab==="history")renderHistory()};
     if(!INST_T)INST_T=setTimeout(go,3000)});
+  es.addEventListener("netclose",e=>{S.netclose=JSON.parse(e.data);renderFeed();renderRadios()});
   es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;S.accurate_where=d.where;S.accurate_rate=d.rate;renderFeed();wlAccNote()});
 }
 // ---------- the Nets area: Schedule | History | Analysis | Minutes | Still open ----------
@@ -858,7 +916,8 @@ const whenNet=iso=>{const d=new Date(iso),t=new Date();
   return (d.toDateString()===t.toDateString()?"at ":"on "+DAYS[(d.getDay()+6)%7]+" "+d.getDate()+" at ")+hhmm(iso)};
 function renderWhy(el,r){
   const L=r.listen||{},w=el.querySelector(".why");if(!w)return;let h="";
-  if(r.paused)h=r.paused_by==="schedule"&&L.next?`Paused until <b>${esc(L.next.name)}</b> ${esc(whenNet(L.next.start))}`
+  if(r.paused&&r.closed)h=`Paused: <b>${esc(r.closed.name)}</b> ${r.closed.manual?"ended by you":"closed by "+(r.closed.by?esc(r.closed.by):"net control")} at ${hhmm(r.closed.at)}${L.next?` · listens again for <b>${esc(L.next.name)}</b> ${esc(whenNet(L.next.start))}`:""}`;
+  else if(r.paused)h=r.paused_by==="schedule"&&L.next?`Paused until <b>${esc(L.next.name)}</b> ${esc(whenNet(L.next.start))}`
     :r.paused_by==="schedule"?"Paused by the schedule (no net coming up on this radio)":"Paused by you";
   else if(L.scheduled)h=L.now?`Listening for <b>${esc(L.now)}</b> (pauses when it ends)`:"Listening only during scheduled nets";
   w.innerHTML=h;w.style.display=h?"":"none"}
@@ -1093,7 +1152,7 @@ async function renderMinutes(){
   $("netsBody").dataset.mkey=d.key;
   $("netsBody").innerHTML=`<div class="mhead">
      <div class="mnav">${d.prev?`<button data-mins="${esc(d.prev)}" title="The time before">‹</button>`:""}<div><div class="mtitle">${esc(net?d.name:"Conversation")} ${d.emergency?'<span class="badge emergency">Emergency net</span>':""}</div>
-     <div class="small muted">${esc(fmtDate(d.occ_date||d.start))} · ${hhmm(d.start)}–${hhmm(d.end)}${d.freq_mhz?" · "+mhz(d.freq_mhz,d.mode):""} · ${d.tx_count} transmissions${acc?" · "+acc:""}${(d.winlink||[]).length?` · ✉ Winlink sent ${(d.winlink||[]).length}×`:""}</div></div>${d.next?`<button data-mins="${esc(d.next)}" title="The time after">›</button>`:""}</div>
+     <div class="small muted">${esc(fmtDate(d.occ_date||d.start))} · ${hhmm(d.start)}–${hhmm(d.end)}${d.freq_mhz?" · "+mhz(d.freq_mhz,d.mode):""} · ${d.tx_count} transmissions${acc?" · "+acc:""}${(d.winlink||[]).length?` · ✉ Winlink sent ${(d.winlink||[]).length}×`:""}${d.closed_at?` · ${d.closed_by==="operator"?"ended by you":"closed by "+esc(d.closed_by||"net control")} at ${hhmm(d.closed_at)}`:""}</div></div>${d.next?`<button data-mins="${esc(d.next)}" title="The time after">›</button>`:""}</div>
      <div class="row mtools"><label class="inl small">Net control <input id="mNcs" class="up" maxlength="11" value="${esc(d.ncs||"")}" placeholder="callsign"></label>
       <button id="mWl" title="ICS-309 log + ICS-213 summary with these minutes">Winlink messages…</button>
       <a class="helpbtn" href="/api/history/minutes?key=${enc(d.key)}&format=md" download>Download .md</a> <button id="mCopy">Copy as text</button>${d.net_id?` <button data-goto="open" data-net="${esc(d.net_id)}">Still open</button>`:""}</div></div>

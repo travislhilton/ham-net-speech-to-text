@@ -180,7 +180,7 @@ you chose is remembered. Each column shows:
   net start or end takes over again. Optionally, **when a net starts, log the radio at the net's frequency and
   mode** (you still tune the radio yourself; the retune warning stays). Kept across restarts in `data\operator.json`.
 - **Nets and conversations**: each radio's log is split into nets/conversations (a new one starts after 15
-  quiet minutes, when the radio's frequency changes, or when a scheduled net starts), each with a header: the net's
+  quiet minutes, when the radio's frequency changes, when a scheduled net starts, or after a net is closed), each with a header: the net's
   name from the schedule (or the kind of net heard), time span, frequency, how many transmissions and stations, and
   its own **Minutes** and **Winlink messages…** buttons. That builds an **ICS-309**
   Communications Log (every transmission: time, from = who is talking as above — yours, then stated, then net
@@ -190,6 +190,29 @@ you chose is remembered. Each column shows:
   any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
   connect. Close Winlink Express first; the station refuses while it is open and backs up Winlink's message
   list before each write.
+- **The end of a net** (`station/netclose.py`). **Net control closes it:** when net control says so on the air
+  ("hearing none, we'll go ahead and close the net", "this net is now closed", "closing the net", "secure the net",
+  "this concludes tonight's net", "returning the repeater to normal amateur use"; "QRT" and "N7XYZ clear" only from
+  net control), the header shows **Closed 20:15** and "Net closed by N7XYZ at 20:15". Questions and plans are not a
+  close ("before we close the net, any…?", "we'll close the net at 9"; "the net will close in 5 minutes" shows
+  *closing soon*). Who counts: the schedule's net control; else the station that gave its call while opening the net
+  or taking roll ("This is N7XYZ, roll call will begin now"; the header offers **Save N7XYZ as net control for
+  <net>**); when nobody can tell who is talking (usual on FM: net control rarely says its call when closing), net
+  control's closing words count after 5 minutes of net, inside the scheduled time (start to end + 5 min). The
+  station keeps recording **2 more minutes** for the 73s and IDs (`close_tail_min`), then: the radio is **paused**
+  if the station turned it on for this net (it was paused before the net, or it listens only during nets) and you
+  have not pressed Pause or Resume since; a radio you had listening before the net keeps listening, and a
+  conversation outside the schedule never pauses anything. The **final accurate pass starts at once** (no waiting
+  for 5 quiet minutes), the minutes draft is refreshed, and what is heard afterwards starts a new conversation. When
+  the pass is done the header offers **Winlink messages ready**: the ICS-309 and ICS-213 built from the accurate
+  text, for you to review (nothing goes into the Outbox until you press Put in Outbox). **Keep listening** (during
+  the 2 minutes) or **Not closed** (after) undoes it: the radio listens again if this paused it, the net runs to its
+  scheduled end and the final pass runs later as usual. Without a close nothing changes: a net ends at its
+  scheduled end + 5 minutes. **End net** (on the header of the net or conversation going on, and on its radio's
+  card) ends it yourself: an inline "End the net now? It stops recording on FTM-150R…" **End net** / **Cancel**,
+  then no tail: recording stops (the radio is paused, as if you pressed Pause; its later nets still resume it),
+  the final pass starts, and **Winlink messages ready** appears when it is done. `close_detect: false` turns the
+  listening for closes off (End net stays). Kept in `data\netclose.json`.
 - **Accurate pass** (home network, optional), in two stages. As soon as each transmission's live text is done,
   the station sends its recording **with the ~25 s of the net before it** to the home server (Whisper large-v3) and
   puts a *provisional* accurate text beside the live text, a few seconds later. When the net has been quiet for
@@ -260,6 +283,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Minutes drafted by rules (attendance, announcements, schedule, action items, decisions, traffic, urgent), editable with a layer that is never overwritten; Still open; .md / text; in the ICS-213 | working (`station/minutes.py`); on the test nets: 100 % of items found, none wrong; on a held-out net written afterwards: 7 of 9 right, 7 of 8 found before tuning. An LLM tidy-up is stubbed (`minutes: {llm: …}`), not wired yet |
 | Urgent board for emergency nets (category, reporter, place, people; Handled) | working |
 | Listen only during scheduled nets (auto resume 1 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
+| The end of a net: net control's close heard (wording, roll-call-learned net control, questions/plans/quotes excluded), 2 min tail, pause only a radio the station turned on, final accurate pass at once, minutes, Winlink messages ready; End net by hand; Not closed undoes | working (`station/netclose.py`; built from the 2026-11-03 FM net, where the close had no speaker); not yet seen on a live net |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
 | Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | built + measured, not deployed yet (synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
 | Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/NPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | built + measured on an i5-12600H station PC, not deployed yet (see "The accurate pass on this PC") |
