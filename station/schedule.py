@@ -32,6 +32,8 @@ DAYS = recur.DAYS
 MODES = ("FM", "USB", "LSB", "AM", "CW", "DIG")
 LEAD_MIN = 1          # resume this many minutes before a net starts (owner 11-02: one minute)
 GRACE_MIN = 5         # pause this many minutes after it ends (nets run over)
+OVERRUN_QUIET_MIN = 5   # a net past its scheduled end keeps running while it was heard less than this long ago
+OVERRUN_MAX_MIN = 180   # ... but never longer than this past its scheduled end
 ALERT_MIN = 5         # the pre-net alert, this many minutes before (per net: alert_min; 0 = no alert)
 BELONGS_MIN = 15      # a transmission this close to an occurrence belongs to that net's history
 LOOK_AHEAD_DAYS = 62  # "paused until ..." looks this far ahead (a monthly net)
@@ -153,6 +155,32 @@ def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, 
                 if best is None or rank < best[0]:
                     best = (rank, item(n, o))
     return best[1] if best else None
+
+
+def overrun(nets: list[dict], rid: str, at: datetime, last_heard: dict, closed=(), quiet=OVERRUN_QUIET_MIN,
+            most=OVERRUN_MAX_MIN, lead=LEAD_MIN) -> dict | None:
+    """The occurrence on radio `rid` still going past its scheduled end at `at` (owner, 2026-11-03: "let the net run
+    until it is done or until just before the next net"), or None. Going = its end has passed, it was heard
+    (`last_heard`: occurrence key -> datetime of its latest transmission) within `quiet` minutes, it was not closed
+    (`closed`), it is at most `most` minutes past its end, and no other net on this radio is due (`lead` minutes
+    before its start). Pure: the ticker, the net tagging and the tests use it."""
+    best = None
+    due = False
+    for n in nets:
+        if n.get("radio") != rid:
+            continue
+        for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=1)):
+            k = recur.key(n.get("id"), o["date"])
+            if o["start"] - timedelta(minutes=lead) <= at < o["end"]:
+                due = True                                      # another net is on (or about to be): it wins
+            elif o["end"] <= at <= o["end"] + timedelta(minutes=most) and k not in closed:
+                h = last_heard.get(k)
+                if h and at - h <= timedelta(minutes=quiet) and h >= o["end"] - timedelta(minutes=quiet):
+                    if best is None or o["end"] > best[0]:
+                        best = (o["end"], item(n, o))
+    if due or not best:
+        return None
+    return best[1] | {"overrun": True}
 
 
 def running(nets: list[dict], at: datetime) -> list[dict]:
@@ -375,6 +403,12 @@ class NetSchedule:
             for rid, r in list(self.st.radios.items()):
                 L = r.setdefault("listen", {"scheduled": False, "tune": False})
                 cur, nxt = listen_window(nets, rid, at, skip=skip)
+                if cur is None:
+                    try:
+                        cur = self.st.overrun(rid, at)               # still going past its end: keep listening
+                    except Exception as e:  # noqa: BLE001
+                        print(f"overrun: {type(e).__name__}: {e}", flush=True)
+                        cur = None
                 L["now"] = cur["name"] if cur else None
                 L["next"] = {"name": nxt["name"], "start": nxt["start"]} if nxt else None
                 want = cur["key"] if cur else ""                       # which net window (edge = a change)

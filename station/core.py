@@ -476,6 +476,13 @@ class Station:
             return it | {"radio_name": radio.get("name"), "freq_mhz": f, "band": band(f),
                          "retune": bool(f and radio.get("freq_mhz") and abs(f - radio["freq_mhz"]) > 0.0005)}
         run = running(nets, at)
+        for rid in list(self.radios):                         # nets still going past their scheduled end
+            try:
+                ov = self.overrun(rid, at)
+            except Exception:  # noqa: BLE001
+                ov = None
+            if ov and not any(r["key"] == ov["key"] for r in run):
+                run.append(ov)
         nxt = None
         for n in nets:
             for o in recur.upcoming(n, at, 2):
@@ -501,9 +508,14 @@ class Station:
         rows = []
         for n in self.cfg.get("schedule", []) or []:
             for o in recur.occurrences(n, day0, day0 + timedelta(days=1)):
-                if o["start"].date() != at.date() or o["end"] <= at:
-                    continue
                 it = item(n, o)
+                if o["start"].date() != at.date():
+                    continue
+                if o["end"] <= at:
+                    ov = self.overrun(it["radio"], at)
+                    if not ov or ov["key"] != it["key"]:
+                        continue
+                    it["overrun"] = True
                 c = closer.closes.get(it["key"]) if closer and hasattr(closer, "closes") else None
                 if c and c.get("state") == "closed":
                     continue
@@ -542,9 +554,35 @@ class Station:
                 out.add(k)
         return out
 
+    def last_heard(self, rid: str, at: datetime, within_min: int = 30) -> dict:
+        """Occurrence key -> when it was last heard on `rid` (looking back `within_min` minutes from `at`)."""
+        out, frm, to = {}, (at - timedelta(minutes=within_min)).isoformat(), at.isoformat()
+        for t in reversed(self.tx):                           # newest last: stop once older than the window
+            s = t.get("start", "")
+            if s < frm:
+                break
+            k = (t.get("net") or {}).get("key")
+            if k and t.get("radio") == rid and s <= to and k not in out:
+                out[k] = datetime.fromisoformat(s)
+        return out
+
+    def overrun(self, rid: str, at: datetime | None = None) -> dict | None:
+        """The net on `rid` running past its scheduled end (station/schedule.overrun), or None."""
+        from .schedule import overrun
+        at = at or self.clock()
+        closer = getattr(self, "closer", None)
+        closed = {k for k, c in ((closer.closes if closer and hasattr(closer, "closes") else {}) or {}).items()
+                  if c.get("radio") == rid and c.get("state") == "closed"}
+        return overrun(self.cfg.get("schedule") or [], rid, at, self.last_heard(rid, at), closed,
+                       quiet=self.cfg.get("overrun_quiet_min", 5), most=self.cfg.get("overrun_max_min", 180))
+
     def net_of(self, rid: str, at: datetime, freq_mhz: float | None = None) -> dict | None:
-        """The scheduled occurrence a transmission on `rid` at `at` (heard on `freq_mhz`) belongs to, or None."""
+        """The scheduled occurrence a transmission on `rid` at `at` (heard on `freq_mhz`) belongs to, or None.
+        A net running past its end keeps its transmissions until another net on the radio is due."""
         from .schedule import occurrence_at
+        ov = self.overrun(rid, at)
+        if ov:
+            return {"key": ov["key"], "id": ov["id"], "date": ov["date"], "name": ov["name"]}
         o = occurrence_at(self.cfg.get("schedule") or [], rid, at, freq_mhz=freq_mhz, ended=self.ended_nets(rid, at))
         return {"key": o["key"], "id": o["id"], "date": o["date"], "name": o["name"]} if o else None
 

@@ -88,3 +88,8 @@ accurate:                   # the accurate second pass: the home server when rea
 
 # The download link printed on the reference card (Help) with its QR code, for people you train.
 # download_url: https://github.com/OWNER/ham-net-speech-to-text
+
+# A net still being heard after its scheduled end keeps going (recording, its own transmissions) until net control
+# closes it, it is quiet this many minutes, or just before the next net on the same radio; at most overrun_max_min.
+# overrun_quiet_min: 5
+# overrun_max_min: 180

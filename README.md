@@ -177,6 +177,10 @@ you chose is remembered. Each column shows:
   - **Still open** (per net or for all): what net control may read out: urgent issues not handled, announcements still
     valid (until their date passes, or 4 weeks when undated), coming events, open action items and traffic not yet
     handled. Shown again with the pre-net alert and when the net starts.
+- **A net that runs over**: past its scheduled end, a net still being heard keeps recording and keeps its
+  transmissions (header and Nets today: **running over**) until net control closes it, it is quiet for 5 minutes
+  (`overrun_quiet_min`), or 1 minute before the next net on that radio; at most 3 hours over (`overrun_max_min`).
+  Then the usual end of a net: the final accurate pass, the minutes, and the radio paused if the station resumed it.
 - **Nets today**: a strip under the header lists, one line each, the nets still to come today and the one on the
   air (time, name, frequency, radio). The next one is highlighted; one on the air shows **on the air**, or
   **radio paused** when its radio is not recording. Tap a line to open it in Nets.

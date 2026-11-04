@@ -255,6 +255,9 @@ class NetCloser:
 
     def _occurrence(self, rid: str, at: datetime):
         from .schedule import GRACE_MIN, occurrence_at
+        ov = self.st.overrun(rid, at) if hasattr(self.st, "overrun") else None
+        if ov:
+            return ov, True                                   # running past its end: still its window
         o = occurrence_at(self.st.cfg.get("schedule") or [], rid, at)
         if not o:
             return None, False

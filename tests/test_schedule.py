@@ -277,3 +277,45 @@ def test_net_of_skips_a_net_quiet_for_over_15_minutes(tmp_path):
     st.tx.append({"id": "1", "radio": "ftm", "start": "2026-11-03T20:16:00", "status": "final", "net": key})
     assert st.net_of("ftm", TUE.replace(hour=20, minute=25), 146.94)["name"] == "ARES net"   # 9 min quiet: still on
     assert st.net_of("ftm", TUE.replace(hour=20, minute=56), 146.94)["name"] == "Club net"   # 40 min quiet: over
+
+
+def test_a_net_running_over_keeps_going_until_quiet_closed_or_the_next_net(tmp_path):
+    from station.schedule import overrun
+    nets = [{"id": "ares", "name": "ARES net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+             "start": "20:00", "duration_min": 60},
+            {"id": "club", "name": "Club net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+             "start": "21:30", "duration_min": 30}]
+    t = lambda h, m: TUE.replace(hour=h, minute=m)
+    k = "ares@2026-11-03"
+    assert overrun(nets, "ftm", t(21, 10), {k: t(21, 8)})["key"] == k               # past 21:00, heard 2 min ago
+    assert overrun(nets, "ftm", t(21, 10), {k: t(21, 4)}) is None                    # quiet 6 min: done
+    assert overrun(nets, "ftm", t(21, 10), {k: t(21, 8)}, closed={k}) is None        # net control closed it
+    assert overrun(nets, "ftm", t(21, 29), {k: t(21, 28)}) is None                   # the next net is due
+    assert overrun(nets, "ftm", t(20, 30), {k: t(20, 29)}) is None                   # not past its end yet
+    assert overrun(nets, "ftm", t(21, 10), {k: t(21, 8)}, most=5) is None            # the safety limit
+
+
+def test_overrun_keeps_the_radio_listening_and_the_transmissions_in_the_net(tmp_path):
+    cfg = copy.deepcopy(CFG)
+    cfg["schedule"] = [{"id": "ares", "name": "ARES net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+                        "start": "20:00", "duration_min": 60}]
+    clock = Clock(TUE.replace(hour=19, minute=50))
+    st = make(tmp_path, clock, cfg)
+    st.nets.tick()
+    st.set_paused("ftm", True, by="operator")                                        # paused by hand before the net
+    clock.t = TUE.replace(hour=20, minute=0, second=5); st.nets.tick()
+    assert not st.radios["ftm"]["paused"]                                            # resumed for the net
+    net = st.net_of("ftm", TUE.replace(hour=20, minute=58), 146.94)
+    for m in (58, 62, 66, 70, 74):                                                   # still talking past 21:00
+        at = TUE.replace(hour=20 + (m >= 60), minute=m % 60)
+        tag = st.net_of("ftm", at, 146.94)
+        assert tag and tag["key"] == net["key"]
+        st.tx.append({"id": str(m), "radio": "ftm", "start": at.isoformat(timespec="seconds"), "status": "final",
+                      "net": tag})
+        clock.t = at.replace(second=30); st.nets.tick()
+        assert not st.radios["ftm"]["paused"], m
+    assert st.schedule_now()["current"]["overrun"] is True
+    assert [x["overrun"] for x in st.schedule_now()["today"]] == [True]
+    clock.t = TUE.replace(hour=21, minute=20); st.nets.tick()                        # quiet for 6 minutes
+    assert st.radios["ftm"]["paused"]                                                # paused again, as before
+    assert st.schedule_now()["today"] == []

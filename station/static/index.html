@@ -807,7 +807,7 @@ function onMeter(d){
 function renderNet(){
   const n=S.net||{},c=n.current,x=n.next;
   let h="";
-  if(c) h=`<b>${esc(c.name)}</b><span>${freq(c.band)}</span>${c.radio_name?`<span class="muted">on ${esc(c.radio_name)}</span>`:""}${c.ncs?`<span class="muted">NCS ${esc(c.ncs)}</span>`:""}${c.retune?`<span class="badge exercise">Set the radio to ${esc(Number(c.freq_mhz).toFixed(3))} MHz</span>`:""}<button class="linkish small" data-goto="open" data-net="${esc(c.id)}">Still open ›</button>`;
+  if(c) h=`<b>${esc(c.name)}</b>${c.overrun?'<span class="badge" title="Past its scheduled end and still going: recording until net control closes it, it goes quiet for 5 minutes, or the next net on this radio">running over</span>':""}<span>${freq(c.band)}</span>${c.radio_name?`<span class="muted">on ${esc(c.radio_name)}</span>`:""}${c.ncs?`<span class="muted">NCS ${esc(c.ncs)}</span>`:""}${c.retune?`<span class="badge exercise">Set the radio to ${esc(Number(c.freq_mhz).toFixed(3))} MHz</span>`:""}<button class="linkish small" data-goto="open" data-net="${esc(c.id)}">Still open ›</button>`;
   else if(x) h=`<span class="muted">Next net:</span> <button class="linkish" data-goto="schedule" data-net="${esc(x.id)}"><b>${esc(x.name)}</b></button> <span class="muted">${esc(fmtWhen(x.start))} · ${freq(x.band)}</span>`;
   else h='<span class="muted">No net scheduled</span>';
   $("net").innerHTML=h;
@@ -821,7 +821,7 @@ function renderToday(){
   const mhz=x=>x.freq_mhz?`${Number(x.freq_mhz).toFixed(3)} ${esc(x.mode||"")}`:"";
   box.innerHTML=`<div class="th">Nets today</div>`+L.map(x=>{
     const rp=(S.radios.find(r=>r.id===x.radio)||{}).paused;   // on the air but its radio is paused = not recording
-    const cls=x.skipped?"skip":x.state==="on"&&rp?"later":x.state,tag=x.state==="on"?(rp?"radio paused":"on the air"):x.state==="next"&&!x.skipped?"next":"";
+    const cls=x.skipped?"skip":x.state==="on"&&rp?"later":x.state,tag=x.state==="on"?(rp?"radio paused":x.overrun?"running over":"on the air"):x.state==="next"&&!x.skipped?"next":"";
     return `<button class="tn ${cls}" data-goto="schedule" data-net="${esc(x.id)}" title="${esc(x.name)} · ${hm(x.start)}–${hm(x.end)}${x.skipped?" · skipped":""} — open in Nets">
       <span class="tt">${hm(x.start)}<span class="te">–${hm(x.end)}</span></span><span class="nm">${esc(x.name)}</span><span class="fq">${mhz(x)}</span>${x.radio_name?`<span class="rd">${esc(x.radio_name)}</span>`:""}${tag?`<span class="tag${tag==="radio paused"?" ps":""}">${tag}</span>`:""}</button>`}).join("")}
 function renderHints(){
