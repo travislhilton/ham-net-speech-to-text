@@ -252,7 +252,8 @@ class Station:
 
     def operator(self) -> dict:
         from . import winlink
-        op = {"callsign": self.me, "name": "", "grid": "", "winlink_dir": "", "winlink_account": ""} | \
+        op = {"callsign": self.me, "name": "", "grid": "", "winlink_dir": "", "winlink_account": "",
+              "reach_km": self.reach_km()} | \
              {k: v for k, v in (self._saved().get("operator") or {}).items() if v is not None}
         op["callsign"] = self.me
         installs = winlink.find_installs([op["winlink_dir"]] if op["winlink_dir"] else [])
@@ -264,6 +265,15 @@ class Station:
             op["winlink_account"] = cur["active"] if cur["active"] in cur["accounts"] else (cur["accounts"] or [""])[0]
         return op | {"installs": info, "express_running": winlink.express_running()}
 
+    def reach_km(self) -> int:
+        """VHF/UHF: beyond this a call said once that nothing backs is not counted (Settings; consensus.REACH_KM)."""
+        from .consensus import REACH_KM
+        try:
+            v = int((self._saved().get("operator") or {}).get("reach_km") or REACH_KM)
+        except (TypeError, ValueError):
+            v = REACH_KM
+        return v
+
     def set_operator(self, body: dict) -> dict:
         """The operator's own settings, set on the dashboard: callsign (hints, IDs, Winlink sender), name,
         grid, which Winlink Express install and which callsign account in it."""
@@ -273,9 +283,22 @@ class Station:
         grid = str(body.get("grid", "") or "").strip()
         if grid and not re.fullmatch(r"[A-Ra-r]{2}\d{2}([A-Xa-x]{2})?", grid):
             raise ValueError("grid square must look like EM59 or EM59et")
+        reach = body.get("reach_km")
+        if reach not in (None, ""):
+            try:
+                reach = int(float(reach))
+            except (TypeError, ValueError):
+                raise ValueError("VHF/UHF reach must be a number of km")
+            if not 50 <= reach <= 5000:
+                raise ValueError("VHF/UHF reach must be between 50 and 5000 km")
         with self.lock:
             saved = self._saved()
             op = saved.get("operator") or {}
+            if reach not in (None, ""):
+                if reach != op.get("reach_km"):
+                    self.__dict__.pop("_agreed", None)          # re-run today's agreement with the new reach
+                    threading.Timer(0.5, self.agree_recent_async).start()
+                op["reach_km"] = reach
             op.update(callsign=call, name=str(body.get("name", op.get("name", "")))[:80], grid=grid,
                       winlink_dir=str(body.get("winlink_dir", op.get("winlink_dir", "")))[:260],
                       winlink_account=str(body.get("winlink_account", op.get("winlink_account", ""))).upper()[:12])
@@ -420,6 +443,10 @@ class Station:
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"],
                                               "card": (old.get(c) or {}).get("card")})
                 e["count"] += 1; e["last"] = tx["start"]
+        for c, e in self.heard.items():                  # the agreement's word: no callbook confirms it
+            w = (self.__dict__.get("unconfirmed") or {}).get(c)
+            if w:
+                e["unconfirmed"] = w
 
     def _apply_operator(self):
         saved = self._saved()
@@ -873,11 +900,25 @@ class Station:
         except Exception:  # noqa: BLE001 — history is evidence, never a requirement
             prior = {}
         fx = fixups.load(self.root / "config", self.data)
-        recs, res = consensus.for_session(rows, self._licences(), prior, callfix.home_state(self), self.roster,
+        lic = self._licences()
+        answers = {}
+        if self.callbook and self.callbook.qrz:           # QRZ.com for the calls the FCC does not show Active
+            heard = {c for t in rows for c in ((t.get("accurate") or {}).get("callsigns") or [])
+                     + list(t.get("callsigns") or [])}
+            try:
+                answers = consensus.qrz_answers(heard, self.callbook.qrz, lic,
+                                                allow_network=bool(self.cfg.get("qrz_online", True)))
+            except Exception as e:  # noqa: BLE001 — QRZ is evidence, never a requirement
+                print(f"consensus: QRZ: {type(e).__name__}: {e}", flush=True)
+        recs, res = consensus.for_session(rows, lic, prior, callfix.home_state(self), self.roster,
                                           self.me, fx, fixups.net_names_for(self._sched_entry(net_id)),
-                                          where=self.where())
+                                          where=self.where(), qrz=answers, reach_km=self.reach_km())
         changed = []
+        unconf = self.__dict__.setdefault("unconfirmed", {})
         with self.lock:
+            for e in res["calls"].values():
+                if e.get("status") != "distant":
+                    unconf[e["call"]] = e.get("unconfirmed")      # None = confirmed
             for t in rows:
                 live = self._find(t["id"])
                 if not live:
@@ -894,7 +935,8 @@ class Station:
                 else:
                     live.pop("consensus", None)
                 changed.append(dict(live))
-            if changed:
+            if changed or any((self.heard.get(c) or {}).get("unconfirmed") != w for c, w in unconf.items()
+                              if c in self.heard):
                 self._rebuild_heard()
                 for c, e in self.heard.items():
                     if e.get("card") is None:
@@ -902,8 +944,7 @@ class Station:
         for t in changed:
             self._log({"update": t["id"], "consensus": t.get("consensus")})
             self.bus.publish("tx", t)
-        if changed:
-            self.bus.publish("heard", {"heard": self.heard_list()})
+        self.bus.publish("heard", {"heard": self.heard_list()})
         return {"radio": rid, "start": start, "end": end, "changed": len(changed),
                 "moved": {h: e for h, e in res["calls"].items() if e["call"] != h},
                 "unverified": sorted(h for h, e in res["calls"].items() if e["status"] in ("unverified", "lapsed")),

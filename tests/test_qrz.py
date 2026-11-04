@@ -54,3 +54,18 @@ def test_cache_readable_from_another_thread(tmp_path):
     t = threading.Thread(target=lambda: out.update(r=c.lookup("EA8AB", allow_network=False)))
     t.start(); t.join()
     assert out["r"]["fname"] == "Juan"
+
+
+def test_status_remembers_not_found_and_tells_unchecked_apart(tmp_path):
+    f = Fake([LOGIN, NOTFOUND, REC])
+    c = qrz.Client(("W9XYZ", "pw"), tmp_path / "c.sqlite", f)
+    assert c.status("ZZ9ZZ") == ("missing", None) and len(f.calls) == 2
+    assert c.status("ZZ9ZZ") == ("missing", None) and len(f.calls) == 2          # remembered: not asked again
+    assert c.status("EA8AB", allow_network=False) == ("unknown", None)
+    st, rec = c.status("EA8AB")
+    assert st == "fetched" and rec["fname"] == "Juan"
+    assert c.status("EA8AB")[0] == "cached"
+    c.db.execute("UPDATE qrz_miss SET fetched = 0")                               # a week later: asked again
+    c.fetch = Fake([OSError("offline")])
+    assert c.status("ZZ9ZZ") == ("unknown", None)
+    assert qrz.Client((), tmp_path / "c.sqlite", Fake([])).status("K7NEW") == ("unknown", None)

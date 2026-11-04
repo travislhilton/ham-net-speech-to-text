@@ -37,6 +37,12 @@ rules whatever its score (owner review of the first three live nets, 2026-11-03)
 Otherwise h stays as heard: "verified" when it has its own support, "unverified" when nothing supports it (not in
 the FCC, no name, no history) — flagged, never invented away.
 
+QRZ.com (owner, 11-04): a call the FCC does not show Active is looked up there (the station does it; `qrz` here is
+the answers). A current QRZ record confirms it; when QRZ answers with ANOTHER call that lists the heard one as an
+alias, the heard call is that operator's old call and moves to the current one (on VHF/UHF only within reach). Every
+call ends up "confirmed" (an Active FCC licence, a current QRZ record, the roster) or not, with the reason; an
+unconfirmed call is still counted.
+
 Pure: no network, no globals. The FCC is any object with info()/neighbours()/tails() (Licences below wraps the
 station's sqlite copy); `prior` is {call: earlier nets checked in}. Same input -> same output (idempotent)."""
 import hashlib
@@ -65,6 +71,7 @@ LOCAL_KM = 150          # VHF/UHF: a licence this close is in range of the net (
                         # 3+ times was within 50 km; 32 of 33 licences beyond 250 km were heard once = misreadings)
 REACH_KM = 300         # ... and beyond this a linked system rarely reaches: the 11-03 nets' clean roll-call check-ins
                        # ran to 294 km; past 400 km only 5 of 59 licences were read alike by both passes (misreadings)
+W_ALIAS = 3.0           # QRZ.com: the heard call is an earlier call of this operator
 NEAR_KM = 50            # ... and this close, the clearly nearest licence completes a clipped call on its own
 MAX_PREFIX = 2          # leading characters a clipped call may be missing ("7QF" -> AD7QF)
 
@@ -292,7 +299,8 @@ def src_hash(text: str) -> str:
 # ---------- the agreement ----------
 def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: str | None = None,
           roster=(), me: str = "", live_calls: dict | None = None, local: bool | None = None,
-          where: tuple[float, float] | None = None) -> dict:
+          where: tuple[float, float] | None = None, qrz: dict | None = None,
+          reach_km: float | None = None) -> dict:
     """views: one net's transmissions in time order ({"id", "text", "callsigns"}; the accurate text where there is
     one). live_calls: {tx id: the live text's callsigns} — other readings of the same words, used as evidence.
     local: a VHF/UHF net (default: from the views' freq_mhz), where a licence in the station's state counts more.
@@ -301,7 +309,11 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
     A licence beyond REACH_KM that nothing backs (one transmission, the live and accurate passes did not read it
     alike, no name, town, history or roster) is "distant": its text is kept, but it is left out of the calls and so
     of every count. Said once alone is no evidence: a roll call hears most stations once (owner, 11-04).
-    -> {"calls": {heard: {"call", "conf", "why", "status", "candidates"?, "km"?}}, "tx": {id: [calls after agreement]}}"""
+    qrz: {call: QRZ record, or None = "QRZ.com does not know it"}; a call missing from it was not looked up.
+    reach_km: the "distant" limit (Settings; default REACH_KM).
+    -> {"calls": {heard: {"call", "conf", "why", "status", "confirmed", "unconfirmed"?, "candidates"?, "km"?}},
+        "tx": {id: [calls after agreement]}}"""
+    reach = float(reach_km) if reach_km else REACH_KM
     if local is None:
         f = [v.get("freq_mhz") for v in views if v.get("freq_mhz")]
         local = bool(f) and sum(1 for x in f if x >= 30) * 2 > len(f)
@@ -340,9 +352,36 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
     tails = sorted({c for ev in events for _, k, c in ev if k == "tail"})
     tail_fcc = ({} if fcc is None or not tails else
                 fcc.tails_near(tails, where, 2 * LOCAL_KM) if geo_on else fcc.tails(tails, home_state))
-    dist = (lambda c: fcc.km(c, where)) if geo_on else (lambda c: None)
     if tail_fcc:
         lic.update(fcc.info({c for cs in tail_fcc.values() for c in cs} - set(lic)))
+
+    # QRZ.com: confirms a call the FCC does not know, or names the current call of an old one
+    qrz = {k.upper(): v for k, v in (qrz or {}).items()}
+    today = max((str(v.get("start") or "")[:10] for v in views), default="") or None
+    qrz_now: dict[str, str] = {}                 # heard call -> the operator's current call (QRZ alias)
+    for c in full:
+        rec = qrz.get(c)
+        if not rec or (lic.get(c) or {}).get("status") == "A":
+            continue
+        cur = (rec.get("call") or "").upper()
+        if cur == c:
+            if not lic.get(c) and qrz_current(rec, today):
+                lic[c] = qrz_licence(rec)          # a licence the FCC copy does not have (new, or not a US call)
+        elif cur and c in {a.strip().upper() for a in (rec.get("aliases") or "").split(",")}:
+            qrz_now[c] = cur
+    if qrz_now and fcc is not None:
+        lic.update(fcc.info(set(qrz_now.values()) - set(lic)))
+    for c, cur in qrz_now.items():
+        if cur not in lic:
+            lic[cur] = qrz_licence(qrz[c])
+
+    def dist(c):
+        if not geo_on:
+            return None
+        inf = lic.get(c) or {}
+        if inf.get("src") == "QRZ.com":
+            return round(_km(where, (inf["lat"], inf["lon"]))) if inf.get("lat") is not None else None
+        return fcc.km(c, where)
 
     # where each call was heard in the transcript itself (not the live reading): transmission indexes
     at_tx: dict[str, set] = {}
@@ -384,11 +423,14 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                     break
         return same, nxt, " ".join(said)
 
-    def evidence(c: str, same: set, nxt: set, said: str, cost: float):
-        score, why, ev = -W_COST * cost, [], {"name": False, "name_same": False, "hist": False, "strong": False}
+    def evidence(c: str, same: set, nxt: set, said: str, cost: float, h: str = ""):
+        score, why, ev = -W_COST * cost, [], {"name": False, "name_same": False, "hist": False, "strong": False,
+                                               "alias": False}
         inf = lic.get(c)
+        if h and qrz_now.get(h) == c:
+            score += W_ALIAS; ev.update(alias=True, strong=True); why.append(f"QRZ.com: {h} is an earlier call of {c}")
         if inf and inf["status"] == "A":
-            score += W_ACTIVE; why.append("FCC: active")
+            score += W_ACTIVE; why.append(f"{inf.get('src') or 'FCC'}: active")
         elif inf:
             score += W_LAPSED; why.append(f"FCC: licence {_STATUS.get(inf['status'], inf['status'])}")
         elif US_CALL.match(c):
@@ -433,6 +475,14 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         """The rules a move must pass whatever its score (owner review of the first live nights, 11-03)."""
         if c == h:
             return True
+        if ev.get("alias"):                       # the same operator under the call they hold now
+            if geo_on:
+                d = dist(c)
+                if d is None or d > reach:
+                    return False                  # VHF/UHF: out of reach, or nowhere known (a PO box ZIP)
+            elif local and home_state and (lic.get(c) or {}).get("state") != home_state:
+                return False                      # VHF/UHF without the ZIP centres: the station's state only
+            return not (h in at_tx and c in at_tx and at_tx[h] & at_tx[c])
         if not ev["strong"] and (c not in heard or (not is_tail and distance(h, c) > 1.0)):
             return False          # never invent: an unheard licence, or a far one, needs a name, town or history
         if not ev["strong"] and not is_tail and active(h):
@@ -513,10 +563,12 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
             for c, d in near.get(h, {}).items():
                 if c not in cands and active(c):
                     cands[c] = d
+            if h in qrz_now and qrz_now[h] != h:
+                cands[qrz_now[h]] = 0.0               # the same station: no letters to change
         same, nxt, said = windows(h, banned)
         scored = []
         for c, cost in cands.items():
-            s, why, ev = evidence(c, same, nxt, said, cost)
+            s, why, ev = evidence(c, same, nxt, said, cost, h)
             if not allowed(h, c, is_tail, ev):
                 continue
             scored.append({"call": c, "score": s, "why": why, "strong": ev["strong"], "name": ev["name"],
@@ -539,7 +591,7 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         status = ("verified" if (inf and inf["status"] == "A") or o["strong"] else
                   "lapsed" if inf else "unverified")
         far = dist(h) if status == "verified" and not o["strong"] and active(h) else None
-        if far is not None and far > REACH_KM and in_tx[h] <= 1 and h not in alike:
+        if far is not None and far > reach and in_tx[h] <= 1 and h not in alike:
             status = "distant"      # VHF/UHF: far out of reach, and neither a second hearing nor the other pass backs it
         others = [x["call"] for x in scored if x["call"] != h and x["score"] >= MIN_SCORE
                   and o["score"] - x["score"] < MARGIN][:3]
@@ -612,6 +664,36 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         if e["call"] != h and (decided.get(e["call"]) or {}).get("status") == "distant":
             decided[e["call"]]["status"] = "verified"; decided[e["call"]].pop("km", None)
 
+    def confirm(c: str) -> tuple[str | None, str | None]:
+        inf = lic.get(c)
+        if inf and inf["status"] == "A":
+            return inf.get("src") or "FCC", None
+        if c in roster:
+            return "roster", None
+        why = []
+        if inf:
+            why.append(f"FCC: licence {_STATUS.get(inf['status'], inf['status'])}")
+        elif US_CALL.match(c) and fcc is not None:
+            why.append("not in the FCC database")
+        if c not in qrz:
+            why.append("not checked on QRZ.com (offline or no login)")
+        elif qrz[c] is None:
+            why.append("not on QRZ.com")
+        else:
+            rec, cur = qrz[c], (qrz[c].get("call") or "").upper()
+            if cur and cur != c:
+                d = dist(cur)
+                why.append(f"QRZ.com: now {cur}" + (f", {d:.0f} km away (out of reach)" if d is not None else ""))
+            elif not qrz_current(rec, today):
+                why.append(f"QRZ.com: licence expired {rec.get('expdate')}")
+        return None, "; ".join(why) or "not in the callbooks"
+
+    for h, e in decided.items():
+        src, why = confirm(e["call"])
+        e["confirmed"] = src
+        if why:
+            e["unconfirmed"] = why
+
     per_tx = {}
     for v, ev in zip(views, events):
         out = []
@@ -629,6 +711,53 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
 
 
 _STATUS = {"E": "expired", "C": "cancelled", "T": "terminated", "L": "pending"}
+
+
+def _km(a, b) -> float:
+    from hamkit.zipgeo import km
+    return km(a, b)
+
+
+def qrz_current(rec: dict, today: str | None) -> bool:
+    """A QRZ record whose licence has not expired (no date, or a 0000 date, counts as current: many countries
+    publish none)."""
+    exp = (rec.get("expdate") or "").strip()
+    return not exp or exp.startswith("0000") or not today or exp >= today
+
+
+def qrz_licence(rec: dict) -> dict:
+    """A QRZ record in the shape Licences.info() gives (src says where it came from)."""
+    def num(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+    return {"status": "A", "first": ((rec.get("fname") or "").split() or [None])[0], "city": (rec.get("addr2") or "").upper(),
+            "state": (rec.get("state") or "").upper(), "zip": (rec.get("zip") or "")[:5], "src": "QRZ.com",
+            "lat": num(rec.get("lat")), "lon": num(rec.get("lon")), "_k": (True, "")}
+
+
+def qrz_answers(calls, client, lic=None, allow_network: bool = True, budget: int = 40) -> dict:
+    """{call: QRZ record | None (QRZ does not know it)} for the calls the FCC does not show Active — the `qrz`
+    argument of agree(). Cached answers (found and not found) first; at most `budget` network lookups, and none
+    after the first failure (offline: the rest stay unchecked)."""
+    if client is None:
+        return {}
+    calls = [c for c in dict.fromkeys(c.upper() for c in calls) if US_CALL.match(c) or ANY_CALL.match(c)]
+    if lic is not None:
+        known = lic.info(calls)
+        calls = [c for c in calls if (known.get(c) or {}).get("status") != "A"]
+    out = {}
+    for c in calls:
+        st, rec = client.status(c, allow_network=False)
+        if st == "unknown" and allow_network and budget > 0:
+            budget -= 1
+            st, rec = client.status(c, allow_network=True)
+            if st == "unknown":
+                allow_network = False                   # QRZ unreachable / no login: stop asking this run
+        if st != "unknown":
+            out[c] = rec
+    return out
 
 
 def _conf(margin: float) -> float:
@@ -660,12 +789,20 @@ def records(views: list[dict], result: dict, fix_text=None) -> dict[str, dict]:
         distant = [{"call": c, "km": result["calls"][c].get("km")} for c in (v.get("callsigns") or [])
                    if (result["calls"].get(c) or {}).get("status") == "distant"]
         rec = {"src": src_hash(text), "callsigns": calls}
+        conf = {e["call"]: e for e in result["calls"].values()}
+        unconf = [{"call": c, "why": conf[c].get("unconfirmed") or ""} for c in calls
+                  if c in conf and not conf[c].get("confirmed")]
+        by_qrz = [c for c in calls if (conf.get(c) or {}).get("confirmed") == "QRZ.com"]
         if moved:
             rec["moved"] = moved
         if unverified:
             rec["unverified"] = unverified
         if distant:
             rec["distant"] = distant           # kept in the text, left out of the calls and every count
+        if unconf:
+            rec["unconfirmed"] = unconf        # counted, but no callbook confirms it (owner, 11-04)
+        if by_qrz:
+            rec["qrz"] = by_qrz                # confirmed by QRZ.com (the FCC copy does not have it)
         if fix_text:
             t2, ch = fix_text(text)
             if ch and t2 != text:
@@ -676,14 +813,14 @@ def records(views: list[dict], result: dict, fix_text=None) -> dict[str, dict]:
 
 
 def for_session(rows: list[dict], fcc=None, prior=None, home_state=None, roster=(), me="", fix_cfg=None,
-                net_names=(), where=None) -> tuple[dict, dict]:
+                net_names=(), where=None, qrz=None, reach_km=None) -> tuple[dict, dict]:
     """One net's raw transmissions (as kept in the day log) -> ({tx id: consensus record}, agree() result).
     The one entry point for the station (core.Station.agree_session) and the re-run CLI (tools/consensus.py)."""
     from . import fixups, ics
     rows = sorted(rows, key=lambda t: t["start"])
     views = [ics.view(t, agreed=False) for t in rows]
     live = {t["id"]: list(t.get("callsigns") or []) for t in rows if t.get("accurate")}
-    res = agree(views, fcc, prior, home_state, roster, me, live, where=where)
+    res = agree(views, fcc, prior, home_state, roster, me, live, where=where, qrz=qrz, reach_km=reach_km)
     fix = None
     if (fix_cfg and fix_cfg.get("rules")) or net_names or (fix_cfg or {}).get("net_names"):
         fix = lambda s: fixups.apply(s, fix_cfg or {}, net_names)
@@ -728,6 +865,8 @@ def apply_view(v: dict, rec: dict | None) -> dict:
         v["speaker"], v["speaker_how"] = None, None   # a speaker out of range and said once: not a check-in
     if rec.get("unverified"):
         v["unverified"] = list(rec["unverified"])
+    if rec.get("unconfirmed"):
+        v["unconfirmed"] = list(rec["unconfirmed"])
     return v
 
 

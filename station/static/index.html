@@ -179,6 +179,7 @@ section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:va
 .spkr.op::after{content:" ✎";color:var(--muted);font-weight:400}.whob{font-size:12px;padding:0 6px;color:var(--muted)}
 .maybe{font-size:12px;color:var(--muted);display:inline-flex;gap:3px;align-items:center;margin-left:4px}.maybe .call{font-size:11px;opacity:.75}
 .call.far{opacity:.5;text-decoration:line-through dotted}
+.call.unc{border-style:dashed}.call.unc::after{content:"?";color:var(--muted);font-weight:400;margin-left:1px}
 .call.fixed,.spkr.fixed{text-decoration:underline dotted;text-underline-offset:3px}.text{font-size:16px;overflow-wrap:anywhere}.text.partial{color:var(--partial);font-style:italic}
 .live{color:var(--ok);font-weight:600}.term{border-bottom:2px dotted var(--term);cursor:help}
 .terms{font-size:13px;color:var(--muted)}.terms b{color:var(--term)}
@@ -369,6 +370,8 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <label>Winlink Express folder <select name="winlink_dir"></select></label>
   <div class="small muted" id="wlNone"></div>
   <label>Send as (callsign account in that folder) <select name="winlink_account"></select></label>
+  <label>VHF/UHF reach, km <input name="reach_km" type="number" min="50" max="5000" step="10" style="width:7em"></label>
+  <div class="small muted">On a repeater or simplex net, a callsign licensed farther away than this, heard only once, that the two transcription passes did not read alike and that has no name or earlier check-in with it is shown struck through and not counted. Raise it for a linked repeater system.</div>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
@@ -439,8 +442,10 @@ function txHtml(t0){
   const editing=t0.status==="final"&&FIX&&FIX.where==="log"&&FIX.id===t0.id;
   const fx=Object.fromEntries((t.corrections||[]).map(f=>[f.call,f]));  // near-miss corrections: keep what was heard
   const w=t0.who||null,sp=w&&w.call;
-  const calls=(t.callsigns||[]).filter(c=>c!==sp).map(c=>{const f=fx[c],tip="mentioned"+(f?` · heard "${f.heard}", corrected: ${f.why}`:"");
-    return `<span class="call${f?" fixed":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("")+
+  const unc=Object.fromEntries(((k&&!c&&k.unconfirmed)||[]).map(u=>[u.call,u.why])),byq=new Set((k&&!c&&k.qrz)||[]);
+  const calls=(t.callsigns||[]).filter(c=>c!==sp).map(c=>{const f=fx[c],u=unc[c];
+    const tip="mentioned"+(f?` · heard "${f.heard}", corrected: ${f.why}`:"")+(u!==undefined?` · can't be confirmed: ${u}. Still counted.`:byq.has(c)?" · confirmed on QRZ.com":"");
+    return `<span class="call${f?" fixed":""}${u!==undefined?" unc":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("")+
     ((k&&!c&&k.distant)||[]).map(d=>`<span class="call far" data-call="${esc(d.call)}" title="${d.km} km away, beyond VHF/UHF reach, and nothing backs it: the two transcription passes did not read it alike, it was not heard again, and no name, town or earlier check-in goes with it. Probably misheard; not counted as a station. Use ✎ Fix if it was really there.">${esc(d.call)}</span>`).join("")+
     (t.maybe||[]).map(m=>`<span class="maybe" title="Heard &quot;${esc(m.heard)}&quot;; could be ${esc(m.candidates.join(" or "))}. Click one to look it up; use Who? to set the speaker.">${esc(m.heard)}? ${m.candidates.map(c=>`<span class="call" data-call="${esc(c)}">${esc(c)}</span>`).join("")}</span>`).join("");
   const who=t.status!=="final"?"":(w?whoHtml(w,fx[sp]):"")+`<button class="whob" data-who="${esc(t0.id)}" title="Say who was talking (always wins; kept in the log and the ICS-309)">Who?</button>`+
@@ -965,13 +970,15 @@ function cardHtml(c,e){
     ["Club",c.club?("yes"+(c.trustee?", trustee "+c.trustee:"")):""],["Grid",c.grid],["Zones",c.cq_zone?`CQ ${c.cq_zone}, ITU ${c.itu_zone}, ${c.continent}`:""],["Email",c.email],["Address",c.address]].filter(r=>r[1]);
   return `<div class="station"><div class="hd"><span class="call" data-call="${esc(c.call)}">${esc(c.call)}</span>${e?`<span class="muted small">heard ${e.count}× · last ${hhmm(e.last)}</span>`:""}</div>
    <dl class="st">${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join("")}</dl>
+   ${e&&e.unconfirmed?`<div class="small">Can't be confirmed: ${esc(e.unconfirmed)}. Still counted as a station.</div>`:""}
    <div class="small muted">${(c.sources||[]).join(" · ")||"not found in the callbooks"}${c.qrz_url?` · <a href="${esc(c.qrz_url)}" target="_blank" rel="noopener">QRZ page</a>`:""}</div></div>`;
 }
 function heardRow(rid,c,e){
   const tc=x=>String(x||"").toLowerCase().replace(/\b[a-z]/g,m=>m.toUpperCase());
   const where=[tc(c.city),c.state,c.country==="United States"||(!c.country&&c.state)?"USA":c.country].filter(Boolean).join(", ");
   const k=rid+"|"+c.call;
-  return `<details class="hrow" data-hk="${esc(k)}"${HEARD_OPEN.has(k)?" open":""}><summary><span class="call">${esc(c.call)}</span>`+
+  const u=e&&e.unconfirmed;
+  return `<details class="hrow" data-hk="${esc(k)}"${HEARD_OPEN.has(k)?" open":""}><summary><span class="call${u?" unc":""}"${u?` title="Can't be confirmed: ${esc(u)}. Still counted."`:""}>${esc(c.call)}</span>`+
     `<span class="who">${esc(where)}${c.name&&where?" · ":""}<span class="muted">${esc(tc(c.name))}</span>${!c.name&&!where?'<span class="muted">not in the callbooks</span>':""}</span>`+
     `<span class="n">${e.count}× ${hhmm(e.last)}</span></summary>${cardHtml(c,e)}</details>`;
 }
@@ -998,7 +1005,7 @@ function fillAccounts(f){
 }
 $("openSettings").onclick=async()=>{
   const op=await loadSettings(),f=$("setForm");
-  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";
+  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
   fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();$("settings").showModal();
@@ -1006,7 +1013,7 @@ $("openSettings").onclick=async()=>{
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
   e.preventDefault();const f=$("setForm");
-  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value})});
+  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value,reach_km:f.reach_km.value})});
   const d=await r.json();if(!r.ok){$("setErr").textContent=d.error||"not saved";return}
   OP=d;$("me").textContent=d.callsign+" station";$("settings").close();
 };

@@ -12,7 +12,9 @@ ICS forms follow. Stop the station first or restart it after: a running station 
 --tx-json reads a list of transmissions (or /api/state's {"tx": [...]}) and only reports; it never writes.
 
 The FCC copy is the station's (hamkit/fcc.py DEFAULT_DB, or --fcc); without it only what was heard in the net,
-history and the roster count. The station's state comes from --state, station.yaml region_state, or the
+history and the roster count. Calls the FCC does not show Active are looked up on QRZ.com (the station's cache in
+<data>/callbook, then the network when a login is stored; --qrz-offline: the cache only). The "distant" limit is
+the station's Settings value (operator.json reach_km), else consensus.REACH_KM. The station's state comes from --state, station.yaml region_state, or the
 operator's FCC licence."""
 import argparse
 import json
@@ -69,9 +71,16 @@ def describe(rows: list[dict], recs: dict, res: dict) -> str:
     for h, e in sorted(moved.items()):
         where = "" if h in shown else "  [a live-text reading / a call in the text]"
         lines.append(f"  {h:>8} -> {e['call']:<8} conf {e['conf']:.2f}  {e['why']}{where}")
-    unv = sorted(h for h, e in res["calls"].items() if e["status"] in ("unverified", "lapsed") and h in shown)
-    if unv:
-        lines.append(f"  kept as heard, unverified: {', '.join(unv)}")
+    unc = {}
+    for h, e in res["calls"].items():
+        if e.get("unconfirmed") and e["status"] != "distant" and (h in shown or e["call"] != h):
+            unc[e["call"]] = e["unconfirmed"]
+    if unc:
+        lines.append(f"  counted, can't be confirmed ({len(unc)}):")
+        lines += [f"    {c:>8}  {w}" for c, w in sorted(unc.items())]
+    byq = sorted({e["call"] for e in res["calls"].values() if e.get("confirmed") == "QRZ.com"})
+    if byq:
+        lines.append(f"  confirmed by QRZ.com: {', '.join(byq)}")
     far = sorted((e["km"], h) for h, e in res["calls"].items() if e["status"] == "distant")
     if far:
         lines.append(f"  not counted, beyond VHF/UHF reach and nothing backs them ({len(far)}): "
@@ -96,6 +105,8 @@ def main(argv=None) -> int:
     ap.add_argument("--fcc", default=str(fccmod.DEFAULT_DB))
     ap.add_argument("--state", help="the station's state (two letters)")
     ap.add_argument("--net-name", action="append", default=[], help="a spoken net name to repair (repeatable)")
+    ap.add_argument("--qrz-offline", action="store_true", help="QRZ.com answers from the cache only")
+    ap.add_argument("--no-qrz", action="store_true", help="no QRZ.com answers at all")
     a = ap.parse_args(argv)
     if not a.date and not a.tx_json:
         ap.error("give a date or --tx-json")
@@ -111,9 +122,16 @@ def main(argv=None) -> int:
         state = (lic.info([me]).get(me) or {}).get("state") or None
     fx = fixups.load(Path(a.config), Path(a.data))
     try:
-        grid = (json.loads((Path(a.data) / "operator.json").read_text(encoding="utf-8")).get("operator") or {}).get("grid")
+        opr = json.loads((Path(a.data) / "operator.json").read_text(encoding="utf-8")).get("operator") or {}
     except (OSError, ValueError):
-        grid = None
+        opr = {}
+    grid, reach = opr.get("grid"), opr.get("reach_km")
+    qrz = None
+    if not a.no_qrz:
+        from hamkit import qrz as qrzmod
+        qrz = qrzmod.Client(cache=Path(a.data) / "callbook" / "qrz_cache.sqlite")
+        if a.qrz_offline:
+            qrz.creds = None
     where = consensus.where_of(cfg, grid, lic, me)
     print(f"FCC: {'yes' if lic else 'NO (only the net, history and roster count)'}; state: {state or '?'}; "
           f"VHF/UHF distances: {'yes' if where and lic and lic.geo else 'no (python -m hamkit.zipgeo update)'}")
@@ -156,7 +174,12 @@ def main(argv=None) -> int:
             if hist and net.get("id"):
                 prior = hist.prior_checkins(net["id"], rows[0]["start"], exclude=hist.instance_of(rid, rows[0]["start"]))
             names = fixups.net_names_for(entry, a.net_name)
-            recs, res = consensus.for_session(rows, lic, prior, state, roster, me, fx, names, where=where)
+            views = [ics.view(t, agreed=False) for t in rows]
+            heard = {c for v in views for c in v.get("callsigns") or []} | \
+                    {c for t in rows for c in (t.get("callsigns") or [])}
+            answers = consensus.qrz_answers(heard, qrz, lic, allow_network=bool(qrz and qrz.creds), budget=200)
+            recs, res = consensus.for_session(rows, lic, prior, state, roster, me, fx, names, where=where,
+                                              qrz=answers, reach_km=reach)
             print(f"{rid} {rows[0]['start']} .. {rows[-1]['start']}  {net.get('name') or ''}  ({len(rows)} transmissions)")
             print(describe(rows, recs, res))
             for t in rows:

@@ -23,6 +23,7 @@ AGENT = "ham-net-speech-to-text-0.1"
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = Path(os.environ.get("CALLBOOK_DIR", Path.home() / "data" / "callbook")) / "qrz_cache.sqlite"
 TTL_S = 30 * 86400
+MISS_TTL_S = 7 * 86400          # "not found" is remembered a week (a new licence shows up on QRZ within days)
 FIELDS = ["call", "aliases", "dxcc", "fname", "name", "nickname", "addr1", "addr2", "state", "zip", "country",
           "lat", "lon", "grid", "county", "class", "efdate", "expdate", "email", "url", "image", "qslmgr",
           "eqsl", "lotw", "mqsl", "born", "user", "geoloc", "cqzone", "ituzone", "land", "trustee"]
@@ -113,6 +114,7 @@ class Client:
         self.db = sqlite3.connect(cache, check_same_thread=False)
         self.lock = threading.RLock()
         self.db.execute("CREATE TABLE IF NOT EXISTS qrz (call TEXT PRIMARY KEY, fetched REAL, rec TEXT)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS qrz_miss (call TEXT PRIMARY KEY, fetched REAL)")
 
     @staticmethod
     def _http(params: dict) -> bytes:
@@ -156,6 +158,9 @@ class Client:
                         self.db.commit()
                     return rec
                 if "Not found" in err:
+                    with self.lock:
+                        self.db.execute("INSERT OR REPLACE INTO qrz_miss VALUES (?,?)", (call, time.time()))
+                        self.db.commit()
                     return None
                 if "Session Timeout" in err or "Invalid session key" in err:
                     self.key = None; continue
@@ -163,6 +168,32 @@ class Client:
         except (OSError, ET.ParseError):
             return hit                                   # offline / QRZ down: the cache is the answer
         return hit
+
+    def status(self, call: str, allow_network: bool = True) -> tuple[str, dict | None]:
+        """("cached" | "fetched", record) — QRZ knows it; ("missing", None) — QRZ answered "not found" (now or within
+        MISS_TTL_S); ("unknown", None) — not looked up (no login, offline, network not allowed)."""
+        call = call.upper().strip()
+        hit = self.cached(call)
+        if hit and not hit["stale"]:
+            return "cached", hit
+        with self.lock:
+            m = self.db.execute("SELECT fetched FROM qrz_miss WHERE call=?", (call,)).fetchone()
+        if m and time.time() - m[0] <= MISS_TTL_S:
+            return "missing", None
+        if not allow_network or not self.creds:
+            return ("cached", hit) if hit else ("unknown", None)
+        asked = time.time()
+        try:
+            rec = self.lookup(call)
+        except QRZError:
+            return ("cached", hit) if hit else ("unknown", None)
+        if rec and rec is not hit and "cached_at" not in rec:
+            return "fetched", rec
+        if rec:
+            return ("cached", rec) if hit else ("unknown", None)       # the lookup fell back to the stale cache
+        with self.lock:
+            m = self.db.execute("SELECT fetched FROM qrz_miss WHERE call=?", (call,)).fetchone()
+        return ("missing", None) if m and m[0] >= asked else ("unknown", None)
 
 
 def describe(s: dict) -> tuple[bool, str]:

@@ -177,7 +177,14 @@ def test_station_settings_preview_and_send(tmp_path, install, monkeypatch):
         assert op["winlink_dir"] == install and op["winlink_account"] == "W9XYZ-5"
         with pytest.raises(ValueError):
             st.set_operator({"callsign": "not a call!"})
+        assert op["reach_km"] == 300
+        with pytest.raises(ValueError):
+            st.set_operator({"callsign": "W9XYZ", "reach_km": "far"})
+        with pytest.raises(ValueError):
+            st.set_operator({"callsign": "W9XYZ", "reach_km": 10})
+        assert st.set_operator({"callsign": "W9XYZ", "reach_km": "450"})["reach_km"] == 450 and st.reach_km() == 450
         st.set_operator({"callsign": "W9XYZ", "name": "Pat Sample", "grid": "EM59et"})
+        assert st.reach_km() == 450                                               # kept when not sent
         st.roster.add("K7ABC")                     # no callbook in this test; the roster confirms the call
         st.inject("a", np.zeros(32000, np.float32))
         t0 = time.time()

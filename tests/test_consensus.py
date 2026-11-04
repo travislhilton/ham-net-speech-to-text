@@ -211,7 +211,8 @@ def test_an_ambiguous_name_is_left_as_heard_with_its_candidates(lic):
 def test_never_invent_a_call_without_evidence_but_history_is_evidence(lic):
     r = run(lic)
     assert r["calls"]["KZ7QQQ"] == {"call": "KZ7QQQ", "status": "unverified", "conf": r["calls"]["KZ7QQQ"]["conf"],
-                                    "why": "not in the FCC database", "score": 0.0}
+                                    "why": "not in the FCC database", "score": 0.0, "confirmed": None,
+                                    "unconfirmed": "not in the FCC database; not checked on QRZ.com (offline or no login)"}
     assert r["calls"]["K7RRT"]["call"] == "K7RRT"                  # K7RRD exists and is near, nothing else
     r = run(lic, prior={"K7RRD": 4})
     e = r["calls"]["K7RRT"]
@@ -466,3 +467,117 @@ def test_the_stations_location(geolic):
     assert where_of({}, "EM59", geolic, "AD7QK") == ZIPS["00001"]   # a 4-character one is not: the licence's ZIP
     assert where_of({}, "EM59", geolic, "N0CALL") == (39.5, -89.0)
     assert where_of({}, "", None, "AD7QK") is None
+
+
+# ---------- QRZ.com: confirmed or not, and an operator's old call (owner, 11-04) ----------
+def qrec(call, aliases="", expdate="2030-01-01", **kw):
+    return {"call": call, "aliases": aliases, "expdate": expdate, **kw}
+
+
+def test_every_call_is_confirmed_or_says_why_not(lic):
+    q = {"KZ7QQQ": None}
+    r = run(lic, qrz=q)
+    assert r["calls"]["KF7AQT"]["confirmed"] == "FCC" and "unconfirmed" not in r["calls"]["KF7AQT"]
+    e = r["calls"]["KZ7QQQ"]
+    assert e["confirmed"] is None and e["unconfirmed"] == "not in the FCC database; not on QRZ.com"
+    assert e["status"] == "unverified" and "KZ7QQQ" in r["tx"]["7014"]          # still counted
+    # an expired licence: both callbooks say so
+    r = run(lic, qrz={"KD7PHX": qrec("KD7PHX", expdate="2021-12-17")})
+    assert r["calls"]["KD7PHX"]["unconfirmed"] == "FCC: licence expired; QRZ.com: licence expired 2021-12-17"
+    # the roster confirms a call no callbook has
+    assert run(lic, roster={"KZ7QQQ"})["calls"]["KZ7QQQ"]["confirmed"] == "roster"
+
+
+def test_a_current_qrz_record_confirms_a_call_the_fcc_copy_lacks(lic):
+    v = [{"id": "0", "start": "2026-11-03T20:00:00", "text": "EA8AB and KZ7NEW.", "callsigns": ["EA8AB", "KZ7NEW"],
+          "freq_mhz": 14.3}]
+    q = {"EA8AB": qrec("EA8AB", expdate="", fname="Juan", country="Canary Islands"),
+         "KZ7NEW": qrec("KZ7NEW", expdate="2036-01-01", fname="Newt Q", state="IL")}
+    r = K.agree(v, lic, home_state="IL", qrz=q)
+    assert r["calls"]["EA8AB"]["confirmed"] == "QRZ.com" and r["calls"]["KZ7NEW"]["confirmed"] == "QRZ.com"
+    assert r["calls"]["KZ7NEW"]["status"] == "verified" and "QRZ.com: active" in r["calls"]["KZ7NEW"]["why"]
+    rec = K.records(v, r)["0"]
+    assert rec["qrz"] == ["EA8AB", "KZ7NEW"] and "unconfirmed" not in rec
+    # expired before the net: not confirmed
+    q["EA8AB"]["expdate"] = "2026-01-01"
+    e = K.agree(v, lic, home_state="IL", qrz=q)["calls"]["EA8AB"]
+    assert e["confirmed"] is None and e["unconfirmed"] == "QRZ.com: licence expired 2026-01-01"
+
+
+def test_an_old_call_moves_to_the_operators_current_call_within_reach(geolic):
+    def run(heard, q, where=HOME, f=146.94):
+        v = [{"id": "0", "start": "2026-11-03T20:00:00", "text": f"{heard}.", "callsigns": [heard], "freq_mhz": f},
+             {"id": "1", "start": "2026-11-03T20:01:00", "text": "Thank you.", "callsigns": [], "freq_mhz": f}]
+        return v, K.agree(v, geolic, home_state="IL", where=where, qrz=q)
+    v, r = run("KE7OLD", {"KE7OLD": qrec("AD7QK", aliases="KE7OLD,KE7OLDER")})
+    e = r["calls"]["KE7OLD"]
+    assert e["call"] == "AD7QK" and e["status"] == "fixed" and e["confirmed"] == "FCC"
+    assert "QRZ.com: KE7OLD is an earlier call of AD7QK" in e["why"] and r["tx"]["0"] == ["AD7QK"]
+    assert K.records(v, r)["0"]["moved"][0]["call"] == "AD7QK"
+    # the operator now lives 645 km away: left as heard, unconfirmed, and why
+    _, r = run("KE7FAR", {"KE7FAR": qrec("KD7QQZ", aliases="KE7FAR")})
+    e = r["calls"]["KE7FAR"]
+    assert e["call"] == "KE7FAR" and e["unconfirmed"] == "not in the FCC database; QRZ.com: now KD7QQZ, 645 km away (out of reach)"
+    # nowhere known (a PO box ZIP / a QRZ record with no position): not moved on VHF/UHF
+    _, r = run("KE7BOX", {"KE7BOX": qrec("W1BOX", aliases="KE7BOX", state="WA")})
+    assert r["calls"]["KE7BOX"]["call"] == "KE7BOX"
+    # ... but on HF reach means nothing: moved
+    _, r = run("KE7BOX", {"KE7BOX": qrec("W1BOX", aliases="KE7BOX", state="WA")}, f=3.985)
+    assert r["calls"]["KE7BOX"]["call"] == "W1BOX" and r["calls"]["KE7BOX"]["confirmed"] == "QRZ.com"
+    # QRZ answering with another call that does NOT list the heard one as an alias: no move
+    _, r = run("KE7OLD", {"KE7OLD": qrec("AD7QK", aliases="")})
+    assert r["calls"]["KE7OLD"]["call"] == "KE7OLD"
+
+
+def test_the_reach_is_a_setting(geolic):
+    v = [{"id": "0", "text": "KD7QQP.", "callsigns": ["KD7QQP"], "freq_mhz": 146.94},
+         {"id": "1", "text": "Thank you.", "callsigns": [], "freq_mhz": 146.94}]
+    assert K.agree(v, geolic, home_state="IL", where=HOME)["calls"]["KD7QQP"]["status"] == "verified"   # 170 km
+    e = K.agree(v, geolic, home_state="IL", where=HOME, reach_km=100)["calls"]["KD7QQP"]
+    assert e["status"] == "distant" and e["km"] == 170
+
+
+class FakeQrz:
+    def __init__(self, known, offline=False):
+        self.known, self.offline, self.asked = known, offline, []
+
+    def status(self, call, allow_network=True):
+        if call in self.known and self.known[call] is not None:
+            return "cached", self.known[call]
+        if not allow_network:
+            return "unknown", None
+        self.asked.append(call)
+        if self.offline:
+            return "unknown", None
+        return "missing", None
+
+
+def test_qrz_answers_skip_active_licences_and_stop_when_offline(lic):
+    q = FakeQrz({"EA8AB": qrec("EA8AB")})
+    out = K.qrz_answers(["KF7AQT", "EA8AB", "KZ7QQQ", "KD7PHX", "not a call"], q, lic)
+    assert out == {"EA8AB": q.known["EA8AB"], "KZ7QQQ": None, "KD7PHX": None} and "KF7AQT" not in q.asked
+    q = FakeQrz({}, offline=True)
+    assert K.qrz_answers(["KZ7QQQ", "KD7PHX", "KZ7QQR"], q, lic) == {} and q.asked == ["KZ7QQQ"]
+    q = FakeQrz({})
+    K.qrz_answers(["KZ7QQQ", "KD7PHX", "KZ7QQR"], q, lic, budget=2)
+    assert len(q.asked) == 2
+    assert K.qrz_answers(["KZ7QQQ"], None, lic) == {}
+
+
+def test_station_asks_qrz_and_marks_the_calls_no_callbook_confirms(tmp_path):
+    import sqlite3
+    make_fcc(tmp_path / "fcc.sqlite").close()
+    con = sqlite3.connect(tmp_path / "fcc.sqlite", check_same_thread=False)
+    st = station(tmp_path / "data", con)
+    st.cfg["qrz_online"] = True
+    st.callbook.qrz = FakeQrz({})
+    for e in net_lines():
+        st.tx.append(e); st._log(e)
+    st._rebuild_heard()
+    st.agree_session("ftm", st.tx[0]["start"], st.tx[-1]["start"])
+    assert "KZ7QQQ" in st.callbook.qrz.asked and "KF7AQT" not in st.callbook.qrz.asked
+    assert st.heard["KZ7QQQ"]["unconfirmed"] == "not in the FCC database; not on QRZ.com"
+    assert "unconfirmed" not in st.heard["KF7AQT"]
+    rec = st._find("7014")["consensus"]
+    assert rec["unconfirmed"] == [{"call": "KZ7QQQ", "why": "not in the FCC database; not on QRZ.com"}]
+    assert "KZ7QQQ" in K.calls_of(st._find("7014"))                     # still counted
