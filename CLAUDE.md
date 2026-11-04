@@ -6,7 +6,11 @@
   Tailscale IPs, host or user names, emails, SSH or other keys, or home-area place names — in code, tests, docs or
   examples. They live in config that is never committed: `config/station.yaml`, `config/local.yaml`,
   `config/secrets.env`, `capture/config.yaml`, `deploy/windows/ssh-keys.txt` (station) and
-  `~/.config/emcomm-stt/env` (server). Examples use W9XYZ / K7ABC / N0CALL, Springfield, 192.168.1.20.
+  `~/.config/emcomm-stt/env` (server). Examples use W9XYZ / K7ABC / N0CALL, Springfield, IL, 192.168.1.20.
+  Also never: the home state, local club / net names, the real local net frequencies (measured results say "an HF
+  LSB net", or use example values 3.915 / 442.100), ZIP codes, grid squares or coordinates. History was rewritten
+  2026-11-04 to remove all of these (backup bundle on the home server, `~/data/backups/`); scan a commit's diff for
+  them before pushing. Commits are authored as the GitHub no-reply address.
 - **Owner's private notes:** if `private/` exists (a separate private repo cloned there, git-ignored), read
   `private/CLAUDE.md` and `private/continuation-prompt.md` first. Commit and push them in that repo.
 - **README + installer evolve with every change**: update README "Status" and the install steps in the same
