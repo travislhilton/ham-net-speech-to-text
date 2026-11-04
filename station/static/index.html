@@ -286,6 +286,20 @@ ol.mtx button{font-size:11px;padding:0 5px}
 .today button.tn{max-width:760px}.today .tn .tag.ps{background:var(--warnc,#b7791f)}
 .today .tn:focus-visible{outline:2px solid var(--accent,#2b6cb0)}
 @media (max-width:640px){.today{padding:4px 8px 6px}.today .tn{gap:7px;font-size:13px}.today .tn .tt{min-width:0}.today .tn .rd,.today .tn .te{display:none}.today .tn .tt{min-width:4.6em}}
+/* tap-to-correct (✎ Fix): an inline editor in the log and the minutes transcript */
+.fixb{font-size:12px;padding:0 6px;color:var(--muted)}
+.cmark{font-size:12px;color:var(--ok);border:0;background:none;padding:0 2px;white-space:nowrap;cursor:pointer}
+.fixer{scroll-margin:70px 0 12px;display:block;margin:4px 0 2px;border:1px solid var(--accent);border-radius:8px;padding:6px;background:var(--panel)}
+.fixer textarea{display:block;width:100%;font:16px/1.4 system-ui,"Segoe UI",sans-serif;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:6px;resize:vertical}
+.fixer .fixrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.fixer .fixrow button{padding:4px 12px}
+.fixer .fixwas{font-size:12px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+ol.mtx .fixer button{font-size:13px;padding:4px 12px}
+@media (max-width:640px){.fixer .fixhint{display:none}}
+.lrn{list-style:none;padding:0;margin:4px 0}.lrn li{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
+.lrn .pair{flex:1 1 12em;min-width:0;overflow-wrap:anywhere}.lrn .pair s{color:var(--muted)}.lrn button{font-size:12px;padding:2px 8px}
+table.acc{border-collapse:collapse;font-size:13px;margin-top:4px}table.acc td,table.acc th{padding:2px 8px;border-bottom:1px solid var(--line);text-align:left}table.acc td.n{text-align:right;font-variant-numeric:tabular-nums}
+table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding-top:6px}
+#openSettings .badge{font-size:11px;padding:0 6px;margin-left:4px;background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -319,6 +333,7 @@ ol.mtx button{font-size:11px;padding:0 5px}
   <div class="small muted" id="wlNone"></div>
   <label>Send as (callsign account in that folder) <select name="winlink_account"></select></label>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
+  <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
@@ -379,26 +394,93 @@ $("whoForm").addEventListener("submit",e=>{e.preventDefault();e.stopPropagation(
 $("whoAuto").onclick=()=>saveWho("");
 $("whoPick").addEventListener("click",e=>{const b=e.target.closest("[data-whopick]");if(b){e.stopPropagation();saveWho(b.dataset.whopick)}});
 function txHtml(t0){
-  const a=t0.accurate,t=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections,maybe:a.maybe}:t0;
+  const a=t0.accurate,c=t0.status==="final"?t0.corrected:null;   // corrected > accurate > live (station/ics.py view)
+  const t=c?{...t0,text:c.text,callsigns:c.callsigns,speaker:c.speaker,noise:false,corrections:[],maybe:[]}
+    :a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections,maybe:a.maybe}:t0;
+  const editing=t0.status==="final"&&FIX&&FIX.where==="log"&&FIX.id===t0.id;
   const fx=Object.fromEntries((t.corrections||[]).map(f=>[f.call,f]));  // near-miss corrections: keep what was heard
   const w=t0.who||null,sp=w&&w.call;
   const calls=(t.callsigns||[]).filter(c=>c!==sp).map(c=>{const f=fx[c],tip="mentioned"+(f?` · heard "${f.heard}", corrected: ${f.why}`:"");
     return `<span class="call${f?" fixed":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("")+
     (t.maybe||[]).map(m=>`<span class="maybe" title="Heard &quot;${esc(m.heard)}&quot;; could be ${esc(m.candidates.join(" or "))}. Click one to look it up; use Who? to set the speaker.">${esc(m.heard)}? ${m.candidates.map(c=>`<span class="call" data-call="${esc(c)}">${esc(c)}</span>`).join("")}</span>`).join("");
-  const who=t.status!=="final"?"":(w?whoHtml(w,fx[sp]):"")+`<button class="whob" data-who="${esc(t0.id)}" title="Say who was talking (always wins; kept in the log and the ICS-309)">Who?</button>`;
+  const who=t.status!=="final"?"":(w?whoHtml(w,fx[sp]):"")+`<button class="whob" data-who="${esc(t0.id)}" title="Say who was talking (always wins; kept in the log and the ICS-309)">Who?</button>`+
+    (editing||c?"":`<button class="fixb" data-fix="${esc(t0.id)}" title="Correct the words: your text is used for the minutes, search and the Winlink messages, and the station learns from it">✎ Fix</button>`);
   let body;
-  if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
+  if(editing) body=fixEdHtml({id:t0.id,text:bestText(t0),corrected:c,wav:t0.wav,duration_s:t0.duration_s,was:c?c.from:""});
+  else if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
   else if(t.status==="transcribing") body=`<div class="text partial">${esc(t.partial)} <span class="muted">transcribing…</span></div>`;
   else if(t.noise) body=`<div class="text noise" title="Whisper's usual words for noise; press ▶ to listen">${esc(t.text||"")} <span class="small">· probably noise</span></div>`;
-  else body=`<div class="text">${markTerms(t.text,t.terms)||'<span class="muted">(no words recognized)</span>'}</div>`+
+  else body=`<div class="text">${markTerms(t.text,t.terms)||'<span class="muted">(no words recognized)</span>'}${c?" "+cmark(t0.id,c):""}</div>`+
     (t.terms&&t.terms.length?`<div class="terms gloss">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
     (t.looped?`<div class="terms">Weak signal: repeated words were removed.</div>`:"");
   const radio="";
-  if(a&&t0.status==="final")body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">${a.stage==="provisional"?"≈ accurate<span class=\"lt\"> (provisional: the final pass runs when the net ends)</span>":`✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span>`} · live text</summary>${esc(t0.text||"")}</details>`;
+  if(c&&!editing)body+=`<details class="livetext"><summary>✎ corrected by you<span class="lt"> at ${hhmm(c.at)}</span> · the station's text</summary>${a?`<div>Accurate: ${esc(a.text||"")}</div>`:""}<div>Live: ${esc(t0.text||"")}</div></details>`;
+  else if(a&&t0.status==="final"&&!editing)body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">${a.stage==="provisional"?"≈ accurate<span class=\"lt\"> (provisional: the final pass runs when the net ends)</span>":`✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span>`} · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
   const pend=S.accurate_available&&t0.status==="final"&&t0.wav&&accStage(t0)!=="final";   // waiting may improve it (a provisional text too)
   return `<div class="tx${pend?" pending":""}" id="tx-${esc(t.id)}"${pend?` title="Improving: the accurate pass ${esc(accOn())} is working on this. Wait a moment for a better transcript."`:""}><div class="t">${hhmm(t.start)}</div><div><div class="who">${radio}${who}${calls}${play}</div>${body}</div></div>`;
 }
+// ---------- tap-to-correct: ✎ Fix opens an inline editor (log and minutes transcript) ----------
+// Saved as an update line in the day's log (POST /api/tx/<id>/correct); used first everywhere (corrected > accurate >
+// live); the station learns fix-ups from repeated corrections (Settings → Learned fixes) and measures its accuracy
+// against them (Test transcription…). One editor at a time; its draft survives every re-render.
+let FIX=null;   // {id, where: "log" | "min", draft, err, focus}
+const bestText=t=>(t.corrected&&t.corrected.text)||(t.accurate&&t.accurate.text)||t.text||"";
+const cmark=(id,c)=>`<button class="cmark" data-fix="${esc(id)}" title="Corrected by you${c.at?" at "+hhmm(c.at):""}. The station heard: ${esc(c.from||"")}. Tap to change or undo.">✎ corrected</button>`;
+function fixEdHtml(t){
+  const v=FIX.draft??t.text,rows=Math.min(7,Math.max(2,Math.ceil(v.length/44)));
+  return `<div class="fixer" data-fixer="${esc(t.id)}"><textarea class="fixta" rows="${rows}" aria-label="The words as they were said" spellcheck="true" autocapitalize="sentences">${esc(v)}</textarea>
+   ${t.was?`<div class="fixwas">The station heard: ${esc(t.was)}</div>`:""}
+   <div class="fixrow"><button class="primary" data-fixsave="${esc(t.id)}">Save</button><button data-fixcancel>Cancel</button>${t.wav?`<button data-play="${esc(t.id)}" title="Listen while you correct it">▶ ${t.duration_s?Math.round(t.duration_s)+" s":"Play"}</button>`:""}${t.corrected?`<button data-fixundo="${esc(t.id)}" title="Forget my correction; use the station's text again">Undo correction</button>`:""}<span class="small muted fixhint">Enter saves · Esc cancels</span><span class="err" role="alert">${esc(FIX.err||"")}</span></div></div>`}
+function fixFocus(){const ta=document.querySelector(".fixer textarea");if(!ta||!FIX||!FIX.focus)return;FIX.focus=false;
+  ta.focus({preventScroll:true});const n=ta.value.length;ta.setSelectionRange(n,n);ta.closest(".fixer").scrollIntoView({block:"nearest"})}
+function fixShow(where,id){ // redraw just the row (the log) or the minutes, with or without the editor
+  if(where==="min"){if($("netsDlg").open&&NV.tab==="minutes")renderMinutes();return}
+  const t=S.tx.find(x=>x.id===id),el=$("tx-"+id);if(t&&el){el.outerHTML=txHtml(t);fixFocus()}}
+function fixOpen(id,where){
+  const old=FIX;FIX={id,where,draft:null,err:"",focus:true};
+  if(old&&(old.id!==id||old.where!==where))fixShow(old.where,old.id);
+  fixShow(where,id)}
+function fixClose(){const old=FIX;FIX=null;if(old)fixShow(old.where,old.id)}
+async function fixSave(id,undo){
+  const ta=document.querySelector(`.fixer[data-fixer="${CSS.escape(id)}"] textarea`),text=ta?ta.value:"";
+  if(!FIX)return;FIX.draft=text;
+  if(!undo&&!text.trim()){FIX.err="Type what was said, or Cancel.";FIX.focus=true;fixShow(FIX.where,id);return}
+  try{const d=await post(`/api/tx/${enc(id)}/correct`,undo?{undo:true}:{text});
+    const where=FIX&&FIX.where;FIX=null;
+    if(S.tx.some(x=>x.id===d.id)){upsertTx(d);fixShow("log",d.id)}   // the row at once (the rest of the log follows)
+    if(where==="min"||$("netsDlg").open&&NV.tab==="minutes")renderMinutes();
+    learnBadge()}
+  catch(err){if(FIX){FIX.err=err.message;FIX.focus=true;fixShow(FIX.where,id)}}}
+document.addEventListener("input",e=>{if(FIX&&e.target.matches(".fixer textarea"))FIX.draft=e.target.value});
+document.addEventListener("keydown",e=>{
+  if(!FIX||!e.target.matches||!e.target.matches(".fixer textarea"))return;
+  if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();fixSave(e.target.closest(".fixer").dataset.fixer)}
+  else if(e.key==="Escape"){e.preventDefault();e.stopPropagation();fixClose()}},true);
+document.addEventListener("click",e=>{
+  const f=e.target.closest("[data-fix]");if(f){e.preventDefault();fixOpen(f.dataset.fix,f.closest("#netsBody")?"min":"log");return}
+  const sv=e.target.closest("[data-fixsave]");if(sv){e.preventDefault();fixSave(sv.dataset.fixsave);return}
+  const un=e.target.closest("[data-fixundo]");if(un){e.preventDefault();fixSave(un.dataset.fixundo,true);return}
+  if(e.target.closest("[data-fixcancel]")){e.preventDefault();fixClose()}});
+// ---------- Learned fixes (Settings) ----------
+let LEARN=null;
+async function learnBadge(){try{LEARN=await api("/api/learned")}catch(e){return}
+  const n=(LEARN.proposals||[]).length,b=$("openSettings");
+  b.innerHTML=`Settings${n?` <span class="badge" title="${n} learned fix${n===1?"":"es"} to review">${n}</span>`:""}`;
+  if($("settings").open)renderLearned(true)}
+async function renderLearned(have){
+  const box=$("learnSet");if(!box)return;
+  if(!have){try{LEARN=await api("/api/learned")}catch(e){box.innerHTML='<span class="muted">Not available.</span>';return}}
+  const L=LEARN,pair=f=>`<span class="pair"><s>${esc(f.heard)}</s> → <b>${esc(f.say)}</b></span>`;
+  const btn=(act,f,label,cls="")=>`<button type="button" class="${cls}" data-learn="${act}" data-h="${esc(f.heard)}" data-s="${esc(f.say)}">${label}</button>`;
+  const props=L.proposals.length?`<ul class="lrn">${L.proposals.map(p=>`<li>${pair(p)}<span class="muted">${p.count}×${p.call&&p.count<2?" · a callsign":""}</span>${btn("accept",p,"Accept","primary")}${btn("ignore",p,"Ignore")}</li>`).join("")}</ul>`
+    :`<p class="muted">${L.corrections?"No fixes to review.":"None yet."} ${esc(L.rule)}</p>`;
+  const acc=L.accepted.length?`<p>In use (${esc(L.file)}):</p><ul class="lrn">${L.accepted.map(f=>`<li>${pair(f)}${f.count?`<span class="muted">${f.count}×</span>`:""}${btn("remove",f,"Remove")}</li>`).join("")}</ul>`:"";
+  const watch=(L.watching||[]).length?`<p class="muted">Seen once, watching: ${L.watching.slice(0,6).map(p=>`${esc(p.heard)} → ${esc(p.say)}`).join(" · ")}</p>`:"";
+  box.innerHTML=`<p class="muted" style="margin:2px 0">From ${L.corrections} corrected line${L.corrections===1?"":"s"} (✎ Fix in the log). Accepted fixes correct what the station hears from now on.</p>${props}${acc}${watch}<span class="err" id="learnErr"></span>`}
+document.addEventListener("click",async e=>{const b=e.target.closest("[data-learn]");if(!b)return;e.preventDefault();
+  try{LEARN=await post("/api/learned",{action:b.dataset.learn,heard:b.dataset.h,say:b.dataset.s});renderLearned(true);learnBadge()}
+  catch(err){const x=$("learnErr");if(x)x.textContent=err.message}});
 // A net or conversation = a run of transmissions on one frequency with no quiet gap over 15 minutes
 // (the same rule as station/ics.py sessions(), which builds the Winlink messages); a net closed by net control or
 // End net ends there: what is heard after it (`after`) starts a new conversation.
@@ -530,7 +612,7 @@ async function runAcc(radio,start,end){
 // ---------- the over-the-air transcription test ----------
 let TEST=null;
 async function openTest(rid){
-  const d=await (await fetch("/api/test")).json();TEST={rid,text:d.text,history:d.history,result:null,msg:""};
+  const d=await (await fetch("/api/test")).json();TEST={rid,text:d.text,history:d.history,result:null,msg:"",acc:null};
   renderTest();if(!$("testDlg").open)$("testDlg").showModal();
 }
 const pctw=x=>x?`${Math.round(x.wer*100)}%`:"";
@@ -546,9 +628,18 @@ function renderTest(){
    <div class="testref">${esc(T.text)}</div>
    <p class="small">2. After they unkey and the text appears under On the air, press Score. Lower is better: 0% = every word right.</p>
    <div class="row"><button id="tScore" class="primary">Score the last transmission</button> <button onclick="$('testDlg').close()">Close</button> <span class="bad small">${esc(T.msg)}</span></div>
-   ${res}${hist}`;
+   ${res}${hist}<div id="accFix">${accFixHtml(T.acc)}</div>`;
   $("tScore").onclick=()=>scoreTest();
+  if(!T.acc)api("/api/accuracy").then(a=>{T.acc=a;const b=$("accFix");if(b&&TEST===T)b.innerHTML=accFixHtml(a)}).catch(()=>{});
 }
+function accFixHtml(a){ // word error rate against the operator's corrections (station/corrections.py)
+  if(!a)return "";
+  const cons=a.groups.some(g=>g.consensus);
+  const cell=(x,g)=>`<td class="n">${x?pctw(x)+(x.n!==g.n?` <span class="muted" title="measured on the ${x.n} of these lines that have this text">(${x.n})</span>`:""):"—"}</td>`;
+  const BY={all:"",radio:"Radio",mode:"Mode",net:"Net"};let last=null;
+  const rows=a.groups.map(g=>{const head=g.by!==last&&g.by!=="all"?`<tr class="grp"><td colspan="${cons?5:4}">${BY[g.by]}</td></tr>`:"";last=g.by;
+    return `${head}<tr><td>${esc(g.name)}${g.few&&g.by!=="all"?' <span class="muted">(few)</span>':""}</td><td class="n">${g.n}</td>${cell(g.live,g)}${cell(g.accurate,g)}${cons?cell(g.consensus,g):""}</tr>`}).join("");
+  return `<h4>Accuracy (from your corrections)</h4><p class="small ${a.few?"muted":""}">${esc(a.note)} ${esc(a.rule)}</p>${a.n?`<div style="overflow-x:auto"><table class="acc"><tr><th></th><th>Lines</th><th>Live</th><th>Accurate</th>${cons?"<th>Consensus</th>":""}</tr>${rows}</table></div>`:""}`}
 async function scoreTest(tx){
   const r=await fetch("/api/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({radio:TEST.rid,tx})});
   const d=await r.json();if(!r.ok){TEST.msg=d.error||"could not score";renderTest();return}
@@ -793,7 +884,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -896,6 +987,7 @@ document.addEventListener("submit",async e=>{
     const i=S.radios.findIndex(x=>x.id===d.id);if(i>=0)S.radios[i]=d;editing=null;document.activeElement.blur();renderRadios();renderNet()}
   catch(err){errEl().textContent="not saved: station unreachable"}
 });
+$("netsDlg").addEventListener("cancel",e=>{if(FIX&&FIX.where==="min"){e.preventDefault();fixClose()}});
 function connect(){
   const es=new EventSource("/events");
   es.onopen=()=>{$("conn").textContent="● live";$("conn").className="ok"};
@@ -918,6 +1010,7 @@ function connect(){
       if(POINTER_DOWN||Date.now()-LAST_TOUCH<2000){INST_T=setTimeout(go,1000);return}   // never swap a button under the pointer
       if(NV.tab==="minutes"&&NV.key===d.key)renderMinutes();else if(NV.tab==="history")renderHistory()};
     if(!INST_T)INST_T=setTimeout(go,3000)});
+  es.addEventListener("learned",()=>learnBadge());
   es.addEventListener("netclose",e=>{S.netclose=JSON.parse(e.data);renderFeed();renderRadios()});
   es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;S.accurate_where=d.where;S.accurate_rate=d.rate;renderFeed();wlAccNote()});
 }
@@ -1154,7 +1247,14 @@ document.addEventListener("pointerup",()=>{POINTER_DOWN=false;LAST_TOUCH=Date.no
 document.addEventListener("pointercancel",()=>{POINTER_DOWN=false},true);
 // the log is rebuilt on every accurate-pass update; a rebuild under a press swaps the button and the click is lost
 // (Run now, Winlink messages…, Who?, End net). While a press is on, rebuild just after it instead.
-{const _rf=renderFeed;let wait=null,rids=new Set();
+{const _raw=renderFeed;let wait=null,rids=new Set();
+  const _rf=function(rid){ // a rebuild keeps the open ✎ Fix editor: the very same element, so its text, cursor and focus
+    const ed=document.querySelector(".feed .fixer"),had=ed&&ed.contains(document.activeElement);
+    const ta=ed&&ed.querySelector("textarea"),sel=ta?[ta.selectionStart,ta.selectionEnd]:null;
+    const out=_raw(rid);
+    if(ed){const nu=document.querySelector(`.feed .fixer[data-fixer="${CSS.escape(ed.dataset.fixer)}"]`);
+      if(nu&&nu!==ed){nu.replaceWith(ed);if(had&&ta){ta.focus({preventScroll:true});ta.setSelectionRange(sel[0],sel[1])}}}
+    return out};
   renderFeed=function(rid){
     if(POINTER_DOWN||Date.now()-LAST_TOUCH<700){rids.add(rid===undefined?"*":rid);
       if(!wait)wait=setTimeout(function again(){if(POINTER_DOWN||Date.now()-LAST_TOUCH<700){wait=setTimeout(again,250);return}
@@ -1182,7 +1282,10 @@ async function renderMinutes(){
   const sec=(k,extra=[])=>{const its=by(k).concat(extra);if(!its.length)return "";
     return `<section class="msec k-${k}"><h4>${KIND[k]} <span class="muted">(${its.length})</span></h4><ul class="items">${its.map(i=>itemHtml(i,{from:i.inst!==d.key})).join("")}</ul></section>`};
   const carried=(d.carried||[]).map(i=>({...i}));
-  const txrows=d.tx.map(t=>`<li id="mtx-${esc(t.id)}" class="${t.noise?"noise":""}"><span class="t">${hhmm(t.start)}</span> <b>${esc(t.speaker||"")}</b> ${esc(t.text||"")} ${t.wav?`<button data-play="${esc(t.id)}" title="Play">▶</button>`:""}</li>`).join("");
+  const txrows=d.tx.map(t=>{const ed=FIX&&FIX.where==="min"&&FIX.id===t.id,c=t.corrected;
+    return `<li id="mtx-${esc(t.id)}" class="${t.noise&&!c?"noise":""}"><span class="t">${hhmm(t.start)}</span> <b>${esc(t.speaker||"")}</b> ${ed
+      ?fixEdHtml({id:t.id,text:t.text||"",corrected:c,wav:t.wav,duration_s:t.duration_s,was:c?c.from:""})
+      :`${esc(t.text||"")}${c?" "+cmark(t.id,c):""} ${t.wav?`<button data-play="${esc(t.id)}" title="Play">▶</button>`:""}${c?"":` <button class="fixb" data-fix="${esc(t.id)}" title="Correct the words">✎ Fix</button>`}`}</li>`}).join("");
   const keep=$("netsBody").dataset.mkey===d.key?{top:$("netsBody").scrollTop,open:[...$("netsBody").querySelectorAll("details[id]")].filter(x=>x.open).map(x=>x.id)}:null;
   $("netsBody").dataset.mkey=d.key;
   $("netsBody").innerHTML=`<div class="mhead">
@@ -1216,6 +1319,7 @@ async function renderMinutes(){
     b.insertAdjacentHTML("afterend",`<textarea class="mcopybox" rows="8" readonly style="width:100%;margin-top:6px">${esc(mtxt)}</textarea><div class="small muted">Select all and copy (Cmd+C / long-press → Copy).</div>`);
     const box=b.parentElement.querySelector(".mcopybox");box.focus();box.select()};
   if(keep){keep.open.forEach(id=>{const x=$(id);if(x)x.open=true});$("netsBody").scrollTop=keep.top}
+  if(FIX&&FIX.where==="min"){const det=$("mTx");if(det)det.open=true;fixFocus()}
   if(NV.hl){const el=$("mtx-"+NV.hl);if(el){el.classList.add("flash");el.scrollIntoView({block:"center"})}NV.hl=null}
 }
 async function saveMin(body,quiet){
@@ -1369,7 +1473,7 @@ function renderAlertSettings(){
   const n=$("setNotif");if(n)n.onclick=async()=>{await Notification.requestPermission();renderAlertSettings()};
 }
 
-connect();
+connect();learnBadge();
 // "Open on phone": QR codes for the addresses a phone can reach (made by the station, works offline)
 $("openPhone").addEventListener("click",async()=>{
   $("phoneBody").innerHTML='<h3>Open on a phone</h3><p class="muted small">Getting this PC\'s addresses…</p>';$("phoneDlg").showModal();

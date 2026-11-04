@@ -15,7 +15,7 @@ import yaml
 
 from hamkit import glossary
 from hamkit.bands import band
-from hamkit.callsigns import load_roster, normalize
+from hamkit.callsigns import load_roster, normalize, _ANY as CALL_SHAPE
 from hamkit.hints import Hinter, phonetic
 from . import callfix
 from . import speaker
@@ -412,7 +412,7 @@ class Station:
         for tx in self.tx:
             if tx.get("status") != "final":
                 continue
-            for c in (tx.get("accurate") or tx).get("callsigns", []):
+            for c in (tx.get("corrected") or tx.get("accurate") or tx).get("callsigns", []):
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"],
                                               "card": (old.get(c) or {}).get("card")})
                 e["count"] += 1; e["last"] = tx["start"]
@@ -658,6 +658,83 @@ class Station:
         self._log({"update": tid, "speaker_set": call or None})
         self.bus.publish("tx", tx)
         return tx
+
+    # ---------- tap-to-correct (station/corrections.py learns from these) ----------
+    MAX_CORRECTION = 4000
+
+    def correct(self, tid: str, text: str | None = None, undo: bool = False) -> dict:
+        """The operator's own text for a transmission ("✎ Fix"): it wins over the accurate pass and the live text
+        everywhere (log, search, minutes, attendance, ICS-309/213, Winlink). Callsigns are found again in it. Kept
+        like "Who?": an update line in the day's log ({"update": id, "corrected": {...}}, or None = Undo), merged by
+        load_today and the history index, so it works for a transmission from any day."""
+        live = None
+        with self.lock:
+            live = self._find(tid)
+            raw = dict(live) if live is not None else None
+        if raw is None:
+            raw = self.history.tx_raw(tid) if re.fullmatch(r"\w+", str(tid)) else None
+        if raw is None:
+            raise LookupError(tid)
+        if raw.get("status", "final") != "final":
+            raise ValueError("the transmission is still being transcribed")
+        if undo:
+            cor = None
+        else:
+            text = " ".join(str(text or "").split())
+            if not text:
+                raise ValueError("the corrected text is empty (Undo correction goes back to the station's text)")
+            if len(text) > self.MAX_CORRECTION:
+                raise ValueError(f"at most {self.MAX_CORRECTION} characters")
+            validate = self.callbook.validate if self.callbook else None
+            shown = ((raw.get("corrected") or {}).get("from")
+                     if raw.get("corrected") else ((raw.get("accurate") or {}).get("text") or raw.get("text") or ""))
+            _, calls = normalize(text, roster=self.roster, validate=validate)
+            # the operator's words stay as typed; the callsigns are read from them: spelled or known ones
+            # (normalize), and any call the operator wrote in capitals (they are the authority here)
+            typed = [c for c in re.findall(r"\b[A-Z0-9]{3,8}\b", text) if CALL_SHAPE.match(c)]
+            calls = list(dict.fromkeys(calls + typed))
+            calls.sort(key=lambda c: text.find(c) if c in text else len(text))   # in the order said
+            cor = {"text": text, "callsigns": calls, "noise": False, "by": "operator",
+                   "at": datetime.now().isoformat(timespec="seconds"), "from": shown}
+            cor["speaker"], cor["speaker_how"] = speaker.from_text(text, calls, self._ncs_at(raw))
+        with self.lock:
+            live = self._find(tid)
+            if live is not None:
+                if cor is None:
+                    live.pop("corrected", None)
+                else:
+                    live["corrected"] = cor
+                self._rebuild_heard()
+                for c in (cor or {}).get("callsigns", []):
+                    if c in self.heard and not self.heard[c].get("card"):
+                        self.heard[c]["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
+                out = dict(live)
+            else:
+                out = dict(raw)
+                out.pop("corrected", None)
+                if cor:
+                    out["corrected"] = cor
+        self._log({"update": tid, "corrected": cor})
+        self.history.flush()                      # minutes, attendance and search see it now; dashboards refresh
+        self.bus.publish("tx", out)
+        if live is not None:
+            self.bus.publish("heard", {"heard": self.heard_list()})
+        return out
+
+    def learned(self, action: str | None = None, heard: str = "", say: str = "") -> dict:
+        """Learned fixes: proposals from the corrections, and the accepted list (data/fixups_learned.yaml)."""
+        from . import corrections
+        store, rows = corrections.Learned(self.data), self.history.corrected_rows()
+        if action:
+            out = store.act(action, heard, say, rows)
+            self.bus.publish("learned", {"accepted": len(out["accepted"]), "proposals": len(out["proposals"])})
+            return out
+        return store.view(rows)
+
+    def accuracy(self) -> dict:
+        """Word error rate of live / accurate / consensus text against the operator's corrections."""
+        from . import corrections
+        return corrections.accuracy(self.history.corrected_rows(), self.me, self.radios)
 
     def refix_ended_nets(self, now: datetime | None = None, quiet_min: float = 15):
         """When a net is over, run the near-miss callsign correction once more over its accurate text with the WHOLE
@@ -1091,12 +1168,12 @@ class Station:
                 tx = json.loads(line)
             except ValueError:
                 continue
-            if "update" in tx:                                # added after the live text: accurate pass, "Who?"
+            if "update" in tx:                                # added after the live text: accurate pass, "Who?", ✎ Fix
                 for t in self.tx:
                     if t.get("id") == tx["update"]:
                         t.update({k: v for k, v in tx.items() if k in ("accurate", "accurate_echo", "speaker_set",
-                                                                      "net", "after")})
-                        for k in ("net", "after"):              # a net close undone: back into the net
+                                                                      "net", "after", "corrected")})
+                        for k in ("net", "after", "corrected"):   # a net close / a correction undone
                             if k in tx and tx[k] is None:
                                 t.pop(k, None)
                         if "accurate" in tx:

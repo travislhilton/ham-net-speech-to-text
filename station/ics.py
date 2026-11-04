@@ -46,9 +46,10 @@ def session_bounds(tx: list[dict], rid: str, gap_min: int = 15) -> tuple[str, st
 
 
 def view(t: dict) -> dict:
-    """A transmission as the forms see it: the accurate pass's text and callsigns when there is one, and the best
-    speaker (station/speaker.py best: operator-set > stated > net control > voice)."""
-    a = t.get("accurate")
+    """A transmission as the forms see it: the operator's correction when there is one (tap-to-correct), else the
+    accurate pass's text and callsigns, else the live text; and the best speaker (station/speaker.py best:
+    operator-set > corrected text > stated > net control > voice)."""
+    a = t.get("corrected") or t.get("accurate")
     v = {**t, **{k: a[k] for k in ("text", "callsigns", "noise") if k in a}} if a else dict(t)
     v["speaker"], v["speaker_how"] = speaker.best(t)
     return v
