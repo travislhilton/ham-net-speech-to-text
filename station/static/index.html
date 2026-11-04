@@ -924,7 +924,8 @@ function netForm(n){
     <div class="rline" data-for="yearly">In <select name="month">${MONTHS.map((m,i)=>`<option value="${i+1}"${(r.month||new Date().getMonth()+1)===i+1?" selected":""}>${m}</option>`).join("")}</select></div>
     <div class="rline" data-for="monthly yearly"><label class="chk"><input type="radio" name="mby" value="day"${mby==="day"?" checked":""}> On day <select name="monthday">${Array.from({length:31},(_,i)=>`<option${r.monthday===i+1?" selected":""}>${i+1}</option>`).join("")}<option value="last"${r.monthday===-1?" selected":""}>last</option></select></label>
       <label class="chk"><input type="radio" name="mby" value="nth"${mby==="nth"?" checked":""}> On the</label> <span class="chips" data-for-mby="nth">${ORDS.map(([v,l])=>chip("nth",v,l,nth.includes(v))).join("")}</span></div>
-    <div class="rline" data-for="weekly monthly yearly" data-wd><span class="lbl">${f==="weekly"?"On":"of"}</span> <span class="chips">${DAYS.map(d=>chip("wd",d,d,wd.includes(d))).join("")}</span></div>
+    <div class="rline" data-for="weekly monthly yearly" data-wd><span class="lbl">${f==="weekly"?"On":"of"}</span> <span class="chips">${DAYS.map(d=>chip("wd",d,d,wd.includes(d))).join("")}</span>
+      <div class="small muted" data-nth-hint hidden style="flex-basis:100%">Pick one or more of 1st–5th/last and a day: 1st + Tue = the first Tuesday of every month; 1st + 3rd + Sun = the 1st and 3rd Sunday.</div></div>
     <div class="rline"><label class="inl"><span data-for="once">On</span><span data-for="daily weekly monthly yearly">Starting</span> <input type="date" name="starts" value="${esc(r.starts||today())}"></label></div>
     <div class="rline" data-for="daily weekly monthly yearly">Ends <label class="chk"><input type="radio" name="ends" value="never"${ends==="never"?" checked":""}> never</label>
       <label class="chk"><input type="radio" name="ends" value="on"${ends==="on"?" checked":""}> on <input type="date" name="until" value="${esc(r.until||"")}"></label>
@@ -950,9 +951,12 @@ function collectNet(f,saved){
 function showFor(f){
   const freq=f.rfreq.value,mby=f.mby.value;
   f.querySelectorAll("[data-for]").forEach(x=>{x.hidden=!x.dataset.for.split(" ").includes(freq)});
-  f.querySelectorAll("[data-for-mby]").forEach(x=>{x.style.opacity=mby==="nth"?1:.45});
-  const wd=f.querySelector("[data-wd]");wd.hidden=!(freq==="weekly"||((freq==="monthly"||freq==="yearly")&&mby==="nth"));
-  wd.querySelector(".lbl").textContent=freq==="weekly"?"On":"";
+  const monthly=freq==="monthly"||freq==="yearly";
+  f.querySelectorAll("[data-for-mby]").forEach(x=>{x.style.opacity=mby==="nth"?1:.55});
+  // the weekday picker is always shown for Monthly/Yearly (dimmed while "On day" is chosen): a weekday is half of "the 1st Tuesday"
+  const wd=f.querySelector("[data-wd]");wd.hidden=!(freq==="weekly"||monthly);wd.style.opacity=monthly&&mby!=="nth"?.55:1;
+  wd.querySelector(".lbl").textContent=freq==="weekly"?"On":"Day of the week";
+  const hint=f.querySelector("[data-nth-hint]");if(hint)hint.hidden=!monthly;
   const n=parseInt(f.interval.value)||1;f.querySelector(".unit").textContent={daily:"day",weekly:"week",monthly:"month",yearly:"year"}[freq]+(n>1?"s":"")+(freq==="weekly"?"":"");
 }
 let PVT=null;
@@ -961,6 +965,9 @@ function wireNetForm(saved){
   const pv=()=>{clearTimeout(PVT);PVT=setTimeout(async()=>{const box=$("netPv");if(!box)return;
     try{const d=await post("/api/schedule/preview",collectNet(f,saved));box.innerHTML=d.error?`<p class="err">${esc(d.error)}</p>`:pvHtml(d,saved)}
     catch(err){box.innerHTML=`<p class="err">${esc(err.message)}</p>`}},200)};
+  f.addEventListener("change",e=>{const n=e.target.name,fr=f.rfreq.value;
+    if(n==="nth"||(n==="wd"&&(fr==="monthly"||fr==="yearly")))f.querySelector("input[name=mby][value=nth]").checked=true;
+    if(n==="monthday")f.querySelector("input[name=mby][value=day]").checked=true},true);
   f.addEventListener("input",()=>{showFor(f);pv()});f.addEventListener("change",()=>{showFor(f);pv()});pv();
   f.onsubmit=async e=>{e.preventDefault();
     try{const d=await post(NV.edit?`/api/schedule/${enc(NV.edit)}`:"/api/schedule",collectNet(f,saved));S.schedule=d.schedule;NV.edit=null;NV.adding=false;renderNetPick();renderSchedule(true);renderRadios()}
