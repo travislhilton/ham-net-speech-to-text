@@ -15,17 +15,26 @@ Candidates for a heard call h:
     and suffix ("7VF").
 
 Evidence, weighed per candidate (W_* below):
-  big     Active FCC licence; the licensee's first name (or its nickname: Bob/Robert, Wally/Wallace) said near the
-          call — after it in the same transmission, or in the next 2 ("Thank you, Joseph"), stopping at the next
-          OTHER call so a name is not handed to the wrong station;
-  medium  a town said near it that is the licence's city; licensed in the station's state; took part in this
+  big     Active FCC licence; the licensee's first name (or its nickname: Bob/Robert, Wally/Wallace) said right
+          after the call in its own transmission, or in the reply that follows it directly ("Thank you, Joseph";
+          an empty transmission or the call said again is skipped), never past the next OTHER call;
+  medium  a town said there that is the licence's city; licensed in the station's state; took part in this
           same net before (history.db); on the roster;
   small   how often it was heard in this net;
   cost    the edit distance from what was heard.
 
-The best candidate replaces h only when it beats what was heard AND the runner-up by MARGIN; a call never heard
-needs a name, town or history behind it. Otherwise h stays as heard: "verified" when it has its own support,
-"unverified" when nothing supports it (not in the FCC, no name, no history) — flagged, never invented away.
+The best candidate replaces h only when it beats what was heard AND the runner-up by MARGIN, and passes these
+rules whatever its score (owner review of the first three live nets, 2026-11-03):
+  - a call never heard needs a name, town or history behind it; so does moving a heard call that is itself an
+    Active licence ("licensed in the state" alone never moves a live licence);
+  - more than 1 plain letter change (or more than 1 prefix letter missing from a clipped call) needs the name
+    said WITH the call, or a name and earlier check-ins;
+  - never onto a call heard in the same transmission; two calls each heard in their own check-in turn (never in
+    adjacent transmissions) are two stations unless they differ by 1 letter and one is no Active licence;
+  - a name moves one call only: the call it was said with, else the best-scored; the others are judged again
+    without it.
+Otherwise h stays as heard: "verified" when it has its own support, "unverified" when nothing supports it (not in
+the FCC, no name, no history) — flagged, never invented away.
 
 Pure: no network, no globals. The FCC is any object with info()/neighbours()/tails() (Licences below wraps the
 station's sqlite copy); `prior` is {call: earlier nets checked in}. Same input -> same output (idempotent)."""
@@ -50,7 +59,18 @@ TAIL_COST = 0.5                                # a clipped call: the prefix was 
 CLUSTER_CAP = 1.5
 MARGIN = 1.5
 MIN_SCORE = 3.0
-WINDOW_TX = 2                                  # a name/town counts in the call's transmission and the next 2
+MAX_SUBS = 1            # letters changed (or prefix letters missing from a clipped call) on FCC + name alone
+
+
+def levenshtein(a: str, b: str) -> int:
+    """Plain edit count: every changed, added or dropped character is 1, however alike it sounds."""
+    prev = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        cur = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] != b[j - 1]))
+        prev = cur
+    return prev[-1]
 
 EXTRA_CONFUSE = [set("17"), set("MN"), set("QG"), set("0O")]
 
@@ -246,6 +266,7 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                 heard[c] += 1
     full = [c for c in heard if US_CALL.match(c) or ANY_CALL.match(c)]
     texts = [_source_text(v) for v in views]
+    noise = [bool(v.get("noise")) for v in views]
 
     # what the FCC says about every call heard, its neighbours, and the clipped calls
     near = {c: neighbours(c) for c in full if US_CALL.match(c)}
@@ -257,33 +278,47 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
     if tail_fcc:
         lic.update(fcc.info({c for cs in tail_fcc.values() for c in cs} - set(lic)))
 
-    def windows(call: str, cluster: set[str]):
-        """(names said, text said) after each mention of `call`, to the next OTHER call, within WINDOW_TX."""
-        names, said = set(), []
+    # where each call was heard in the transcript itself (not the live reading): transmission indexes
+    at_tx: dict[str, set] = {}
+    for i, ev in enumerate(events):
+        for _, k, c in ev:
+            if k in ("call", "token"):
+                at_tx.setdefault(c, set()).add(i)
+
+    def _repeat_of(c2: str, call: str) -> bool:
+        return c2 == call or (len(c2) >= 3 and call.startswith(c2))        # "N7Y..." repeating N7YPX
+
+    def windows(call: str, banned: set):
+        """(names said in the call's own transmission right after it, names said in the reply that follows it
+        directly, text said) — each part stops at the next OTHER call, so a name belongs to the call it follows.
+        The reply is the next transmission with words in it that are not just this call again."""
+        same, nxt, said = set(), set(), []
         for i, ev in enumerate(events):
             for p, k, c in ev:
                 if c != call or k == "live":
                     continue
-                chunk = []
-                stop = False
-                for j in range(i, min(len(events), i + WINDOW_TX + 1)):
-                    t = texts[j]
-                    a = p if j == i else 0
-                    b = len(t)
-                    for q, k2, c2 in events[j]:
-                        if k2 != "live" and q > a and c2 not in cluster and (j > i or q > p):
-                            b = min(b, q); stop = True
-                            break
-                    chunk.append(t[a:b])
-                    if stop:
-                        break
-                s = " ".join(chunk)
-                said.append(s)
-                names |= {w.upper() for w in _CAP.findall(s)}
-        return names, " ".join(said)
+                t = texts[i]
+                b = next((q for q, k2, c2 in ev if k2 != "live" and q > p and not _repeat_of(c2, call)), len(t))
+                s1 = t[p:b]
+                said.append(s1)
+                same |= {w.upper() for w in _CAP.findall(s1)} - banned
+                if b < len(t):
+                    continue                                   # another call follows in the same transmission
+                for j in range(i + 1, len(events)):
+                    tj = texts[j]
+                    others = [q for q, k2, c2 in events[j] if k2 != "live" and not _repeat_of(c2, call)]
+                    left = re.sub(r"[A-Z0-9][A-Z0-9-]{1,9}",
+                                  lambda m: "" if _repeat_of(m.group(0).replace("-", ""), call) else m.group(0), tj)
+                    if noise[j] or not re.search(r"[A-Za-z]{2}", left):
+                        continue                               # empty, noise, or the call said again
+                    s2 = tj[:min(others)] if others else tj
+                    said.append(s2)
+                    nxt |= {w.upper() for w in _CAP.findall(s2)} - banned
+                    break
+        return same, nxt, " ".join(said)
 
-    def evidence(c: str, names: set, said: str, cost: float, was_heard: bool) -> tuple[float, list[str], bool]:
-        score, why, strong = -W_COST * cost, [], False
+    def evidence(c: str, same: set, nxt: set, said: str, cost: float):
+        score, why, ev = -W_COST * cost, [], {"name": False, "name_same": False, "hist": False, "strong": False}
         inf = lic.get(c)
         if inf and inf["status"] == "A":
             score += W_ACTIVE; why.append("FCC: active")
@@ -292,33 +327,55 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         elif US_CALL.match(c):
             why.append("not in the FCC database")
         if inf:
-            nm = first_names(inf.get("first")) & names
+            fn = first_names(inf.get("first"))
+            nm = fn & (same | nxt)
             if nm:
-                score += W_NAME; strong = True
-                why.append(f"name {sorted(nm)[0].title()} matches")
+                score += W_NAME; ev.update(name=sorted(nm)[0], name_same=bool(fn & same), strong=True)
+                why.append(f"name {sorted(nm)[0].title()} matches"
+                           + (" (said with the call)" if fn & same else " (in the reply)"))
             up = said.upper()
             town = callfix.city_said(inf.get("city"), set(re.findall(r"[A-Z]+", up)), up)
             if town >= callfix.P_CITY:
-                score += W_TOWN; strong = True; why.append(f"town {inf['city'].title()} said")
+                score += W_TOWN; ev["strong"] = True; why.append(f"town {inf['city'].title()} said")
             elif town:
-                score += W_TOWN_PART; strong = True; why.append(f"town {inf['city'].title()} partly said")
+                score += W_TOWN_PART; ev["strong"] = True; why.append(f"town {inf['city'].title()} partly said")
             elif home_state and inf.get("state") == home_state and inf["status"] == "A":
                 score += w_state; why.append(f"licensed in {home_state}")
         n = prior.get(c, 0)
         if n:
-            score += W_HISTORY + (W_HISTORY_MANY if n >= 3 else 0); strong = True
+            score += W_HISTORY + (W_HISTORY_MANY if n >= 3 else 0); ev.update(hist=True, strong=True)
             why.append(f"{n} prior check-in{'s' if n != 1 else ''} to this net")
         if c in roster and c != me:
-            score += W_ROSTER; strong = True; why.append("on the roster")
+            score += W_ROSTER; ev["strong"] = True; why.append("on the roster")
         if heard.get(c, 0) > 1:
             score += min(W_FREQ_MAX, W_FREQ * (heard[c] - 1)); why.append(f"heard {heard[c]} times")
         if cost:
             why.append(f"{cost:g} edit{'s' if cost != 1 else ''} from what was heard")
-        return round(score, 2), why, strong
+        return round(score, 2), why, ev
 
-    decided: dict[str, dict] = {}
-    heard_all = sorted(set(full) | set(tails))
-    for h in heard_all:
+    def active(c):
+        return (lic.get(c) or {}).get("status") == "A"
+
+    def allowed(h: str, c: str, is_tail: bool, ev: dict) -> bool:
+        """The rules a move must pass whatever its score (owner review of the first live nights, 11-03)."""
+        if c == h:
+            return True
+        if not ev["strong"] and (c not in heard or (not is_tail and distance(h, c) > 1.0)):
+            return False          # never invent: an unheard licence, or a far one, needs a name, town or history
+        if not ev["strong"] and not is_tail and active(h):
+            return False          # what was heard is a live licence: "licensed in the state" alone never moves it
+        subs =(len(c) - len(h)) if is_tail else levenshtein(h, c)
+        if subs > MAX_SUBS and not ((ev["name"] and ev["hist"]) or ev["name_same"]):
+            return False          # two letters changed on a name heard in the reply alone: too far
+        if not is_tail and h in at_tx and c in at_tx:
+            if at_tx[h] & at_tx[c]:
+                return False      # both said in the same transmission: two stations
+            adjacent = any(abs(i - j) <= 1 for i in at_tx[h] for j in at_tx[c])
+            if not adjacent and not (subs <= 1 and not (active(h) and active(c))):
+                return False      # each had its own check-in turn: two stations unless one barely differs
+        return True
+
+    def decide(h: str, banned: set) -> dict | None:
         is_tail = h in tails and h not in full
         cands: dict[str, float] = {}
         if is_tail:
@@ -335,44 +392,75 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                     if d is not None:
                         cands[c] = d
             for c, d in near.get(h, {}).items():
-                if c not in cands and (lic.get(c) or {}).get("status") == "A":
+                if c not in cands and active(c):
                     cands[c] = d
-        cluster = {c for c in cands if c in heard} | {h}
-        names, said = windows(h, cluster)
+        same, nxt, said = windows(h, banned)
         scored = []
         for c, cost in cands.items():
-            s, why, strong = evidence(c, names, said, cost, c in heard)
-            if c != h and (c not in heard or cost > 1.0) and not strong:
-                continue          # never invent: an unheard licence, or a far one, needs a name, town or history
-            scored.append({"call": c, "score": s, "why": why, "strong": strong})
+            s, why, ev = evidence(c, same, nxt, said, cost)
+            if not allowed(h, c, is_tail, ev):
+                continue
+            scored.append({"call": c, "score": s, "why": why, "strong": ev["strong"], "name": ev["name"],
+                           "same": ev["name_same"]})
         scored.sort(key=lambda x: (-x["score"], x["call"] != h, x["call"]))
         own = next((x for x in scored if x["call"] == h), None)
-        if not scored or (is_tail and not scored):
-            continue
+        if not scored:
+            return None
         best = scored[0]
         rest = [x["score"] for x in scored[1:]] + ([own["score"]] if own and own is not best else [])
         second = max(rest) if rest else (0.0 if not is_tail else -1.0)
         if best["call"] != h and best["score"] >= MIN_SCORE and best["score"] - second >= MARGIN:
-            decided[h] = {"call": best["call"], "status": "fixed", "conf": _conf(best["score"] - second),
-                          "why": "; ".join(best["why"]), "score": best["score"]}
-        elif is_tail:
-            continue                                     # a clipped call nothing clearly fits: not a call at all
-        else:
-            o = own or {"score": 0.0, "why": ["not in the FCC database"], "strong": False}
-            inf = lic.get(h)
-            status = ("verified" if (inf and inf["status"] == "A") or o["strong"] else
-                      "lapsed" if inf else "unverified")
-            others = [x["call"] for x in scored if x["call"] != h and x["score"] >= MIN_SCORE
-                      and o["score"] - x["score"] < MARGIN][:3]
-            e = {"call": h, "status": status, "conf": _conf(o["score"] - max([x["score"] for x in scored
-                                                                              if x["call"] != h] + [0.0])),
-                 "why": "; ".join(o["why"]), "score": o["score"]}
-            if others:
-                e["candidates"] = others
-            tops = [x for x in scored if x["call"] != h and best["score"] - x["score"] < MARGIN]
-            if tops and tops[0]["score"] >= MIN_SCORE and tops[0]["score"] - o["score"] >= MARGIN:
-                e["_tops"] = tops                       # several readings of one station? settled below
-            decided[h] = e
+            return {"call": best["call"], "status": "fixed", "conf": _conf(best["score"] - second),
+                    "why": "; ".join(best["why"]), "score": best["score"], "_name": best["name"],
+                    "_same": best["same"]}
+        if is_tail:
+            return None                                  # a clipped call nothing clearly fits: not a call at all
+        o = own or {"score": 0.0, "why": ["not in the FCC database"], "strong": False}
+        inf = lic.get(h)
+        status = ("verified" if (inf and inf["status"] == "A") or o["strong"] else
+                  "lapsed" if inf else "unverified")
+        others = [x["call"] for x in scored if x["call"] != h and x["score"] >= MIN_SCORE
+                  and o["score"] - x["score"] < MARGIN][:3]
+        e = {"call": h, "status": status, "conf": _conf(o["score"] - max([x["score"] for x in scored
+                                                                          if x["call"] != h] + [0.0])),
+             "why": "; ".join(o["why"]), "score": o["score"]}
+        if others:
+            e["candidates"] = others
+        tops = [x for x in scored if x["call"] != h and best["score"] - x["score"] < MARGIN]
+        if tops and tops[0]["score"] >= MIN_SCORE and tops[0]["score"] - o["score"] >= MARGIN:
+            e["_tops"] = tops                           # several readings of one station? settled below
+        return e
+
+    heard_all = sorted(set(full) | set(tails))
+    bans: dict[str, set] = {h: set() for h in heard_all}
+    decided: dict[str, dict] = {}
+    todo = list(heard_all)
+    for _ in range(6):
+        for h in todo:
+            e = decide(h, bans[h])
+            if e:
+                decided[h] = e
+            else:
+                decided.pop(h, None)
+        # one name supports one move: when a name moved several calls to different stations, it stays with the
+        # call it was said WITH (then the higher score); the others are judged again without it
+        by_name: dict[str, list] = {}
+        for h, e in decided.items():
+            if e["status"] == "fixed" and e.get("_name"):
+                by_name.setdefault(e["_name"], []).append(h)
+        todo = []
+        for name, hs in by_name.items():
+            if len({decided[h]["call"] for h in hs}) < 2:
+                continue
+            hs.sort(key=lambda h: (not decided[h]["_same"], -decided[h]["score"], h))
+            keep = decided[hs[0]]["call"]
+            for h in hs[1:]:
+                if decided[h]["call"] != keep:
+                    bans[h].add(name); todo.append(h)
+        if not todo:
+            break
+    for e in decided.values():
+        e.pop("_name", None); e.pop("_same", None)
 
     # a chain (A -> B, B -> C) ends at C; a call never ends at one that itself moved
     def final(c, seen=()):

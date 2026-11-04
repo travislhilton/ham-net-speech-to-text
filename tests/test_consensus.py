@@ -33,6 +33,10 @@ LICENCES = [
     ("KD7PHX", "E", "Esther", "CAPITAL CITY", "WA"),
     ("KD7BHX", "A", "ROBERT", "SPRINGFIELD", "IL"), ("KD7DHX", "A", "Robert", "SHELBYVILLE", "IL"),
     ("K7RRD", "A", "Sam", "SPRINGFIELD", "IL"),
+    ("KE7QZZ", "A", "Jo", "SPRINGFIELD", "IL"), ("KC7QVJ", "A", "Petra", "SPRINGFIELD", "IL"),
+    ("KK7QPZ", "A", "Quincy", "SPRINGFIELD", "IL"), ("KM7QEZ", "A", "Quincy", "SHELBYVILLE", "IL"),
+    ("KB7QXV", "A", "Quincy", "SPRINGFIELD", "IL"),
+    ("KF7QLB", "A", "Scott", "SHELBYVILLE", "MT"), ("KF7QLV", "A", "Dave", "SPRINGFIELD", "IL"),
 ]
 
 SCRIPT = [  # minute, accurate text, callsigns as normalize() accepted them
@@ -45,7 +49,7 @@ SCRIPT = [  # minute, accurate text, callsigns as normalize() accepted them
     (2.0, "Thank you, Pat. KG7ABC.", ["KG7ABC"]),
     (2.2, "KG7ABC, Chris in Shelbyville, commercial power.", ["KG7ABC"]),
     (2.4, "Thank you, Chris. 87QF.", []),
-    (2.6, "87QF with handheld.", []),
+    (2.6, "87QF, Brent, with handheld.", []),
     (2.8, "You're good, Brent. Thank you.", []),
     (3.0, "This is W7KTQ commercial power.", []),
     (3.2, "Thank you, Kevin. KD7PHX.", ["KD7PHX"]),
@@ -119,6 +123,55 @@ def test_a_clipped_call_and_an_unlisted_one_are_found_only_with_a_name(lic):
     # no name after it: a clipped call stays out of the calls
     v = [{"id": "1", "text": "Next is 87QF.", "callsigns": [], "freq_mhz": 146.94}]
     assert K.agree(v, lic, home_state="IL")["tx"]["1"] == []
+    # two prefix letters missing and the name only in the reply: too far
+    assert K.agree(net([("87QF.", []), ("You're good, Brent.", [])]), lic, home_state="IL")["tx"]["0"] == []
+
+
+def net(script):
+    return [{"id": str(i), "text": t, "callsigns": c, "freq_mhz": 146.94} for i, (t, c) in enumerate(script)]
+
+
+def test_never_merge_calls_said_in_the_same_transmission_or_in_their_own_turns(lic):
+    # two sound-alike letters (B/Z, G/Z) apart, the other one Active in the state: still two stations
+    r = K.agree(net([("KE7QBG and KE7QZZ.", ["KE7QBG", "KE7QZZ"])]), lic, home_state="IL")
+    assert r["calls"]["KE7QBG"]["call"] == "KE7QBG" and r["tx"]["0"] == ["KE7QBG", "KE7QZZ"]
+    turns = [("KE7QBG.", ["KE7QBG"]), ("Good evening.", []), ("Next.", []), ("KE7QZZ.", ["KE7QZZ"])]
+    assert K.agree(net(turns), lic, home_state="IL")["calls"]["KE7QBG"]["call"] == "KE7QBG"
+    # one letter, and the other reading is no licence at all: one station read twice
+    turns = [("KE7QZA.", ["KE7QZA"]), ("Good evening.", []), ("Next.", []), ("KE7QZZ.", ["KE7QZZ"])]
+    assert K.agree(net(turns), lic, home_state="IL")["calls"]["KE7QZA"]["call"] == "KE7QZZ"
+
+
+def test_a_live_licence_heard_is_never_moved_on_the_state_alone(lic):
+    v = net([("KF7QLB and KE7ABC.", ["KF7QLB", "KE7ABC"])])
+    live = {"0": ["KF7QLV", "KE7ABC"]}                    # the live text read the same words as the in-state call
+    assert K.agree(v, lic, home_state="IL", live_calls=live)["calls"]["KF7QLB"]["call"] == "KF7QLB"
+    v = net([("KF7QLB, Dave, handheld.", ["KF7QLB"])])
+    assert K.agree(v, lic, home_state="IL", live_calls={"0": ["KF7QLV"]})["calls"]["KF7QLB"]["call"] == "KF7QLV"
+
+
+def test_two_letters_need_the_name_with_the_call_or_name_and_history(lic):
+    s = [("KT7QDJ.", ["KT7QDJ"]), ("Welcome Petra, great signal.", [])]
+    assert K.agree(net(s), lic, home_state="IL")["calls"]["KT7QDJ"]["call"] == "KT7QDJ"    # name in the reply
+    e = K.agree(net(s), lic, home_state="IL", prior={"KC7QVJ": 2})["calls"]["KT7QDJ"]
+    assert e["call"] == "KC7QVJ" and "2 prior check-ins" in e["why"]
+    s = [("KT7QDJ, Petra in Springfield.", ["KT7QDJ"])]
+    assert K.agree(net(s), lic, home_state="IL")["calls"]["KT7QDJ"]["call"] == "KC7QVJ"    # said with the call
+
+
+def test_a_name_belongs_to_the_call_it_follows_and_moves_one_call_only(lic):
+    # "Quincy" after KK7QPD is net control's reply; then KM7QEV says "Quincy" with its own call
+    s = [("KK7QPD.", ["KK7QPD"]), ("Welcome Quincy.", []), ("KM7QEV, Quincy here.", ["KM7QEV"]),
+         ("Thank you.", [])]
+    r = K.agree(net(s), lic, home_state="IL")
+    assert r["calls"]["KM7QEV"]["call"] == "KM7QEZ"
+    assert r["calls"]["KK7QPD"]["call"] == "KK7QPD"                  # the name already moved another call
+    # a name after ANOTHER call is not this call's: "KB7QXZ" never gets the name said after KE7ABC
+    s = [("KB7QXZ.", ["KB7QXZ"]), ("KE7ABC, Quincy.", ["KE7ABC"])]
+    assert K.agree(net(s), lic, home_state="IL")["calls"]["KB7QXZ"]["call"] == "KB7QXZ"
+    # the reply is the next transmission with words: an empty one or the call said again is skipped
+    s = [("KK7QPD.", ["KK7QPD"]), (".", []), ("KK7QPD", ["KK7QPD"]), ("Welcome Quincy.", [])]
+    assert K.agree(net(s), lic, home_state="IL")["calls"]["KK7QPD"]["call"] == "KK7QPZ"
 
 
 def test_two_real_stations_a_letter_apart_are_not_merged(lic):
