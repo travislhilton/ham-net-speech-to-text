@@ -36,7 +36,8 @@ What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing
   callsigns are covered by the FCC database either way). The password goes to Windows Credential Manager;
 - reports the graphics card and driver (Intel/NVIDIA graphics are used only with a current driver);
 - keeps your settings (`config/station.yaml`, `config/engine.yaml`, `config/local.yaml`) across updates;
-- starts the station at every sign-in (task "HamNet Station"), puts a **HamNet Station** shortcut on the
+- starts the station at every sign-in (task "HamNet Station", which also brings it back within 2 minutes if it
+  ever stops), puts a **HamNet Station** shortcut on the
   desktop, and opens port 8091 to your home network and Tailscale only;
 - lists the audio inputs it can record from.
 

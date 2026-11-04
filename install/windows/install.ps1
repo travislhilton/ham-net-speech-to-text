@@ -188,10 +188,14 @@ $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name   # e.g. STATION
 $sAct = New-ScheduledTaskAction -Execute "$venv\Scripts\pythonw.exe" -Argument '-m station --log data\station.log' `
   -WorkingDirectory $InstallDir
 $sTrg = New-ScheduledTaskTrigger -AtLogOn -User $user
+# Watchdog: Task Scheduler's restart-on-failure covers only a failed launch, not a crash later (11-04: pythonw died
+# in fastprox.dll, Windows' WMI client, 1 s after a restart and stayed down). Starting the task every 2 minutes
+# does nothing while it runs (IgnoreNew) and brings it back within 2 minutes of a crash.
+$sTrg2 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 2)
 $sSet = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 `
   -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
 $sPrn = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName 'HamNet Station' -Action $sAct -Trigger $sTrg -Settings $sSet -Principal $sPrn `
+Register-ScheduledTask -TaskName 'HamNet Station' -Action $sAct -Trigger $sTrg, $sTrg2 -Settings $sSet -Principal $sPrn `
   -Description 'Live voice-net transcription and dashboard (ham-net-speech-to-text)' -Force | Out-Null
 Set-Content -Path "$env:PUBLIC\Desktop\HamNet Station.url" -Value "[InternetShortcut]`r`nURL=http://localhost:8091/" -Encoding ascii
 Stop-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue
