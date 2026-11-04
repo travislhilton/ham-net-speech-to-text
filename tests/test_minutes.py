@@ -105,3 +105,11 @@ def test_held_out_net(capsys):
     with capsys.disabled():
         print(f"\nheld-out net: precision {tp}/{tp + fp}, recall {tp}/{tp + fn}")
     assert tp / (tp + fp) >= 0.75 and tp / (tp + fn) >= 0.85
+
+
+def test_a_garbled_fragment_is_not_an_urgent_fire_outside_an_emergency_net():
+    from station.minutes import extract
+    v = [{"id": "1", "start": "2026-11-02T20:04:31", "text": "He's burning river!", "speaker": None, "callsigns": []}]
+    assert not [i for i in extract(v) if i["kind"] == "urgent"]
+    v[0]["text"] = "There is a house burning on Main Street, two people outside."
+    assert [i["category"] for i in extract(v) if i["kind"] == "urgent"] == ["fire"]

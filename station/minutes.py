@@ -99,7 +99,9 @@ URGENT = {   # category -> cue (whole words, case-insensitive)
               r"trauma|fell and|has fallen|car accident|crash",
     "fire": r"(?:structure |brush |grass |house |wild|forest |vehicle |car )?fire(?! (?:station|department|dept|"
             r"chief|hall|house|district|truck|company|extinguisher|drill|works|wood))|smoke (?:showing|visible|"
-            r"from|coming)|flames|burning",
+            r"from|coming)|flames|(?:house|home|building|structure|barn|shed|garage|car|vehicle|truck|brush|grass|field|"
+            r"trees?|woods) (?:is |are |was )?(?:burning|on fire)|burning (?:house|home|building|structure|barn|car|"
+            r"vehicle|brush|grass|field)",
     "flood": r"flood(?:ing|ed|s)?|water (?:is )?rising|high water|washed out|wash ?out|under water|mudslide|"
              r"landslide|debris flow",
     "missing person": r"missing (?:person|child|hiker|hunter|man|woman|boy|girl|kid|resident|\w+ year old)|"
@@ -312,7 +314,11 @@ def extract(views: list[dict], ref: date | None = None, emergency: bool = False)
                 cats = urgent_categories(s)
                 if cats == ["emergency"] and PREAMBLE.search(s):
                     cats = []                                         # net control's preamble, not a report
-                if cats and (emergency or set(cats) - WEAK or len(cats) > 1 or find_place(s)):
+                # outside an emergency net a short fragment with one cue is usually a mis-heard word
+                # ("He's burning river!"): it needs a second cue or a place, or at least 5 words
+                strong = emergency or len(cats) > 1 or find_place(s) or \
+                    (set(cats) - WEAK and (len(s.split()) >= 5 or "emergency" in cats))
+                if cats and strong:
                     add("urgent", s, category=cats[0], categories=cats, people=find_people(s, calls),
                         place=find_place(s))
                     continue
