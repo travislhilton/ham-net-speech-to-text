@@ -360,3 +360,79 @@ def test_cli_reruns_a_day_and_is_idempotent(tmp_path, capsys):
     assert "0 transmission records" in capsys.readouterr().out and log.read_text().count('"consensus"') == n
     merged = {t["id"]: t for t in cli.merged_log(log)}
     assert ics.view(merged["7002"])["callsigns"] == ["KF7AQT", "N7YTX"]
+
+
+# ---------- VHF/UHF: distance from the station (hamkit/zipgeo.py) ----------
+HOME = (39.80, -89.65)
+ZIPS = {"00001": (39.926, -89.65),   # 14 km north
+        "00002": (40.070, -89.65),   # 30 km north, across the state line
+        "00003": (38.270, -89.65),   # 170 km south
+        "00004": (39.980, -89.65),   # 20 km north
+        "00005": (37.999, -89.65)}   # 200 km south
+GEO_LICENCES = [  # call, status, first, state, zip
+    ("AD7QK", "A", "Ann", "IL", "00001"), ("AE7QK", "A", "Bea", "IL", "00003"),
+    ("KK7QM", "A", "Cy", "ID", "00002"), ("AB7QM", "A", "Di", "IL", "00005"),
+    ("AD7QN", "A", "Ed", "IL", "00001"), ("AE7QN", "A", "Flo", "IL", "00004"),
+    ("KD7QQB", "A", "Gus", "IL", "00001"), ("KD7QQP", "A", "Hal", "IL", "00003"),
+]
+
+
+@pytest.fixture
+def geolic(tmp_path):
+    from hamkit.zipgeo import ZipGeo
+    c = fcc.connect(tmp_path / "geo.sqlite")
+    for usi, (call, st, first, state, z) in enumerate(GEO_LICENCES, 1):
+        c.execute("INSERT INTO hd VALUES (?,?,?,?,?,?)", (usi, call, st, "2020-01-01", "2030-01-01", None))
+        c.execute("INSERT INTO en (usi, call, first, city, state, zip) VALUES (?,?,?,?,?,?)",
+                  (usi, call, first, "SOMEWHERE", state, z + "1234"))
+    c.commit()
+    return K.Licences(c, geo=ZipGeo(rows=ZIPS))
+
+
+def test_on_vhf_a_clipped_call_goes_to_the_clearly_nearest_licence(geolic):
+    ag = lambda s, f=146.94, where=HOME: K.agree(
+        [{"id": str(i), "text": t, "callsigns": [], "freq_mhz": f} for i, t in enumerate(s)],
+        geolic, home_state="IL", where=where)
+    # 14 km against 170 km, no name said: the near one (the station's own area is evidence enough)
+    r = ag(["87QK and something.", "Good evening."])
+    assert r["tx"]["0"] == ["AD7QK"] and "nearest licence ending in 7QK" in r["calls"]["7QK"]["why"]
+    assert "14 km away" in r["calls"]["7QK"]["why"]
+    # a licence across the state line 30 km away beats an in-state one 200 km away
+    assert ag(["87QM.", "Thank you."])["tx"]["0"] == ["KK7QM"]
+    # two licences both close by (14 and 20 km): left as heard, with both and their distances
+    r = ag(["87QN.", "Thank you."])
+    assert r["tx"]["0"] == [] and r["calls"]["7QN"]["candidates"] == ["AD7QN", "AE7QN"]
+    assert "AD7QN 14 km" in r["calls"]["7QN"]["why"] and "AE7QN 20 km" in r["calls"]["7QN"]["why"]
+    # on HF distance says nothing: the old rule (in-state, a name needed) applies
+    assert ag(["87QK and something.", "Good evening."], f=3.985)["tx"]["0"] == []
+    # no station location known: the old rule too
+    assert ag(["87QK and something.", "Good evening."], where=None)["tx"]["0"] == []
+
+
+def test_on_vhf_a_licence_in_range_scores_by_its_distance(geolic):
+    v = [{"id": "0", "text": "KD7QQB.", "callsigns": ["KD7QQB"], "freq_mhz": 146.94}]
+    r = K.agree(v, geolic, home_state="IL", where=HOME)
+    assert "14 km away" in r["calls"]["KD7QQB"]["why"]
+    v = [{"id": "0", "text": "KD7QQP.", "callsigns": ["KD7QQP"], "freq_mhz": 146.94}]
+    assert "beyond VHF/UHF range" in K.agree(v, geolic, home_state="IL", where=HOME)["calls"]["KD7QQP"]["why"]
+
+
+def test_grid_squares_and_distances():
+    from hamkit.zipgeo import grid_to_latlon, km, parse
+    la, lo = grid_to_latlon("EM59")
+    assert (la, lo) == (39.5, -89.0)
+    la, lo = grid_to_latlon("em59et")
+    assert abs(la - 39.8125) < 1e-6 and abs(lo - (-89.625)) < 1e-3
+    assert grid_to_latlon("ZZ99") is None
+    assert round(km((39.8, -89.65), (38.27, -89.65))) == 170
+    assert parse("GEOID\tA\tB\tC\tD\tINTPTLAT\tINTPTLONG\n62701\t1\t2\t3\t4\t39.80\t-89.65\n") == {"62701": (39.8, -89.65)}
+
+
+def test_the_stations_location(geolic):
+    from station.consensus import where_of
+    assert where_of({"station_lat": 1.5, "station_lon": 2.5}, "EM59et", geolic, "AD7QK") == (1.5, 2.5)
+    la, _ = where_of({}, "EM59et", geolic, "AD7QK")
+    assert abs(la - 39.8125) < 1e-6                       # a 6-character grid is precise enough
+    assert where_of({}, "EM59", geolic, "AD7QK") == ZIPS["00001"]   # a 4-character one is not: the licence's ZIP
+    assert where_of({}, "EM59", geolic, "N0CALL") == (39.5, -89.0)
+    assert where_of({}, "", None, "AD7QK") is None

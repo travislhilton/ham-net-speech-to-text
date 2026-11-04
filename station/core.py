@@ -839,8 +839,18 @@ class Station:
             return None
         lic = self.__dict__.get("_licences_obj")
         if lic is None or lic.con is not cb.con:
-            lic = self._licences_obj = Licences(cb.con, getattr(cb, "lock", None))
+            from hamkit.zipgeo import ZipGeo
+            try:
+                geo = ZipGeo()                                # the ZIP centres (python -m hamkit.zipgeo update)
+            except Exception:  # noqa: BLE001 — distance is evidence, never a requirement
+                geo = None
+            lic = self._licences_obj = Licences(cb.con, getattr(cb, "lock", None), geo)
         return lic
+
+    def where(self) -> tuple[float, float] | None:
+        """The station's (lat, lon) for VHF/UHF distances (station/consensus.py where_of)."""
+        from .consensus import where_of
+        return where_of(self.cfg, (self._saved().get("operator") or {}).get("grid"), self._licences(), self.me)
 
     def _sched_entry(self, net_id: str | None) -> dict | None:
         return next((n for n in (self.cfg.get("schedule") or []) if net_id and n.get("id") == net_id), None)
@@ -864,7 +874,8 @@ class Station:
             prior = {}
         fx = fixups.load(self.root / "config", self.data)
         recs, res = consensus.for_session(rows, self._licences(), prior, callfix.home_state(self), self.roster,
-                                          self.me, fx, fixups.net_names_for(self._sched_entry(net_id)))
+                                          self.me, fx, fixups.net_names_for(self._sched_entry(net_id)),
+                                          where=self.where())
         changed = []
         with self.lock:
             for t in rows:

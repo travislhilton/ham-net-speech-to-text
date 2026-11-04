@@ -100,12 +100,19 @@ def main(argv=None) -> int:
     me = (cfg.get("callsign") or "").upper()
     roster = load_roster(Path(a.config)) | ({me} - {""})
     con = sqlite3.connect(f"file:{a.fcc}?mode=ro", uri=True) if Path(a.fcc).exists() else None
-    lic = consensus.Licences(con) if con else None
+    from hamkit.zipgeo import ZipGeo
+    lic = consensus.Licences(con, geo=ZipGeo(Path(a.fcc).parent / "zipgeo.sqlite")) if con else None
     state = (a.state or cfg.get("region_state") or "").upper() or None
     if not state and lic and me:
         state = (lic.info([me]).get(me) or {}).get("state") or None
     fx = fixups.load(Path(a.config), Path(a.data))
-    print(f"FCC: {'yes' if lic else 'NO (only the net, history and roster count)'}; state: {state or '?'}")
+    try:
+        grid = (json.loads((Path(a.data) / "operator.json").read_text(encoding="utf-8")).get("operator") or {}).get("grid")
+    except (OSError, ValueError):
+        grid = None
+    where = consensus.where_of(cfg, grid, lic, me)
+    print(f"FCC: {'yes' if lic else 'NO (only the net, history and roster count)'}; state: {state or '?'}; "
+          f"VHF/UHF distances: {'yes' if where and lic and lic.geo else 'no (python -m hamkit.zipgeo update)'}")
 
     data = Path(a.data)
     if a.tx_json:
@@ -145,7 +152,7 @@ def main(argv=None) -> int:
             if hist and net.get("id"):
                 prior = hist.prior_checkins(net["id"], rows[0]["start"], exclude=hist.instance_of(rid, rows[0]["start"]))
             names = fixups.net_names_for(entry, a.net_name)
-            recs, res = consensus.for_session(rows, lic, prior, state, roster, me, fx, names)
+            recs, res = consensus.for_session(rows, lic, prior, state, roster, me, fx, names, where=where)
             print(f"{rid} {rows[0]['start']} .. {rows[-1]['start']}  {net.get('name') or ''}  ({len(rows)} transmissions)")
             print(describe(rows, recs, res))
             for t in rows:

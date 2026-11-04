@@ -139,10 +139,11 @@ if (-not $SkipModels) {
 }
 
 if (-not $SkipCallbook) {
-  Step "Callbook: FCC license database + country file (first run ~200 MB)"
+  Step "Callbook: FCC license database + country file + ZIP centres (first run ~200 MB)"
   Push-Location $InstallDir
   Run { & $vpy -m hamkit.fcc update }
   Run { & $vpy -m hamkit.dxcc update }
+  Run { & $vpy -m hamkit.zipgeo update }    # ZIP centres (1 MB, once): VHF/UHF callsign distances
   Pop-Location
 }
 

@@ -61,6 +61,9 @@ CLUSTER_CAP = 1.5
 MARGIN = 1.5
 MIN_SCORE = 3.0
 MAX_SUBS = 1            # letters changed on FCC + a name in the reply alone
+LOCAL_KM = 150          # VHF/UHF: a licence this close is in range of the net (the 11-03 nets: every station heard
+                        # 3+ times was within 50 km; 32 of 33 licences beyond 250 km were heard once = misreadings)
+NEAR_KM = 50            # ... and this close, the clearly nearest licence completes a clipped call on its own
 MAX_PREFIX = 2          # leading characters a clipped call may be missing ("7QF" -> AD7QF)
 
 
@@ -152,8 +155,8 @@ def neighbours(call: str) -> dict[str, float]:
 # ---------- the FCC, as the agreement sees it ----------
 class Licences:
     """The station's FCC copy (hamkit/fcc.py sqlite). Every answer is cached for the life of the object."""
-    def __init__(self, con, lock=None):
-        self.con, self.lock = con, lock
+    def __init__(self, con, lock=None, geo=None):
+        self.con, self.lock, self.geo = con, lock, geo      # geo: hamkit.zipgeo.ZipGeo (the licence's ZIP centre)
         self._info: dict[str, dict | None] = {}
         self._tails: dict[tuple, list[str]] = {}
 
@@ -170,14 +173,14 @@ class Licences:
             chunk = want[i:i + 900]
             for c in chunk:
                 self._info[c] = None
-            rows = self._run("SELECT hd.call, hd.status, en.first, en.city, en.state, hd.grant_date FROM hd LEFT JOIN"
-                             f" en USING (usi) WHERE hd.call IN ({','.join('?' * len(chunk))})", chunk)
-            for call, st, first, city, state, granted in rows:
+            rows = self._run("SELECT hd.call, hd.status, en.first, en.city, en.state, hd.grant_date, en.zip FROM hd"
+                             f" LEFT JOIN en USING (usi) WHERE hd.call IN ({','.join('?' * len(chunk))})", chunk)
+            for call, st, first, city, state, granted, zipcode in rows:
                 cur = self._info.get(call)
                 key = (st == "A", granted or "")
                 if cur is None or key > cur["_k"]:
                     self._info[call] = {"status": st, "first": first, "city": (city or "").upper(),
-                                        "state": (state or "").upper(), "_k": key}
+                                        "state": (state or "").upper(), "zip": (zipcode or "")[:5], "_k": key}
         return {c: self._info[c] for c in calls if self._info.get(c)}
 
     def tails(self, tails, state: str | None) -> dict[str, list[str]]:
@@ -194,6 +197,54 @@ class Licences:
                     if call.endswith(t) and US_CALL.match(call):
                         self._tails[(t, state)].append(call)
         return {t: sorted(self._tails.get((t, state), [])) for t in tails}
+
+
+    def km(self, call: str, where) -> float | None:
+        """How far the licence's mailing ZIP centre is from `where` (lat, lon); None when unknown."""
+        inf = self._info.get(call) if call in self._info else (self.info([call]).get(call))
+        p = self.geo.where((inf or {}).get("zip")) if (self.geo and where) else None
+        if p is None:
+            return None
+        from hamkit.zipgeo import km
+        return km(where, p)
+
+    def tails_near(self, tails, where, radius_km: float) -> dict[str, list[str]]:
+        """{"7QF": [Active calls ending in 7QF whose ZIP is within radius_km of `where`, any state]} — on VHF/UHF the
+        net's area, which may cross a state line."""
+        want = [t for t in dict.fromkeys(tails) if (t, "near", radius_km) not in self._tails]
+        if want and self.geo and where:
+            for t in want:
+                self._tails[(t, "near", radius_km)] = []
+            cond = " OR ".join("hd.call LIKE ?" for _ in want)
+            rows = self._run("SELECT DISTINCT hd.call FROM hd WHERE hd.status='A' AND (" + cond + ")",
+                             ["%" + t for t in want])
+            calls = [c for (c,) in rows if US_CALL.match(c)]
+            self.info(calls)
+            for c in calls:
+                d = self.km(c, where)
+                if d is None or d > radius_km:
+                    continue
+                for t in want:
+                    if c.endswith(t):
+                        self._tails[(t, "near", radius_km)].append(c)
+        return {t: sorted(self._tails.get((t, "near", radius_km), [])) for t in tails}
+
+
+def where_of(cfg: dict, grid: str | None, lic, me: str) -> tuple[float, float] | None:
+    """The station's (lat, lon): `station_lat`/`station_lon` in station.yaml, else the operator's 6-character grid
+    (Settings), else the operator's licence ZIP centre, else a 4-character grid (1 x 2 degrees: coarse)."""
+    from hamkit.zipgeo import grid_to_latlon
+    if cfg.get("station_lat") is not None and cfg.get("station_lon") is not None:
+        return (float(cfg["station_lat"]), float(cfg["station_lon"]))
+    grid = str(grid or "").strip()
+    if len(grid) == 6 and grid_to_latlon(grid):
+        return grid_to_latlon(grid)
+    call = (me or "").upper().split("-")[0]
+    if lic is not None and getattr(lic, "geo", None) and call:
+        p = lic.geo.where((lic.info([call]).get(call) or {}).get("zip"))
+        if p:
+            return p
+    return grid_to_latlon(grid) if grid else None
 
 
 # ---------- what was said ----------
@@ -238,15 +289,19 @@ def src_hash(text: str) -> str:
 
 # ---------- the agreement ----------
 def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: str | None = None,
-          roster=(), me: str = "", live_calls: dict | None = None, local: bool | None = None) -> dict:
+          roster=(), me: str = "", live_calls: dict | None = None, local: bool | None = None,
+          where: tuple[float, float] | None = None) -> dict:
     """views: one net's transmissions in time order ({"id", "text", "callsigns"}; the accurate text where there is
     one). live_calls: {tx id: the live text's callsigns} — other readings of the same words, used as evidence.
     local: a VHF/UHF net (default: from the views' freq_mhz), where a licence in the station's state counts more.
+    where: the station's (lat, lon). On a VHF/UHF net with the ZIP centres installed, distance replaces the state:
+    a licence within LOCAL_KM is in range, a clipped call goes to the clearly nearest licence (owner, 11-04).
     -> {"calls": {heard: {"call", "conf", "why", "status", "candidates"?}}, "tx": {id: [calls after agreement]}}"""
     if local is None:
         f = [v.get("freq_mhz") for v in views if v.get("freq_mhz")]
         local = bool(f) and sum(1 for x in f if x >= 30) * 2 > len(f)
     w_state = W_STATE_LOCAL if local else W_STATE
+    geo_on = bool(local and where and fcc is not None and getattr(fcc, "geo", None))
     prior = {k.upper(): v for k, v in (prior or {}).items()}
     roster = {c.upper() for c in roster} - {""}
     me = (me or "").upper()
@@ -276,7 +331,9 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
     if fcc is not None:
         lic = fcc.info(set(full) | {n for d in near.values() for n in d} | roster | set(prior))
     tails = sorted({c for ev in events for _, k, c in ev if k == "tail"})
-    tail_fcc = fcc.tails(tails, home_state) if (fcc is not None and tails) else {}
+    tail_fcc = ({} if fcc is None or not tails else
+                fcc.tails_near(tails, where, 2 * LOCAL_KM) if geo_on else fcc.tails(tails, home_state))
+    dist = (lambda c: fcc.km(c, where)) if geo_on else (lambda c: None)
     if tail_fcc:
         lic.update(fcc.info({c for cs in tail_fcc.values() for c in cs} - set(lic)))
 
@@ -342,6 +399,12 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                 score += W_TOWN; ev["strong"] = True; why.append(f"town {inf['city'].title()} said")
             elif town:
                 score += W_TOWN_PART; ev["strong"] = True; why.append(f"town {inf['city'].title()} partly said")
+            elif geo_on and inf["status"] == "A" and dist(c) is not None:
+                d = dist(c)
+                if d <= LOCAL_KM:
+                    score += w_state; why.append(f"{d:.0f} km away")
+                else:
+                    why.append(f"{d:.0f} km away (beyond VHF/UHF range)")
             elif home_state and inf.get("state") == home_state and inf["status"] == "A":
                 score += w_state; why.append(f"licensed in {home_state}")
         n = prior.get(c, 0)
@@ -386,31 +449,47 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         another transmission (the live pass reading the clipped words themselves as a full call is no evidence),
         else left as heard, with the candidates (owner, 11-03)."""
         fits = sorted(c for c in tail_fcc.get(h, []) if active(c) and 1 <= len(c) - len(h) <= MAX_PREFIX
-                      and (not home_state or (lic.get(c) or {}).get("state") == home_state))
+                      and (geo_on or not home_state or (lic.get(c) or {}).get("state") == home_state))
         if not fits:
             return None
+        area = f"within {2 * LOCAL_KM} km" if geo_on else f"in {home_state}"
+        near = None                                       # VHF/UHF: the clearly nearest licence, if one is
+        if geo_on:
+            fits.sort(key=lambda c: (dist(c), c))
+            d0 = dist(fits[0])
+            if d0 <= LOCAL_KM and all(dist(c) >= max(2.5 * d0, d0 + 50) for c in fits[1:]):
+                near = fits[0]
+        kms = lambda cs: ", ".join(f"{c} {dist(c):.0f} km" for c in cs) if geo_on else ""
         own = {i for i, ev in enumerate(events) if any(k == "tail" and v == h for _, k, v in ev)}
         inn = [c for c in fits if any(v == c and k in ("call", "token", "live")   # heard in full in this net, in a
                                       for i, ev in enumerate(events) if i not in own for _, k, v in ev)]   # turn of its own
-        if len(fits) > 1 and len(inn) != 1:
+        if len(fits) > 1 and len(inn) != 1 and not near:
             return {"call": h, "status": "ambiguous", "conf": 0.0, "candidates": fits[:3],
-                    "why": f"{len(fits)} licences in {home_state} end in {h}", "score": 0.0}
+                    "why": f"{len(fits)} licences {area} end in {h}" + (f" ({kms(fits[:3])})" if geo_on else ""),
+                    "score": 0.0}
         same, nxt, said = windows(h, banned)
-        if len(fits) > 1:                                # the one of them heard in full in this net (owner, 11-04)
+        if len(fits) > 1 and len(inn) == 1:              # the one of them heard in full in this net (owner, 11-04)
             c = inn[0]
             s, why, ev = evidence(c, same, nxt, said, TAIL_COST)
             s = max(s, MIN_SCORE)
             return {"call": c, "status": "fixed", "conf": _conf(s), "score": s, "_name": ev["name"],
                     "_same": ev["name_same"],
-                    "why": "; ".join(why + [f"{len(fits)} licences in {home_state} end in {h}; only {c} was "
+                    "why": "; ".join(why + [f"{len(fits)} licences {area} end in {h}; only {c} was "
                                             f"heard in full in this net"])}
-        c = fits[0]
+        c = near or fits[0]
         s, why, ev = evidence(c, same, nxt, said, TAIL_COST)
-        if not (ev["name"] or ev["hist"]):
-            return None
+        close = near is not None and dist(near) <= NEAR_KM          # the station's own area: evidence on its own
+        if not (ev["name"] or ev["hist"] or close):
+            return None if len(fits) == 1 else {"call": h, "status": "ambiguous", "conf": 0.0, "candidates": fits[:3],
+                                                "why": f"{len(fits)} licences {area} end in {h} ({kms(fits[:3])})",
+                                                "score": 0.0}
+        if close and not (ev["name"] or ev["hist"]):
+            s = max(s, MIN_SCORE)
+        last = (f"the nearest licence ending in {h}" + (f" (then {kms(fits[1:3])})" if len(fits) > 1 else
+                                                        f", the only one {area}")) if near else \
+            f"the only licence {area} ending in {h}"
         return {"call": c, "status": "fixed", "conf": _conf(s), "score": s, "_name": ev["name"],
-                "_same": ev["name_same"],
-                "why": "; ".join(why + [f"the only licence in {home_state} ending in {h}"])}
+                "_same": ev["name_same"], "why": "; ".join(why + [last])}
 
     def decide(h: str, banned: set) -> dict | None:
         is_tail = h in tails and h not in full
@@ -576,14 +655,14 @@ def records(views: list[dict], result: dict, fix_text=None) -> dict[str, dict]:
 
 
 def for_session(rows: list[dict], fcc=None, prior=None, home_state=None, roster=(), me="", fix_cfg=None,
-                net_names=()) -> tuple[dict, dict]:
+                net_names=(), where=None) -> tuple[dict, dict]:
     """One net's raw transmissions (as kept in the day log) -> ({tx id: consensus record}, agree() result).
     The one entry point for the station (core.Station.agree_session) and the re-run CLI (tools/consensus.py)."""
     from . import fixups, ics
     rows = sorted(rows, key=lambda t: t["start"])
     views = [ics.view(t, agreed=False) for t in rows]
     live = {t["id"]: list(t.get("callsigns") or []) for t in rows if t.get("accurate")}
-    res = agree(views, fcc, prior, home_state, roster, me, live)
+    res = agree(views, fcc, prior, home_state, roster, me, live, where=where)
     fix = None
     if (fix_cfg and fix_cfg.get("rules")) or net_names or (fix_cfg or {}).get("net_names"):
         fix = lambda s: fixups.apply(s, fix_cfg or {}, net_names)

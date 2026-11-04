@@ -9,6 +9,8 @@ consensus: true             # one station, one call across a net: variants merge
 # A schedule entry can say its name as net control says it, for the fix-ups (station/fixups.py):
 #   spoken: [Springfield County ARES net]
 # region_state: IL          # your state for callsign correction, when your licence address is elsewhere (default: FCC)
+# station_lat: 39.80         # where the station is, for VHF/UHF callsign distances (default: your 6-character grid
+# station_lon: -89.65        #   in Settings, else your licence's ZIP code centre)
 
 radios:                     # one entry per radio; each needs its own sound input (never the VARA one)
   - id: ftm150              # short name used by the schedule
