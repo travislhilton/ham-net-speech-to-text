@@ -63,6 +63,8 @@ MIN_SCORE = 3.0
 MAX_SUBS = 1            # letters changed on FCC + a name in the reply alone
 LOCAL_KM = 150          # VHF/UHF: a licence this close is in range of the net (the 11-03 nets: every station heard
                         # 3+ times was within 50 km; 32 of 33 licences beyond 250 km were heard once = misreadings)
+REACH_KM = 300         # ... and beyond this a linked system rarely reaches: the 11-03 nets' clean roll-call check-ins
+                       # ran to 294 km; past 400 km only 5 of 59 licences were read alike by both passes (misreadings)
 NEAR_KM = 50            # ... and this close, the clearly nearest licence completes a clipped call on its own
 MAX_PREFIX = 2          # leading characters a clipped call may be missing ("7QF" -> AD7QF)
 
@@ -296,8 +298,9 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
     local: a VHF/UHF net (default: from the views' freq_mhz), where a licence in the station's state counts more.
     where: the station's (lat, lon). On a VHF/UHF net with the ZIP centres installed, distance replaces the state:
     a licence within LOCAL_KM is in range, a clipped call goes to the clearly nearest licence (owner, 11-04).
-    A licence beyond LOCAL_KM said in one transmission only, with no name, town, history or roster for it, is
-    "distant": its text is kept, but it is left out of the calls and so of every count (owner, 11-04).
+    A licence beyond REACH_KM that nothing backs (one transmission, the live and accurate passes did not read it
+    alike, no name, town, history or roster) is "distant": its text is kept, but it is left out of the calls and so
+    of every count. Said once alone is no evidence: a roll call hears most stations once (owner, 11-04).
     -> {"calls": {heard: {"call", "conf", "why", "status", "candidates"?, "km"?}}, "tx": {id: [calls after agreement]}}"""
     if local is None:
         f = [v.get("freq_mhz") for v in views if v.get("freq_mhz")]
@@ -325,6 +328,7 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                 heard[c] += 1
     full = [c for c in heard if US_CALL.match(c) or ANY_CALL.match(c)]
     in_tx = Counter(c for ev in events for c in {c for _, k, c in ev if k in ("call", "token", "live")})
+    alike = {c for v in views for c in (v.get("callsigns") or []) if c in (live_calls.get(v.get("id")) or [])}
     texts = [_source_text(v) for v in views]
     noise = [bool(v.get("noise")) for v in views]
 
@@ -535,8 +539,8 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         status = ("verified" if (inf and inf["status"] == "A") or o["strong"] else
                   "lapsed" if inf else "unverified")
         far = dist(h) if status == "verified" and not o["strong"] and active(h) else None
-        if far is not None and far > LOCAL_KM and in_tx[h] <= 1:
-            status = "distant"      # VHF/UHF: a licence out of range, said once, nothing else for it: not counted
+        if far is not None and far > REACH_KM and in_tx[h] <= 1 and h not in alike:
+            status = "distant"      # VHF/UHF: far out of reach, and neither a second hearing nor the other pass backs it
         others = [x["call"] for x in scored if x["call"] != h and x["score"] >= MIN_SCORE
                   and o["score"] - x["score"] < MARGIN][:3]
         e = {"call": h, "status": status, "conf": _conf(o["score"] - max([x["score"] for x in scored

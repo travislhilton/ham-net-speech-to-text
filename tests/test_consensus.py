@@ -368,12 +368,14 @@ ZIPS = {"00001": (39.926, -89.65),   # 14 km north
         "00002": (40.070, -89.65),   # 30 km north, across the state line
         "00003": (38.270, -89.65),   # 170 km south
         "00004": (39.980, -89.65),   # 20 km north
-        "00005": (37.999, -89.65)}   # 200 km south
+        "00005": (37.999, -89.65),   # 200 km south
+        "00006": (34.000, -89.65)}   # 645 km south
 GEO_LICENCES = [  # call, status, first, state, zip
     ("AD7QK", "A", "Ann", "IL", "00001"), ("AE7QK", "A", "Bea", "IL", "00003"),
     ("KK7QM", "A", "Cy", "ID", "00002"), ("AB7QM", "A", "Di", "IL", "00005"),
     ("AD7QN", "A", "Ed", "IL", "00001"), ("AE7QN", "A", "Flo", "IL", "00004"),
     ("KD7QQB", "A", "Gus", "IL", "00001"), ("KD7QQP", "A", "Hal", "IL", "00003"),
+    ("KD7QQZ", "A", "Ivy", "IL", "00006"),
 ]
 
 
@@ -417,29 +419,32 @@ def test_on_vhf_a_licence_in_range_scores_by_its_distance(geolic):
     assert "beyond VHF/UHF range" in K.agree(v, geolic, home_state="IL", where=HOME)["calls"]["KD7QQP"]["why"]
 
 
-def test_on_vhf_a_far_licence_said_once_is_not_counted(geolic):
+def test_on_vhf_a_far_licence_nothing_backs_is_not_counted(geolic):
     from station import ics
-    def run(texts, f=146.94, **kw):
-        views = [{"id": str(i), "text": t, "callsigns": [w.strip(".,") for w in t.split() if w.strip(".,") in
-                                                         {"KD7QQB", "KD7QQP"}], "freq_mhz": f}
+    CALLS = {"KD7QQB", "KD7QQP", "KD7QQZ"}
+    def run(texts, f=146.94, live=None, **kw):
+        views = [{"id": str(i), "text": t, "freq_mhz": f,
+                  "callsigns": [w.strip(".,") for w in t.split() if w.strip(".,") in CALLS]}
                  for i, t in enumerate(texts)]
-        return views, K.agree(views, geolic, home_state="IL", where=HOME, **kw)
-    # 170 km away, said once, nothing else for it: kept in the text, left out of the calls
-    views, r = run(["KD7QQB and KD7QQP.", "Thank you."])
-    e = r["calls"]["KD7QQP"]
-    assert e["status"] == "distant" and e["km"] == 170 and r["tx"]["0"] == ["KD7QQB"]
+        return views, K.agree(views, geolic, home_state="IL", where=HOME, live_calls=live, **kw)
+    # 645 km away, one transmission, the live pass read something else: kept in the text, left out of the calls
+    views, r = run(["KD7QQB and KD7QQZ.", "Thank you."], live={"0": ["KD7QQB", "KD7QQS"]})
+    e = r["calls"]["KD7QQZ"]
+    assert e["status"] == "distant" and e["km"] == 645 and r["tx"]["0"] == ["KD7QQB"]
     rec = K.records(views, r)["0"]
-    assert rec["callsigns"] == ["KD7QQB"] and rec["distant"] == [{"call": "KD7QQP", "km": 170}]
-    tx = {"id": "0", "start": "2026-11-03T20:00:00", "text": "KD7QQB and KD7QQP.",
-          "callsigns": ["KD7QQB", "KD7QQP"], "status": "final", "consensus": rec}
-    assert K.calls_of(tx) == ["KD7QQB"] and ics.view(tx)["distant"][0]["call"] == "KD7QQP"
-    # said twice: counted
-    assert run(["KD7QQP.", "KD7QQP, thank you."])[1]["calls"]["KD7QQP"]["status"] == "verified"
-    # its name said with it, or a prior check-in to this net: counted
-    assert run(["KD7QQP, Hal.", "Thank you."])[1]["calls"]["KD7QQP"]["status"] == "verified"
-    assert run(["KD7QQP.", "Thank you."], prior={"KD7QQP": 1})[1]["calls"]["KD7QQP"]["status"] == "verified"
+    assert rec["callsigns"] == ["KD7QQB"] and rec["distant"] == [{"call": "KD7QQZ", "km": 645}]
+    tx = {"id": "0", "start": "2026-11-03T20:00:00", "text": "KD7QQB and KD7QQZ.",
+          "callsigns": ["KD7QQB", "KD7QQZ"], "status": "final", "consensus": rec}
+    assert K.calls_of(tx) == ["KD7QQB"] and ics.view(tx)["distant"][0]["call"] == "KD7QQZ"
+    # a roll call hears most stations once: 170 km (a linked repeater's reach) is counted
+    assert run(["KD7QQP.", "Thank you."])[1]["calls"]["KD7QQP"]["status"] == "verified"
+    # both passes read it alike, or said in two transmissions, or its name / a prior check-in: counted
+    assert run(["KD7QQZ.", "Thank you."], live={"0": ["KD7QQZ"]})[1]["calls"]["KD7QQZ"]["status"] == "verified"
+    assert run(["KD7QQZ.", "KD7QQZ, thank you."])[1]["calls"]["KD7QQZ"]["status"] == "verified"
+    assert run(["KD7QQZ, Ivy.", "Thank you."])[1]["calls"]["KD7QQZ"]["status"] == "verified"
+    assert run(["KD7QQZ.", "Thank you."], prior={"KD7QQZ": 1})[1]["calls"]["KD7QQZ"]["status"] == "verified"
     # on HF distance says nothing
-    assert run(["KD7QQP.", "Thank you."], f=3.985)[1]["calls"]["KD7QQP"]["status"] == "verified"
+    assert run(["KD7QQZ.", "Thank you."], f=3.985)[1]["calls"]["KD7QQZ"]["status"] == "verified"
 
 
 def test_grid_squares_and_distances():

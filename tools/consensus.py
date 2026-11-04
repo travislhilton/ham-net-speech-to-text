@@ -74,7 +74,7 @@ def describe(rows: list[dict], recs: dict, res: dict) -> str:
         lines.append(f"  kept as heard, unverified: {', '.join(unv)}")
     far = sorted((e["km"], h) for h, e in res["calls"].items() if e["status"] == "distant")
     if far:
-        lines.append(f"  not counted, out of VHF/UHF range and said once ({len(far)}): "
+        lines.append(f"  not counted, beyond VHF/UHF reach and nothing backs them ({len(far)}): "
                      + ", ".join(f"{h} {km} km" for km, h in far))
     amb = {h: e["candidates"] for h, e in res["calls"].items() if e.get("candidates") and e["call"] == h}
     for h, c in sorted(amb.items()):
