@@ -28,7 +28,7 @@ LICENCES = [
     ("KF7AQT", "A", "Alice", "SPRINGFIELD", "IL"), ("KF7AGP", "E", "Daniel", "SHELBYVILLE", "ID"),
     ("N7YTX", "A", "WILLIAM", "OGDENVILLE", "IL"), ("N7YPX", "A", "LARRY", "CAPITAL CITY", "WA"),
     ("KE7ABC", "A", "Pat", "SPRINGFIELD", "IL"), ("KG7ABC", "A", "Chris", "SHELBYVILLE", "IL"),
-    ("AD7QF", "A", "Brent", "SPRINGFIELD", "IL"), ("AE7QF", "A", "Dana", "NORTH HAVERBROOK", "OR"),
+    ("AD7QF", "A", "Orson", "SPRINGFIELD", "IL"), ("AE7QF", "A", "Dana", "NORTH HAVERBROOK", "OR"),
     ("W7KGQ", "A", "Kevin", "SPRINGFIELD", "IL"), ("W7KDQ", "A", "Kevin", "PORTLAND", "OR"),
     ("KD7PHX", "E", "Esther", "CAPITAL CITY", "WA"),
     ("KD7BHX", "A", "ROBERT", "SPRINGFIELD", "IL"), ("KD7DHX", "A", "Robert", "SHELBYVILLE", "IL"),
@@ -50,8 +50,8 @@ SCRIPT = [  # minute, accurate text, callsigns as normalize() accepted them
     (2.0, "Thank you, Pat. KG7ABC.", ["KG7ABC"]),
     (2.2, "KG7ABC, Chris in Shelbyville, commercial power.", ["KG7ABC"]),
     (2.4, "Thank you, Chris. 87QF.", []),
-    (2.6, "87QF, Brent, with handheld.", []),
-    (2.8, "You're good, Brent. Thank you.", []),
+    (2.6, "87QF, Orson, with handheld.", []),
+    (2.8, "You're good, Orson. Thank you.", []),
     (3.0, "This is W7KTQ commercial power.", []),
     (3.2, "Thank you, Kevin. KD7PHX.", ["KD7PHX"]),
     (3.4, "KD7PHX, running on battery.", ["KD7PHX"]),
@@ -117,7 +117,7 @@ def test_variants_of_one_station_agree_by_name_and_town(lic):
 
 def test_a_clipped_call_and_an_unlisted_one_are_found_only_with_a_name(lic):
     r = run(lic)
-    assert r["calls"]["7QF"]["call"] == "AD7QF" and "name Brent matches" in r["calls"]["7QF"]["why"]
+    assert r["calls"]["7QF"]["call"] == "AD7QF" and "name Orson matches" in r["calls"]["7QF"]["why"]
     assert r["tx"]["7008"] == ["AD7QF"] and r["tx"]["7009"] == ["AD7QF"]
     assert r["calls"]["W7KTQ"]["call"] == "W7KGQ"                    # Kevin in the state, not Kevin elsewhere
     assert r["tx"]["7011"] == ["W7KGQ"]
@@ -130,10 +130,10 @@ def test_a_clipped_call_and_an_unlisted_one_are_found_only_with_a_name(lic):
 def test_a_clipped_call_is_completed_only_when_one_licence_fits_and_its_name_or_history_backs_it(lic):
     ag = lambda s, **kw: K.agree(net(s), lic, home_state="IL", **kw)
     # net control's direct reply names the only in-state licence ending in 7QF (AE7QF is out of state)
-    r = ag([("87QF.", []), (".", []), ("You're good, Brent.", [])])
+    r = ag([("87QF.", []), (".", []), ("You're good, Orson.", [])])
     assert r["tx"]["0"] == ["AD7QF"] and "the only licence in IL ending in 7QF" in r["calls"]["7QF"]["why"]
     # the name after ANOTHER call is not the clipped call's; no name at all: left out
-    assert ag([("87QF.", []), ("KE7ABC, Brent.", ["KE7ABC"])])["tx"]["0"] == []
+    assert ag([("87QF.", []), ("KE7ABC, Orson.", ["KE7ABC"])])["tx"]["0"] == []
     assert ag([("87QF.", []), ("Good evening.", [])])["tx"]["0"] == []
     # earlier check-ins to this net instead of a name
     assert ag([("He's 7QF.", []), ("Good evening.", [])], prior={"AD7QF": 3})["tx"]["0"] == ["AD7QF"]
