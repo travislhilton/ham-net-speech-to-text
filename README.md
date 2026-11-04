@@ -253,9 +253,11 @@ you chose is remembered. Each column shows:
   **the town said** being the licence's city, or the licence being in your state; **earlier check-ins to this same
   net** (the history); how often it was heard. A call only changes when one reading clearly wins, and never: onto
   a call heard in the same transmission; between two calls each heard in its own check-in turn (unless they differ
-  by one letter and one is no live licence); by more than one letter (or a clipped call missing more than one
-  prefix letter) unless the name was said with the call, or a name and earlier check-ins agree; a live licence on
-  "in your state" alone. One name moves one call only. A licence never heard needs a name, a town or a history
+  by one letter and one is no live licence); by more than one letter unless the name was said with the call, or a
+  name and earlier check-ins agree; a live licence on "in your state" alone. One name moves one call only. A
+  clipped call ("87QF", "he's 7QF": up to two leading characters lost) is completed only when exactly one Active
+  licence in your state ends that way and its holder's first name is said with the call or in net control's direct
+  reply, or it checked in to this net before; when two or more fit it is left as heard, with the candidates. A licence never heard needs a name, a town or a history
   behind it, and a call nothing supports stays as heard, marked *unverified*. The transmission keeps its heard text; its
   calls, Stations heard, attendance and minutes, and the Winlink ICS-309/213 use the agreed calls (tooltip: "heard
   KD7ABP, corrected: FCC: active; name Bob matches; licensed in IL"). Re-run a past day (stop the station first):
@@ -324,7 +326,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
-| Net-wide callsign agreement: variants of one station merged by FCC licence, first name, town, earlier check-ins; clipped and unlisted calls found only with a name/town/history; nothing supported = kept, *unverified* | working (`station/consensus.py`, `tools/consensus.py`, `consensus: false`); 11-03 FM net (140 transmissions, FCC on the dev Mac, no history yet): 11 readings moved, 5 calls found in the text, none contradicted by the transcript, the ambiguous ones left as heard. First live night (3 nets): 41 moves, several over-reached (two letters on a name heard in the reply, one name used twice, merging a call heard as its own station); the rules above now keep 25 of them and drop 16 (dry run, same day) |
+| Net-wide callsign agreement: variants of one station merged by FCC licence, first name, town, earlier check-ins; clipped and unlisted calls found only with a name/town/history; nothing supported = kept, *unverified* | working (`station/consensus.py`, `tools/consensus.py`, `consensus: false`); 11-03 FM net (140 transmissions, FCC on the dev Mac, no history yet): 11 readings moved, 5 calls found in the text, none contradicted by the transcript, the ambiguous ones left as heard. First live night (3 nets): 41 moves, several over-reached (two letters on a name heard in the reply, one name used twice, merging a call heard as its own station); the rules above now keep 25 of them and drop 16 (dry run, same day); clipped calls back under the one-licence rule: 1 of 4 completed (the other 3 have two in-state licences each, left as heard) |
 | Local-name fix-ups after transcription (`fixups:` in vocab/local.yaml, learned pairs, the net's own name by sound) | working (`station/fixups.py`); 11-03 net: "Aries" x3, "Windlink" x1 |
 | Near-miss callsign correction ('W9XVZ' -> W9XYZ heard in this net, 'K7ABD Springfield' -> K7ABC of Springfield); only when one reading clearly wins, what was heard kept (dotted underline + tooltip), live and accurate text, stations heard and Winlink use the corrected call; 15 min after a net ends it runs once more with the whole net known; uncertain ones show as "WV78? KV7RMV KB7XT" to click; expired licences are not ticked in the Winlink To: list | working (`hamkit/callfix.py`, `callfix: false` turns it off); 3.915 net: 8 corrections, none contradicted, most garbles left as heard |
 | QRZ.com online lookups (grid, international names), cached for offline use | working (`hamkit.qrz set-login`) |

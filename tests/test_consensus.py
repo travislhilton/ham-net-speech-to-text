@@ -37,6 +37,7 @@ LICENCES = [
     ("KK7QPZ", "A", "Quincy", "SPRINGFIELD", "IL"), ("KM7QEZ", "A", "Quincy", "SHELBYVILLE", "IL"),
     ("KB7QXV", "A", "Quincy", "SPRINGFIELD", "IL"),
     ("KF7QLB", "A", "Scott", "SHELBYVILLE", "MT"), ("KF7QLV", "A", "Dave", "SPRINGFIELD", "IL"),
+    ("N7QH", "A", "Lee", "SPRINGFIELD", "IL"), ("AB7QH", "A", "Lee", "OGDENVILLE", "IL"),
 ]
 
 SCRIPT = [  # minute, accurate text, callsigns as normalize() accepted them
@@ -123,8 +124,22 @@ def test_a_clipped_call_and_an_unlisted_one_are_found_only_with_a_name(lic):
     # no name after it: a clipped call stays out of the calls
     v = [{"id": "1", "text": "Next is 87QF.", "callsigns": [], "freq_mhz": 146.94}]
     assert K.agree(v, lic, home_state="IL")["tx"]["1"] == []
-    # two prefix letters missing and the name only in the reply: too far
-    assert K.agree(net([("87QF.", []), ("You're good, Brent.", [])]), lic, home_state="IL")["tx"]["0"] == []
+
+
+
+def test_a_clipped_call_is_completed_only_when_one_licence_fits_and_its_name_or_history_backs_it(lic):
+    ag = lambda s, **kw: K.agree(net(s), lic, home_state="IL", **kw)
+    # net control's direct reply names the only in-state licence ending in 7QF (AE7QF is out of state)
+    r = ag([("87QF.", []), (".", []), ("You're good, Brent.", [])])
+    assert r["tx"]["0"] == ["AD7QF"] and "the only licence in IL ending in 7QF" in r["calls"]["7QF"]["why"]
+    # the name after ANOTHER call is not the clipped call's; no name at all: left out
+    assert ag([("87QF.", []), ("KE7ABC, Brent.", ["KE7ABC"])])["tx"]["0"] == []
+    assert ag([("87QF.", []), ("Good evening.", [])])["tx"]["0"] == []
+    # earlier check-ins to this net instead of a name
+    assert ag([("He's 7QF.", []), ("Good evening.", [])], prior={"AD7QF": 3})["tx"]["0"] == ["AD7QF"]
+    # two in-state licences end in 7QH: left as heard, with both as candidates
+    r = ag([("7QH.", []), ("Thank you, Lee.", [])])
+    assert r["tx"]["0"] == [] and r["calls"]["7QH"]["candidates"] == ["AB7QH", "N7QH"]
 
 
 def net(script):

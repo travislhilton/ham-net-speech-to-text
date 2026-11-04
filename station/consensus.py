@@ -11,8 +11,10 @@ Candidates for a heard call h:
     B/C/D/E/G/P/T/V/Z, M/N, F/S/X, 1/7, ...; any other letter, an insertion or a deletion cost 1);
   - FCC licences one edit (or two confusable letters) from h that are Active — these were never heard, so they
     need evidence of their own (a name, a town or a prior check-in), never only "it exists";
-  - for a clipped call ("87QF", "he's 7QX"): heard calls and in-state Active licences that end in the same digit
-    and suffix ("7VF").
+  - for a clipped call ("87QF", "he's 7QX": up to 2 leading characters missing): completed only when exactly ONE
+    Active licence in the station's state ends in that digit + suffix, and its licensee's first name is said with
+    the call or in net control's direct reply, or it checked in to this net before; two or more fit = left as
+    heard with the candidates (owner, 2026-11-03).
 
 Evidence, weighed per candidate (W_* below):
   big     Active FCC licence; the licensee's first name (or its nickname: Bob/Robert, Wally/Wallace) said right
@@ -27,8 +29,7 @@ The best candidate replaces h only when it beats what was heard AND the runner-u
 rules whatever its score (owner review of the first three live nets, 2026-11-03):
   - a call never heard needs a name, town or history behind it; so does moving a heard call that is itself an
     Active licence ("licensed in the state" alone never moves a live licence);
-  - more than 1 plain letter change (or more than 1 prefix letter missing from a clipped call) needs the name
-    said WITH the call, or a name and earlier check-ins;
+  - more than 1 plain letter change needs the name said WITH the call, or a name and earlier check-ins;
   - never onto a call heard in the same transmission; two calls each heard in their own check-in turn (never in
     adjacent transmissions) are two stations unless they differ by 1 letter and one is no Active licence;
   - a name moves one call only: the call it was said with, else the best-scored; the others are judged again
@@ -59,7 +60,8 @@ TAIL_COST = 0.5                                # a clipped call: the prefix was 
 CLUSTER_CAP = 1.5
 MARGIN = 1.5
 MIN_SCORE = 3.0
-MAX_SUBS = 1            # letters changed (or prefix letters missing from a clipped call) on FCC + name alone
+MAX_SUBS = 1            # letters changed on FCC + a name in the reply alone
+MAX_PREFIX = 2          # leading characters a clipped call may be missing ("7QF" -> AD7QF)
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -179,7 +181,7 @@ class Licences:
         return {c: self._info[c] for c in calls if self._info.get(c)}
 
     def tails(self, tails, state: str | None) -> dict[str, list[str]]:
-        """{"7VF": [Active calls in `state` ending in 7VF]} (one table scan per new batch of tails)."""
+        """{"7QF": [Active calls in `state` ending in 7QF]} (one table scan per new batch of tails)."""
         want = [t for t in dict.fromkeys(tails) if (t, state) not in self._tails]
         if want and state:
             for t in want:
@@ -286,7 +288,8 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                 at_tx.setdefault(c, set()).add(i)
 
     def _repeat_of(c2: str, call: str) -> bool:
-        return c2 == call or (len(c2) >= 3 and call.startswith(c2))        # "N7Y..." repeating N7YPX
+        return (c2 == call or (len(c2) >= 3 and call.startswith(c2))       # "N7Y..." repeating N7YPX
+                or (call[:1].isdigit() and c2.endswith(call)))             # "87QF" repeating the clipped 7QF
 
     def windows(call: str, banned: set):
         """(names said in the call's own transmission right after it, names said in the reply that follows it
@@ -375,15 +378,32 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
                 return False      # each had its own check-in turn: two stations unless one barely differs
         return True
 
+    def clipped(h: str, banned: set) -> dict | None:
+        """A call heard without its first 1-2 characters ("87QF" -> 7QF, "He's 7QX"): completed only when exactly ONE
+        Active licence in the station's state ends in that digit + suffix (prefix completion only, no other letter
+        changed) AND its licensee's first name is said with the call or in net control's direct reply, or it has
+        checked in to this net before. Two or more fit: left as heard, with the candidates (owner, 11-03)."""
+        fits = sorted(c for c in tail_fcc.get(h, []) if active(c) and 1 <= len(c) - len(h) <= MAX_PREFIX
+                      and (not home_state or (lic.get(c) or {}).get("state") == home_state))
+        if not fits:
+            return None
+        if len(fits) > 1:
+            return {"call": h, "status": "ambiguous", "conf": 0.0, "candidates": fits[:3],
+                    "why": f"{len(fits)} licences in {home_state} end in {h}", "score": 0.0}
+        c = fits[0]
+        same, nxt, said = windows(h, banned)
+        s, why, ev = evidence(c, same, nxt, said, TAIL_COST)
+        if not (ev["name"] or ev["hist"]):
+            return None
+        return {"call": c, "status": "fixed", "conf": _conf(s), "score": s, "_name": ev["name"],
+                "_same": ev["name_same"],
+                "why": "; ".join(why + [f"the only licence in {home_state} ending in {h}"])}
+
     def decide(h: str, banned: set) -> dict | None:
         is_tail = h in tails and h not in full
         cands: dict[str, float] = {}
         if is_tail:
-            for c in full:
-                if c.endswith(h) and US_CALL.match(c):
-                    cands[c] = TAIL_COST
-            for c in tail_fcc.get(h, []):
-                cands.setdefault(c, TAIL_COST)
+            return clipped(h, banned)
         else:
             cands[h] = 0.0
             for c in full:
