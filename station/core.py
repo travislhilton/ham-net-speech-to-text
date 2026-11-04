@@ -150,6 +150,8 @@ class Station:
         from .history import History            # net history, search, analysis, minutes (data/history.db)
         self.history = History(self.data, nets=lambda: self.cfg.get("schedule") or [], radios=lambda: self.radios,
                                callbook=callbook, clock=clock, me=self.me, bus=self.bus)
+        from .netclose import NetCloser         # the end of a net: net control closing it, or End net
+        self.closer = NetCloser(self, config)
         self.final_q: queue.Queue = queue.Queue()
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
@@ -208,6 +210,10 @@ class Station:
                     self.accurate.tick()
                 except Exception as e:  # noqa: BLE001 — never let the pass stop the station
                     print(f"accurate tick: {type(e).__name__}: {e}", flush=True)
+            try:                               # a closed net's tail: pause, final pass, minutes
+                self.closer.tick()
+            except Exception as e:  # noqa: BLE001
+                print(f"netclose tick: {type(e).__name__}: {e}", flush=True)
             try:                               # schedule: resume/pause radios at their nets
                 self.nets.tick()
             except Exception as e:  # noqa: BLE001 — never let the schedule stop the station
@@ -366,6 +372,9 @@ class Station:
             self.radios[rid]["paused_by"] = by if paused else None
             if by == "operator":          # the operator's own Pause/Resume during a net wins over the net's end
                 self.radios[rid].setdefault("listen", {}).pop("resumed_for", None)
+                self.radios[rid]["listen"]["operator_at"] = self.clock().isoformat(timespec="seconds")
+            if not paused:
+                self.radios[rid].pop("closed", None)       # "Paused: <net> closed by net control" no longer applies
             if not paused and self.radios[rid].get("state") == "paused":
                 self.radios[rid]["state"] = "starting"
             saved = self._saved()
@@ -571,6 +580,8 @@ class Station:
         self._log({"update": tid, "accurate": acc})
         self.bus.publish("tx", tx)
         self.bus.publish("heard", {"heard": self.heard_list()})
+        if tx.get("status") == "final":
+            self._hear_close(tx)                                 # a close the live text garbled
 
     def _ncs_at(self, tx: dict) -> str | None:
         """Net control of the scheduled net this transmission was heard in (at its own time: the accurate pass can
@@ -825,6 +836,11 @@ class Station:
                 net = self.net_of(rid, start)               # which scheduled net (and occurrence) it belongs to
             except Exception:  # noqa: BLE001
                 net = None
+            after = self.closer.after_close(rid, start, net)   # the net was closed: a new conversation starts
+            if after:
+                tx["after"] = after
+                if net and net.get("key") == after:
+                    net = None
             if net:
                 tx["net"] = net
             self.tx.append(tx)
@@ -969,8 +985,17 @@ class Station:
         self.bus.publish("heard", {"heard": self.heard_list()})
         if getattr(self, "accurate", None):
             self.accurate.on_final(tx)                           # the accurate pass follows the live text
+        self._hear_close(tx)
         if new and self.callbook and self.callbook.qrz and self.cfg.get("qrz_online", True):
             threading.Thread(target=self._qrz_refresh, args=(new,), daemon=True).start()
+
+    def _hear_close(self, tx):
+        try:                                                     # did net control just close the net?
+            with self.lock:
+                t = dict(self._find(tx["id"]) or tx)
+            self.closer.on_tx(t)
+        except Exception as e:  # noqa: BLE001 — never let close detection stop the station
+            print(f"netclose: {type(e).__name__}: {e}", flush=True)
 
     def _qrz_refresh(self, calls):
         for c in calls:
@@ -1018,7 +1043,11 @@ class Station:
             if "update" in tx:                                # added after the live text: accurate pass, "Who?"
                 for t in self.tx:
                     if t.get("id") == tx["update"]:
-                        t.update({k: v for k, v in tx.items() if k in ("accurate", "accurate_echo", "speaker_set")})
+                        t.update({k: v for k, v in tx.items() if k in ("accurate", "accurate_echo", "speaker_set",
+                                                                      "net", "after")})
+                        for k in ("net", "after"):              # a net close undone: back into the net
+                            if k in tx and tx[k] is None:
+                                t.pop(k, None)
                         if "accurate" in tx:
                             t.pop("accurate_echo", None)
                         if "accurate_echo" in tx:
@@ -1046,7 +1075,7 @@ class Station:
             return {"callsign": self.me, "radios": list(self.radios.values()), "tx": self._recent_tx(),
                     "heard": self.heard_list(), "hints": self.hints, "net": self.schedule_now(),
                     "schedule": self.nets.decorated(), "engines": self.engines,
-                    "alerts": self.nets.alerts.last, "urgent": self._urgent(), "history": self.history.status,
+                    "alerts": self.nets.alerts.last, "netclose": self.closer.state(), "urgent": self._urgent(), "history": self.history.status,
                     "accurate": self.accurate.status() if getattr(self, "accurate", None) else [],
                     "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False,
                     "accurate_where": self.accurate.where if getattr(self, "accurate", None) and self.accurate.enabled else None,

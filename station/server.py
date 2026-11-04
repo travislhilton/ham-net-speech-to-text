@@ -141,8 +141,9 @@ def make_handler(station):
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
+            close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or sched or who or alert or item or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or who or alert or item or close or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 self.close_connection = True                   # its body is unread: never reuse the connection
                 return self._json({"error": "not found"}, 404)
             try:
@@ -150,6 +151,15 @@ def make_handler(station):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if sched:
                     return self._json(station.nets.post(u.path, body))
+                if close:                                       # End net / Not closed / Save net control
+                    rid, act, key = close.group(1), close.group(2), str(body.get("key") or "") or None
+                    if act == "end":
+                        station.closer.end_now(rid, key)
+                    elif act == "undo":
+                        station.closer.undo(rid, key or "")
+                    else:
+                        station.closer.save_ncs(rid, key or "", body.get("call"))
+                    return self._json(station.closer.state())
                 if alert:
                     return self._json(station.nets.alerts.act(unquote(alert.group(1)), alert.group(2)))
                 if item:

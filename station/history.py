@@ -8,7 +8,8 @@ overwritten by re-extraction or the accurate pass.
 
     instance   one occurrence of a scheduled net ("<net id>@<occurrence date>"), or a conversation outside any
                net ("<radio>@<first transmission>"): start/end, frequency, net control, counts, accurate-pass status,
-               Winlink messages sent
+               Winlink messages sent, and when and by whom it was closed (station/netclose.py: net control's
+               closing words, or the operator's End net)
     tx         every final transmission ever (live + accurate text, speaker, callsigns, recording path) — a pointer
                into the day log and data/recordings, never a copy of the audio
     part       who took part in an instance: ncs | checkin (spoke, or was acknowledged by net control) | mentioned
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS inst(key TEXT PRIMARY KEY, kind TEXT, net_id TEXT, occ_date TEXT, name TEXT, radio TEXT,
   start TEXT, end TEXT, sched_start TEXT, sched_end TEXT, freq_mhz REAL, mode TEXT, ncs TEXT, net_type TEXT,
   emergency INTEGER DEFAULT 0, tx_count INTEGER DEFAULT 0, stations INTEGER DEFAULT 0, acc_final INTEGER DEFAULT 0,
-  acc_total INTEGER DEFAULT 0, winlink TEXT, dirty INTEGER DEFAULT 1);
+  acc_total INTEGER DEFAULT 0, winlink TEXT, dirty INTEGER DEFAULT 1, closed_at TEXT, closed_by TEXT, closed_tx TEXT);
 CREATE INDEX IF NOT EXISTS inst_net ON inst(net_id, occ_date);
 CREATE INDEX IF NOT EXISTS inst_radio ON inst(radio, end);
 CREATE INDEX IF NOT EXISTS inst_start ON inst(start);
@@ -121,6 +122,10 @@ class History:
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA synchronous=NORMAL")
         self.con.executescript(SCHEMA)
+        have = {r[1] for r in self.con.execute("PRAGMA table_info(inst)")}
+        for col in ("closed_at", "closed_by", "closed_tx"):        # an index made before net closes were heard
+            if col not in have:
+                self.con.execute(f"ALTER TABLE inst ADD COLUMN {col} TEXT")
         self.fts = has_fts5(self.con)
         if self.fts:
             self.con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS tx_fts USING fts5(text, live, calls)")
@@ -173,12 +178,21 @@ class History:
             if not row:
                 return
             raw = json.loads(row["raw"])
-            raw.update({k: v for k, v in e.items() if k in ("accurate", "accurate_echo", "speaker_set")})
+            raw.update({k: v for k, v in e.items() if k in ("accurate", "accurate_echo", "speaker_set", "net", "after")})
             if "accurate" in e:
                 raw.pop("accurate_echo", None)
             if "accurate_echo" in e:
                 raw.pop("accurate", None)
-            self._put(raw, row["inst"])
+            key = row["inst"]
+            if "after" in e or "net" in e:                         # a net close undone: back into the net
+                for k in ("net", "after"):
+                    if raw.get(k) is None:
+                        raw.pop(k, None)
+                old = key
+                key = self._assign(raw)
+                if key != old:
+                    self.con.execute("UPDATE inst SET dirty=1 WHERE key=?", (old,))
+            self._put(raw, key)
             return
         if e.get("status") != "final" or not e.get("id") or not e.get("start") or not e.get("radio"):
             return
@@ -214,10 +228,11 @@ class History:
         rid, t = raw["radio"], raw["start"]
         at = datetime.fromisoformat(t)
         tag = raw.get("net") or {}
+        after = raw.get("after")                  # heard after its net was closed: never that net again
         occ = None
         if tag.get("id") and tag.get("date"):
             occ = tag
-        else:
+        elif not after:
             occ = occurrence_at(self.nets() or [], rid, at)
         if occ:
             key = recur.key(occ["id"], occ["date"])
@@ -233,7 +248,7 @@ class History:
             return key
         last = self.con.execute("SELECT key, end, freq_mhz FROM inst WHERE radio=? AND start<=? ORDER BY end DESC"
                                 " LIMIT 1", (rid, t)).fetchone()
-        if last and last["end"] and at - datetime.fromisoformat(last["end"]) <= GAP \
+        if last and last["end"] and at - datetime.fromisoformat(last["end"]) <= GAP and last["key"] != after \
                 and (last["freq_mhz"] or None) == (raw.get("freq_mhz") or None):
             return last["key"]
         key = f"{rid}@{t}"
@@ -319,8 +334,10 @@ class History:
                 m = p.search(v.get("text") or "")
                 if m and m.group("c").upper() in (v.get("callsigns") or []):
                     return m.group("c").upper()
-        heard = {c for v in views for c in (v.get("callsigns") or []) + [v.get("speaker")] if c}
-        return sched_ncs if sched_ncs and sched_ncs in heard else sched_ncs
+        if sched_ncs:
+            return sched_ncs
+        from .netclose import learn_ncs                   # the station that opened the net / took roll
+        return learn_ncs(views)
 
     def _refresh(self, key: str):
         inst = self.con.execute("SELECT * FROM inst WHERE key=?", (key,)).fetchone()
@@ -459,6 +476,17 @@ class History:
             w = json.loads(i["winlink"] or "[]") if i else []
             w.append({"at": self.clock().isoformat(timespec="seconds"), "forms": forms, "to": to})
             self.con.execute("UPDATE inst SET winlink=? WHERE key=?", (json.dumps(w), r["inst"]))
+
+    def note_close(self, key: str, at: str, by: str | None, tx_id: str | None):
+        """The net was closed at the transmission starting `at` (net control's words, or "operator": End net)."""
+        with self.lock:
+            self.con.execute("UPDATE inst SET closed_at=?, closed_by=?, closed_tx=?, dirty=1 WHERE key=?",
+                             (at, by, tx_id, key))
+
+    def undo_close(self, key: str):
+        with self.lock:
+            self.con.execute("UPDATE inst SET closed_at=NULL, closed_by=NULL, closed_tx=NULL, dirty=1 WHERE key=?",
+                             (key,))
 
     def instance_of(self, radio: str, start: str) -> str | None:
         r = self._one("SELECT inst FROM tx WHERE radio=? AND start>=? ORDER BY start LIMIT 1", (radio, start))

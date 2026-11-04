@@ -55,6 +55,12 @@ schedule:
   #   exceptions: {"2026-12-01": {cancel: true, note: Hamfest}, "2026-12-15": {date: "2026-12-16", start: "19:30"}}
   # Older lists like `days: [Tue, Thu]` still work (read as a weekly rule).
 
+# The end of a net: when net control closes it on the air ("we'll go ahead and close the net", "this net is now
+# closed"), keep recording this many minutes for the 73s, then pause the radio if the station turned it on for the
+# net, and start the final accurate pass at once. End net on the dashboard does the same at once.
+close_tail_min: 2
+# close_detect: false       # do not listen for net control closing the net (End net still works)
+
 accurate:                   # the accurate second pass: the home server when reachable, else THIS PC
   urls: [http://192.168.1.20:8090, http://my-server:8090]   # your accurate-pass server(s), tried in order
   local: auto               # this PC's spare compute when there is no home server (key or network): auto = what the

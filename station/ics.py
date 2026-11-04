@@ -21,7 +21,8 @@ def fit(s: str, n: int) -> str:
 def sessions(tx: list[dict], rid: str, gap_min: int = 15) -> list[dict]:
     """The nets and conversations heard on `rid`, oldest first: a run of transmissions on one frequency with no
     quiet gap longer than `gap_min` minutes; a scheduled net's first transmission starts a new one (the station
-    tags each transmission with its net: core.net_of). The dashboard groups its log the same way (static/index.html,
+    tags each transmission with its net: core.net_of), and so does the first one after a net was closed (`after`:
+    station/netclose.py). The dashboard groups its log the same way (static/index.html,
     groupSessions) and asks for Winlink messages by a session's first and last transmission times."""
     rows = sorted((t for t in tx if t.get("radio") == rid and t.get("status") == "final"), key=lambda t: t["start"])
     out = []
@@ -29,7 +30,8 @@ def sessions(tx: list[dict], rid: str, gap_min: int = 15) -> list[dict]:
         at = datetime.fromisoformat(t["start"])
         cur = out[-1] if out else None
         net = (t.get("net") or {}).get("key")
-        if (cur and at - datetime.fromisoformat(cur["end"]) <= timedelta(minutes=gap_min)
+        closed = bool(cur and t.get("after") and t["after"] in (cur["net"], f"{rid}@{cur['start']}"))
+        if (cur and not closed and at - datetime.fromisoformat(cur["end"]) <= timedelta(minutes=gap_min)
                 and t.get("freq_mhz") == cur["freq_mhz"] and (net == cur["net"] or not net)):
             cur["end"] = t["start"]; cur["count"] += 1
         else:
