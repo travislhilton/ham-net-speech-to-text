@@ -182,7 +182,7 @@ def repair_net_name(text: str, names: list[str], threshold: float = NET_THRESHOL
                     exact = True
                     break
                 s = similarity(got, target)
-                # its first word must sound alike too: "the SARC net" never becomes another net's name
+                # its first word must sound alike too: "the club net" never becomes another net's name
                 if s >= threshold and _key(got[0])[:2] == _key(target[0])[:2] and (best is None or s > best[0]):
                     best = (s, span[0].start(), span[-1].end(), " ".join(got))
             if best and not exact:

@@ -33,7 +33,7 @@ def test_the_nets_own_name_by_sound():
     assert t == "Calling the Springfield County ARES net, good evening."
     assert ch[-1]["heard"] == "Springfeld Country ARES net" and "sounds" in ch[-1]["why"]
     assert fix("welcome to the Springfield Count Ares Net tonight")[0] == "welcome to the Springfield County ARES Net tonight"
-    for s in ("the SARC net is at nine", "the Shelbyville County ARES net", "Good evening, Morgan Internet.",
+    for s in ("the club net is at nine", "the Shelbyville County ARES net", "Good evening, Morgan Internet.",
               "the Springfield ARES net", "This is the Springfield County ARES net."):
         assert fix(s)[0] == s.replace("Aries", "ARES"), s                # another net, a dropped word, already right
     assert fix("Calling the Springfeld Country Aries net", names=())[0] == "Calling the Springfeld Country ARES net"

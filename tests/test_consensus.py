@@ -25,8 +25,8 @@ T0 = datetime(2026, 11, 3, 20, 0)
 # call, status, first name, city, state
 LICENCES = [
     ("K7NET", "A", "Morgan", "SPRINGFIELD", "IL"),
-    ("KF7AQT", "A", "Valerie", "SPRINGFIELD", "IL"), ("KF7AGP", "E", "Daniel", "SHELBYVILLE", "ID"),
-    ("N7YTX", "A", "WALLACE", "OGDENVILLE", "IL"), ("N7YPX", "A", "LARRY", "CAPITAL CITY", "WA"),
+    ("KF7AQT", "A", "Alice", "SPRINGFIELD", "IL"), ("KF7AGP", "E", "Daniel", "SHELBYVILLE", "ID"),
+    ("N7YTX", "A", "WILLIAM", "OGDENVILLE", "IL"), ("N7YPX", "A", "LARRY", "CAPITAL CITY", "WA"),
     ("KE7ABC", "A", "Pat", "SPRINGFIELD", "IL"), ("KG7ABC", "A", "Chris", "SHELBYVILLE", "IL"),
     ("AD7QF", "A", "Brent", "SPRINGFIELD", "IL"), ("AE7QF", "A", "Dana", "NORTH HAVERBROOK", "OR"),
     ("W7KGQ", "A", "Kevin", "SPRINGFIELD", "IL"), ("W7KDQ", "A", "Kevin", "PORTLAND", "OR"),
@@ -38,9 +38,9 @@ LICENCES = [
 SCRIPT = [  # minute, accurate text, callsigns as normalize() accepted them
     (0, "This is K7NET, net control for the Springfield County Aries net.", ["K7NET"]),
     (1, "KF7AQT.", ["KF7AQT"]),
-    (1.2, "KF7AGP in Springfield on handheld. Thank you, Valerie. N7YPX.", ["KF7AGP", "N7YPX"]),
+    (1.2, "KF7AGP in Springfield on handheld. Thank you, Alice. N7YPX.", ["KF7AGP", "N7YPX"]),
     (1.4, "N7YPX.", ["N7YPX"]),
-    (1.6, "Thank you Wally, KE7ABC.", ["KE7ABC"]),
+    (1.6, "Thank you Bill, KE7ABC.", ["KE7ABC"]),
     (1.8, "KE7ABC, Pat in Springfield.", ["KE7ABC"]),
     (2.0, "Thank you, Pat. KG7ABC.", ["KG7ABC"]),
     (2.2, "KG7ABC, Chris in Shelbyville, commercial power.", ["KG7ABC"]),
@@ -101,11 +101,11 @@ def test_variants_of_one_station_agree_by_name_and_town(lic):
     r = run(lic)
     e = r["calls"]["KF7AGP"]
     assert e["call"] == "KF7AQT" and e["status"] == "fixed"
-    assert "name Valerie matches" in e["why"] and "town Springfield said" in e["why"]
+    assert "name Alice matches" in e["why"] and "town Springfield said" in e["why"]
     assert r["calls"]["KF7AQT"]["status"] == "verified"
     # never heard as N7YTX: an Active licence in the state whose holder net control thanked by his nickname
     e = r["calls"]["N7YPX"]
-    assert e["call"] == "N7YTX" and "name Wally matches" in e["why"] and e["conf"] >= 0.9
+    assert e["call"] == "N7YTX" and "name Bill matches" in e["why"] and e["conf"] >= 0.9
     tx = r["tx"]
     assert tx["7002"] == ["KF7AQT", "N7YTX"] and tx["7003"] == ["N7YTX"]
 
