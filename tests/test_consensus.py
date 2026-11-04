@@ -143,6 +143,8 @@ def test_a_clipped_call_is_completed_only_when_one_licence_fits_and_its_name_or_
     # ... unless exactly one of them was heard in full in this net
     r = ag([("7QH.", []), ("Good evening.", []), ("N7QH, Lee.", ["N7QH"])])
     assert r["tx"]["0"] == ["N7QH"] and "only N7QH was heard in full" in r["calls"]["7QH"]["why"]
+    # the live pass reading the same clipped words as a full call is not a hearing of it
+    assert ag([("7QH.", []), ("Good evening.", [])], live_calls={"0": ["N7QH"]})["tx"]["0"] == []
     r = ag([("7QH.", []), ("N7QH.", ["N7QH"]), ("Next.", []), ("AB7QH.", ["AB7QH"])])
     assert r["tx"]["0"] == [] and r["calls"]["7QH"]["candidates"] == ["AB7QH", "N7QH"]
 

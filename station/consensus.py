@@ -382,13 +382,16 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         """A call heard without its first 1-2 characters ("87QF" -> 7QF, "He's 7QX"): completed only when exactly ONE
         Active licence in the station's state ends in that digit + suffix (prefix completion only, no other letter
         changed) AND its licensee's first name is said with the call or in net control's direct reply, or it has
-        checked in to this net before. Two or more fit: the one of them heard in full in this net (owner, 11-04),
+        checked in to this net before. Two or more fit: the one of them heard in full in this net (owner, 11-04) in
+        another transmission (the live pass reading the clipped words themselves as a full call is no evidence),
         else left as heard, with the candidates (owner, 11-03)."""
         fits = sorted(c for c in tail_fcc.get(h, []) if active(c) and 1 <= len(c) - len(h) <= MAX_PREFIX
                       and (not home_state or (lic.get(c) or {}).get("state") == home_state))
         if not fits:
             return None
-        inn = [c for c in fits if c in heard]            # heard in full in this net
+        own = {i for i, ev in enumerate(events) if any(k == "tail" and v == h for _, k, v in ev)}
+        inn = [c for c in fits if any(v == c and k in ("call", "token", "live")   # heard in full in this net, in a
+                                      for i, ev in enumerate(events) if i not in own for _, k, v in ev)]   # turn of its own
         if len(fits) > 1 and len(inn) != 1:
             return {"call": h, "status": "ambiguous", "conf": 0.0, "candidates": fits[:3],
                     "why": f"{len(fits)} licences in {home_state} end in {h}", "score": 0.0}
