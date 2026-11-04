@@ -1126,6 +1126,15 @@ let INST_T=null,POINTER_DOWN=false,LAST_TOUCH=0;
 document.addEventListener("pointerdown",()=>{POINTER_DOWN=true;LAST_TOUCH=Date.now()},true);
 document.addEventListener("pointerup",()=>{POINTER_DOWN=false;LAST_TOUCH=Date.now()},true);
 document.addEventListener("pointercancel",()=>{POINTER_DOWN=false},true);
+// the log is rebuilt on every accurate-pass update; a rebuild under a press swaps the button and the click is lost
+// (Run now, Winlink messages…, Who?, End net). While a press is on, rebuild just after it instead.
+{const _rf=renderFeed;let wait=null,rids=new Set();
+  renderFeed=function(rid){
+    if(POINTER_DOWN||Date.now()-LAST_TOUCH<700){rids.add(rid===undefined?"*":rid);
+      if(!wait)wait=setTimeout(function again(){if(POINTER_DOWN||Date.now()-LAST_TOUCH<700){wait=setTimeout(again,250);return}
+        wait=null;const all=rids.has("*"),list=[...rids];rids=new Set();if(all)_rf();else list.forEach(r=>_rf(r))},250);
+      return}
+    return _rf(rid)}}
 // copy that also works on plain http (no secure context, so no navigator.clipboard): a selected textarea + execCommand
 function copyText(text){
   if(window.isSecureContext&&navigator.clipboard)return navigator.clipboard.writeText(text).then(()=>true,()=>legacyCopy(text));
