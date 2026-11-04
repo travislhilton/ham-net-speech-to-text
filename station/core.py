@@ -556,11 +556,23 @@ class Station:
         from capture.gates import SileroGate             # needs torch; HF/SSB radios
         return SileroGate({"threshold": r.get("vad_threshold", 0.5)})
 
+    # Segmenting defaults per gate (station/segmenter.py; README "Segmenting"). FM carrier: the repeater's hang
+    # time keeps the carrier up between speakers, so a long carrier is split at voice pauses and carrier dips; a
+    # carrier drop between overs is a turn change (2.5-4 s on the 2026-11-03 net), so pieces are not merged across
+    # one. HF voice gate: no carrier, the VAD closes on a breath or between the letters of a call sign, so a short
+    # piece waits `merge_gap_ms` for its continuation and a longer pre-roll gives back the syllable the VAD heard late.
+    SEG_DEFAULTS = {
+        "carrier": {"preroll_ms": 500, "hangover_ms": 900, "split_pause_ms": 800, "dip_split_ms": 96,
+                    "merge_gap_ms": 0, "merge_max_s": 3.0, "min_split_s": 2.0, "pause_ratio": 0.35},
+        "voice": {"preroll_ms": 600, "hangover_ms": 900, "split_pause_ms": 0, "dip_split_ms": 0,
+                  "merge_gap_ms": 600, "merge_max_s": 3.0, "min_split_s": 2.0, "pause_ratio": 0.35},
+    }
+
     def segmenter(self, r) -> Segmenter:
-        return Segmenter(self._gate(r), SR, 32, r.get("min_speech_ms", 400), r.get("hangover_ms", 900),
-                         r.get("max_tx_s", 180), r.get("preroll_ms", 250), r.get("partial_every_s", 1.0),
-                         split_pause_ms=r.get("split_pause_ms", 800 if r["gate"] == "carrier" else 0),
-                         min_split_s=r.get("min_split_s", 2.0))
+        d = self.SEG_DEFAULTS["carrier" if r["gate"] == "carrier" else "voice"]
+        k = {key: r.get(key, v) for key, v in d.items()}
+        return Segmenter(self._gate(r), SR, 32, r.get("min_speech_ms", 400), k.pop("hangover_ms"),
+                         r.get("max_tx_s", 180), k.pop("preroll_ms"), r.get("partial_every_s", 1.0), **k)
 
     def _recent_tx(self, per_radio=1500) -> list[dict]:
         """Each radio's day (up to `per_radio`), so every net reaches the dashboard whole: its header counts, the
@@ -1056,7 +1068,8 @@ class Station:
                 self.partial_slot[rid] = (self._live_id(rid), ev[1]); self.partial_ev.set()
             elif ev[0] == "end":
                 i = ev[2]
-                print(f"{datetime.now():%H:%M:%S} {rid} gate CLOSE {i['duration_s']}s"
+                print(f"{datetime.now():%H:%M:%S} {rid} {'split at a pause' if i.get('split') else 'gate CLOSE'}"
+                      f" {i['duration_s']}s" + (" (a short piece kept with its neighbour)" if i.get("merged") else "")
                       + (" -> dropped (shorter than min_speech_ms)" if i["kerchunk"] else ""), flush=True)
                 self._tx_end(rid, ev[1], ev[2])
 

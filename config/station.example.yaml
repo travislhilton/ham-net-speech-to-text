@@ -19,7 +19,14 @@ radios:                     # one entry per radio; each needs its own sound inpu
     mode: FM
     # meter: {low_dbfs: -45, high_dbfs: -6, clip_dbfs: -1, dead_dbfs: -60, snr_good_db: 20, snr_fair_db: 10}
     # waterfall_hz: [0, 8000]   # default 0-8 kHz for FM (carrier gate), 0-4 kHz for voice gate
-    # split_pause_ms: 800     # carrier gate: also cut at speech pauses this long (repeater hang time); 0 = off
+    # Segmenting (README "Segmenting"); the defaults shown are for the carrier gate, voice-gate defaults in brackets
+    # preroll_ms: 500         # audio kept from before the gate opened [600]
+    # hangover_ms: 900        # the gate stays closed this long before a transmission ends [900]
+    # min_speech_ms: 400      # shorter is a kerchunk, dropped unless merged [400]
+    # split_pause_ms: 800     # carrier gate: also cut at speech pauses this long (repeater hang time); 0 = off [0]
+    # dip_split_ms: 96        # a carrier dip this long (squelch tail) is a turn boundary; 0 = off [0]
+    # merge_gap_ms: 0         # a short piece waits this long after the hangover for its continuation; 0 = off [600]
+    # merge_max_s: 3.0        # ... only pieces with less speech than this [3.0]
     # highpass_hz: 300        # carrier gate: remove the sub-audible tone and hum before Whisper; 0 = off
   # - id: ic705
   #   name: Icom IC-705

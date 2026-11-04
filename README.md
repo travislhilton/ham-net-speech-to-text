@@ -301,7 +301,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live signal + SNR meters and waterfall per radio; several radios at once | working |
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |
-| Repeaters / carrier that stays up between speakers: split at speech pauses (>= 0.8 s) | working (`split_pause_ms`, carrier-gate radios) |
+| Repeaters / carrier that stays up between speakers: split at speech pauses (>= 0.8 s) and carrier dips, cut in the middle of the pause, a fragment ("Over.", the end of a call sign) kept with its neighbour, a voiceless repeater tail never its own transmission | working (`split_pause_ms`, `dip_split_ms`, carrier-gate radios; see "Segmenting"); 2026-11-03 FM net replayed: 140 → 105 transmissions, blank ones 31 → 3, words lost in dropped pieces 79 → 0 |
+| HF / voice gate: 600 ms pre-roll; a short piece waits 0.6 s after the hangover for its continuation (a call sign spelled with gaps, a kerchunk before the words) | built + unit-tested (`merge_gap_ms`, `merge_max_s`, `preroll_ms`); not yet measured on a live HF net |
 | Sub-audible tone + mains hum removed before Whisper (high-pass 300 Hz on FM data-jack radios) | working (`highpass_hz`) |
 | Whisper's noise phrases ("So.", "We'll be right back.") shown greyed as probable noise, left out of the ICS-309 | working |
 | Icom IC-705 via Icom Remote Utility (voice gate) | working on the test PC; frequency read from the radio planned |
@@ -335,10 +336,50 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
 | Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). Code + `python -m tools.voice_eval` kept to re-measure on FM nets |
 
+## Segmenting
+
+How the station turns a radio's audio into transmissions (`station/segmenter.py`; per-radio settings in
+`config/station.yaml`, defaults per gate in `Station.SEG_DEFAULTS`):
+
+| Setting | FM carrier gate | HF voice gate | What it does |
+|---|---|---|---|
+| `preroll_ms` | 500 | 600 | audio kept from before the gate opened; on HF the voice gate hears a first syllable late |
+| `hangover_ms` | 900 | 900 | the gate must stay closed this long before a transmission ends |
+| `min_speech_ms` | 400 | 400 | less speech than this is a kerchunk and dropped (unless merged, below) |
+| `split_pause_ms` | 800 | 0 (off) | a carrier that stays up (repeater hang time) is split where the voice pauses this long |
+| `dip_split_ms` | 96 | 0 | a carrier dip this long (the last speaker's squelch tail) is a turn boundary even with a shorter pause |
+| `merge_gap_ms` | 0 (off) | 600 | a short piece waits this long after the hangover; if the gate opens again it is the same transmission |
+| `merge_max_s` | 3.0 | 3.0 | only pieces with less speech than this wait for a continuation |
+| `min_split_s` | 2.0 | 2.0 | no piece is cut off shorter than this |
+| `pause_ratio` | 0.35 | 0.35 | how far between this radio's quiet and loud (gate open, last 30 s) a frame must be to count as voice |
+
+Rules for a carrier that stays up: the cut is made when the voice comes back, in the middle of the pause, so
+neither piece starts or ends on a word; the earlier piece is only sent for transcription once the next one has
+`min_speech_ms` of voice, so a fragment stays with its neighbour instead of becoming its own transmission (or being
+dropped), and a voiceless repeater tail after the last word is trimmed. A dead carrier before anyone talks is dropped.
+Merging happens before a transmission ends, so the dashboard and the accurate pass only ever see the joined audio
+(one transmission id); there is nothing to replace afterwards.
+
+Measured on the 2026-11-03 FM repeater net (24 minutes of the station's raw recording replayed through the old and
+the new segmenter, every piece transcribed with Whisper large-v3-turbo):
+
+| | before | after |
+|---|---|---|
+| transmissions | 140 (+36 dropped) | 105 (+0 dropped) |
+| blank pieces ("." / "So." with no words) | 31 | 3 |
+| words (of 989 heard in the whole carrier) in no transmission | 80 | 1 |
+| cuts inside a carrier / words a cut ran through | 103 / 29 | 32 / 9 (word-timing jitter: the text on both sides is whole) |
+
+What it found: the voice-pause detector learned its "loud" level from the open-squelch hiss between overs, which is
+louder in the voice band than a weak station, so a weak station's whole check-in read as a pause: cut mid-call, then
+dropped as a kerchunk (a check-in "K7ABC ... power" lost that way). Speech never started before the carrier on
+the FM net (76 carrier openings), so on FM the pre-roll is lead-in, not lost syllables; a call sign read with its
+prefix wrong ("87ABC") is Whisper's reading of a whole word, not a clipped start.
+
 ## How the accurate pass works
 
-The station cuts a repeater net at every 0.8 s pause, so one "transmission" is often half a sentence, or one
-speaker's tail and the next speaker's start, 1–3 s long. Whisper given such a piece on its own reads courtesy beeps
+The station cuts a repeater net at its 0.8 s pauses (see "Segmenting"), so one "transmission" is often half a
+sentence, or one speaker's tail and the next speaker's start, a few seconds long. Whisper given such a piece on its own reads courtesy beeps
 as "Thank you." and garbles callsigns it gets right inside a sentence. So the home server hears transmissions in
 their place in the net (`transcribe/context.py`, `POST /accurate/context`):
 
