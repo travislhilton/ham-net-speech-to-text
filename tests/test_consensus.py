@@ -140,6 +140,11 @@ def test_a_clipped_call_is_completed_only_when_one_licence_fits_and_its_name_or_
     # two in-state licences end in 7QH: left as heard, with both as candidates
     r = ag([("7QH.", []), ("Thank you, Lee.", [])])
     assert r["tx"]["0"] == [] and r["calls"]["7QH"]["candidates"] == ["AB7QH", "N7QH"]
+    # ... unless exactly one of them was heard in full in this net
+    r = ag([("7QH.", []), ("Good evening.", []), ("N7QH, Lee.", ["N7QH"])])
+    assert r["tx"]["0"] == ["N7QH"] and "only N7QH was heard in full" in r["calls"]["7QH"]["why"]
+    r = ag([("7QH.", []), ("N7QH.", ["N7QH"]), ("Next.", []), ("AB7QH.", ["AB7QH"])])
+    assert r["tx"]["0"] == [] and r["calls"]["7QH"]["candidates"] == ["AB7QH", "N7QH"]
 
 
 def net(script):

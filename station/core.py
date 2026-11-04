@@ -483,13 +483,17 @@ class Station:
                 ov = None
             if ov and not any(r["key"] == ov["key"] for r in run):
                 run.append(ov)
-        nxt = None
+        nxt, nxt_r = None, {}
         for n in nets:
             for o in recur.upcoming(n, at, 2):
                 if o["start"] > at and (nxt is None or o["start"] < nxt[0]):
                     nxt = (o["start"], item(n, o))
+                r = n.get("radio")
+                if o["start"] > at and r and (r not in nxt_r or o["start"] < nxt_r[r][0]):
+                    nxt_r[r] = (o["start"], item(n, o))
         return {"current": deco(run[0]) if run else None, "next": deco(nxt[1]) if nxt else None,
                 "running": [deco(r) for r in run], "by_radio": self._current_by_radio(at),
+                "next_by_radio": {r: deco(v[1]) for r, v in nxt_r.items()},     # the log's Up next, per radio
                 "today": [deco(x) for x in self.today_nets(at)]}
 
     def today_nets(self, at: datetime | None = None) -> list[dict]:

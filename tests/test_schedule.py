@@ -236,6 +236,10 @@ def test_today_strip_lists_the_rest_of_today_with_the_next_one_marked(tmp_path):
     assert names() == [("Club net", "on")]
     clock.t = TUE.replace(hour=23)
     assert names() == []
+    # the log's Up next: the next net on each radio, whatever day it is
+    nb = st.schedule_now()["next_by_radio"]
+    assert nb["ic705"]["name"] == "Wednesday net" and nb["ic705"]["start"].endswith("19:00")
+    assert nb["ic705"]["freq_mhz"] == 3.985 and nb["ftm"]["start"] > TUE.replace(hour=23).isoformat()
 
 
 def test_back_to_back_nets_on_one_radio_keep_their_own_transmissions():

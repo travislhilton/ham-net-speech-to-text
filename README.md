@@ -67,7 +67,7 @@ or `http://<station-name>:8091/` from another PC or phone on your home network o
 
 The dashboard has one column per radio, with everything about that radio in it. The top of each column is
 one set of tabs, **Radio** (meters, waterfall, frequency) | **What you can do now** |
-**Stations heard**, all the same height, so **On the air**, the conversation, always fills the space below
+**Stations heard**, all the same height, so the log always fills the space below
 and never moves when you switch tabs. A dot on "What you can do now" means it has guidance (red: urgent).
 On the What you can do now and Stations heard tabs, drag the bar between the tabs and the conversation to
 give either one more room (remembered per radio; double-click the bar to reset).
@@ -94,8 +94,22 @@ you chose is remembered. Each column shows:
 - **More room for the log on a phone:** tap the open tab (or **▴ Hide**) to fold the radio panel down to its tab
   bar; **▾ Show** or any tab brings it back (remembered per radio). Each net's header folds too (tap its title; open
   by default, remembered).
-- **On the air** (under each radio's card, one transcript per radio): every transmission as it happens.
-  Grey words appear while the station is still
+- **The log** (under each radio's card, one per radio), arranged by what is happening now:
+  - **On the air** at the top: the net or conversation going on now (heard within the last 15 minutes and not
+    closed by net control), open, its header pinned while you scroll its transmissions, newest first. The tag says
+    **on the air**, **running over** (past its scheduled end) or **closing** (net control closed it; recording the
+    73s).
+  - When nothing is on the air, one line instead: the scheduled net in its time now, still waiting for its first
+    transmission (**on the air**, or **radio paused**: press Resume to record it), else **up next**: the next net
+    on this radio with its day, time, frequency and a countdown. Tap it to open the net in Nets.
+  - **Completed**: every earlier net and conversation, one line each under a day heading (Today, Yesterday, …):
+    time, name, Closed/Ended, ✓ accurate (or the accurate pass's progress), frequency, transmissions and stations.
+    They start collapsed; open one for its Minutes, Winlink messages, close and accurate-pass status and every
+    transmission (the ones you open stay open in this browser). A net moves here when it is closed or 15 minutes
+    after it goes quiet.
+  - A paused radio folds its meters and waterfall away, leaving more room for the log.
+
+  Each transmission: grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons, Q-codes
   and prowords are underlined with their meaning below (untick **Explain radio terms** at the top to hide the
   meanings; on by default, remembered per browser), and ▶ plays the recording.
@@ -129,7 +143,8 @@ you chose is remembered. Each column shows:
 - **What you can do now** (per radio): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
-- **Stations heard** (per radio, a tab beside On the air): one line per callsign (city, state, country · name, how
+- **Stations heard** (per radio, a tab above the log; the same calls as the log: your corrections, then the
+  net-wide agreement, then the accurate pass, then the live text): one line per callsign (city, state, country · name, how
   often and when last heard); tap a line for the license, grid, zones and address (FCC, QRZ.com and the country file). Click any callsign for its card (with
   the nets that station takes part in: how many times and when last).
 - **Net type** (a badge on each radio card): the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
@@ -257,7 +272,8 @@ you chose is remembered. Each column shows:
   name and earlier check-ins agree; a live licence on "in your state" alone. One name moves one call only. A
   clipped call ("87QF", "he's 7QF": up to two leading characters lost) is completed only when exactly one Active
   licence in your state ends that way and its holder's first name is said with the call or in net control's direct
-  reply, or it checked in to this net before; when two or more fit it is left as heard, with the candidates. A licence never heard needs a name, a town or a history
+  reply, or it checked in to this net before; when two or more fit, the one of them heard in full in the same net
+  is used ("7QH" with N7QH checked in earlier), otherwise it is left as heard, with the candidates. A licence never heard needs a name, a town or a history
   behind it, and a call nothing supports stays as heard, marked *unverified*. The transmission keeps its heard text; its
   calls, Stations heard, attendance and minutes, and the Winlink ICS-309/213 use the agreed calls (tooltip: "heard
   KD7ABP, corrected: FCC: active; name Bob matches; licensed in IL"). Re-run a past day (stop the station first):
@@ -334,6 +350,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Operator hints: relay, check-in, emergency, formal traffic, exercise, CQ/DX, 10-minute ID | working (`config/procedures.yaml`) |
 | Net type recognition (emergency, exercise, ARES/RACES, SKYWARN, NTS, check-in, DX) | working, rules-based |
 | Live dashboard in the browser (on the station PC or any PC/phone on the network) | working (`station/`, port 8091) |
+| The log by what is happening now: On the air (open) or one line for the net on now / Up next; Completed nets and conversations one collapsed line each under a day heading; Stations heard counts the same calls as the log | working (2026-11-04; checked on desktop + phone widths with the first live night's log) |
 | Winlink ICS-309 + ICS-213 into the Winlink Express Outbox, To: = everyone who took part | built; Outbox format matched against Winlink Express 1.8 messages (one and two recipients); first real write to be checked |
 | Net schedule with radio, frequency and band; editor in the dashboard (Nets) | working (`data/schedule.json`, seeded from `config/station.yaml`) |
 | Repeating nets like Outlook: once, daily, every N weeks on days, monthly by day or nth weekday (1st and 3rd Sunday, last Friday), yearly; ends never / on / after N; skip or move one date; said in plain words with the next 5 dates | working (`station/recur.py`); used for listening, the net running now / next, naming nets in the log and the alert; DST, month ends, 5th weekdays and leap years tested |

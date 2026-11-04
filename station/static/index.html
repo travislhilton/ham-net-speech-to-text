@@ -70,6 +70,42 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .sess .sbody{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
 .sess:not([open]){padding-top:4px;padding-bottom:4px}
 .sess+.tx{border-top:0}
+.onair{display:flow-root}.onair>.sess:first-child{margin-top:0}
+.sess .sbody{justify-content:flex-start;gap:6px 8px}.sess .acc.ok,.sess .nclose:not(.closed):not(.ask){flex-basis:auto}
+/* the log: the net on the air (open, sticky header), or one line for the scheduled net on now / up next; then
+   Completed: one collapsed line per earlier net or conversation under a day heading (time · name · status · size) */
+.logbox .tag{flex:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 7px;border-radius:9px;background:var(--accent);color:#fff;vertical-align:1px}
+.logbox .tag.on{background:var(--ok)}.logbox .tag.ps{background:var(--warnc);color:#16181d}
+.sess.live{border-color:color-mix(in srgb,var(--ok) 60%,var(--line))}
+.nowbar{flex:none;margin-bottom:6px}.nowbar[hidden]{display:none}
+.nowl{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:baseline;gap:10px;width:100%;padding:6px 10px;border-radius:8px;font-size:14px;white-space:nowrap;overflow:hidden;border:1px solid var(--line);background:var(--chip)}
+.nowl .nm{overflow:hidden;text-overflow:ellipsis;min-width:6em;flex:0 1 auto}
+.nowl .tt,.nowl .fq{flex:none;font-variant-numeric:tabular-nums;color:var(--muted)}.nowl .tt{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+.nowl .note{margin-left:auto;padding-left:6px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.nowl.next{border-color:color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.nowl.on{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 9%,var(--panel))}
+.nowl.ps{border-color:var(--warnc);background:color-mix(in srgb,var(--warnc) 10%,var(--panel))}
+.nowl.quiet{cursor:default;font-size:13px;padding:4px 10px;background:none}
+.nowl:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.feed .grp{display:flex;align-items:center;gap:6px;margin:16px 0 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.feed .grp:first-child{margin-top:0}
+.feed .grp .n{font-weight:600;border:1px solid var(--line);border-radius:9px;padding:0 6px;letter-spacing:0}
+.feed .grp::after{content:"";flex:1;border-top:1px solid var(--line)}
+.feed .day{font-size:12px;color:var(--muted);margin:8px 0 2px 4px;font-weight:600}
+details.sess.done{position:static;background:none;border:0;border-top:1px solid var(--line);border-radius:0;margin:0;padding:0}
+.feed .day+details.sess.done{border-top:0}
+details.sess.done>summary{gap:8px;padding:6px 4px;white-space:nowrap;overflow:hidden;border-radius:6px}
+details.sess.done>summary:hover{background:var(--chip)}
+details.sess.done[open]>summary{position:sticky;top:0;z-index:1;background:var(--chip);box-shadow:0 1px 0 var(--line)}
+.sess.done .tt{flex:none;min-width:6.4em;font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.sess.done .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sess.done .meta{flex:none;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.pill{flex:none;font-size:11px;padding:0 6px;border-radius:9px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}.pill.run{color:var(--accent);border-color:var(--accent)}
+.sess.done .txs{padding:0 0 8px 14px}.sess.done .txs>.sbody{margin:6px 0 2px}
+/* a paused radio hears nothing: its meters and waterfall fold away (more room for the log) */
+.radio.paused .mrow,.radio.paused .wf,.radio.paused .axis,.radio.paused .cap{display:none}
+@media (max-width:900px){.sess.done .meta .fq,.nowl .fq,.nowl .te,.sess.done .pill.ok{display:none}#openPhone{display:none}.sess.done .txs{padding-left:0}.sess.done .tt{min-width:0}.nowl{gap:6px;padding:5px 8px}}
 /* a transmission the accurate pass is still working on: a thin pulsing bar + "improving…" */
 .tx.pending,.feed .tx.pending{padding-left:8px;box-shadow:inset 3px 0 0 var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 7%,transparent),transparent 45%);animation:accpulse 1.6s ease-in-out infinite}
 .phoneqr{display:flex;flex-wrap:wrap;gap:16px;margin:8px 0}
@@ -500,26 +536,65 @@ function groupSessions(list){
 }
 // Net headers start open; the ones the operator closes stay closed (remembered in this browser).
 const SESS_CLOSED=new Set((()=>{try{return JSON.parse(localStorage.getItem("hamnet.sessClosed")||"[]")}catch(e){return []}})());
+// Completed nets and conversations start collapsed; the ones the operator opens stay open (this browser).
+const SESS_OPEN=new Set((()=>{try{return JSON.parse(localStorage.getItem("hamnet.sessOpen")||"[]")}catch(e){return []}})());
+const FEED={};   // rid -> {row key: session} of the last render: an opened completed row fills in its transmissions
 const HEARD_OPEN=new Set();   // Stations heard rows start collapsed; the ones opened stay open across updates
 document.addEventListener("toggle",e=>{const d=e.target;
-  if(d.matches&&d.matches("details.sess")){d.open?SESS_CLOSED.delete(d.dataset.sk):SESS_CLOSED.add(d.dataset.sk);
+  if(d.matches&&d.matches("details.sess.done")){d.open?SESS_OPEN.add(d.dataset.sk):SESS_OPEN.delete(d.dataset.sk);
+    try{localStorage.setItem("hamnet.sessOpen",JSON.stringify([...SESS_OPEN].slice(-100)))}catch(err){}
+    const b=d.querySelector(".txs"),s=(FEED[d.dataset.rid]||{})[d.dataset.sk];
+    if(d.open&&b&&!b.childElementCount&&s)b.innerHTML=doneBody(d.dataset.rid,s);}
+  else if(d.matches&&d.matches("details.sess")){d.open?SESS_CLOSED.delete(d.dataset.sk):SESS_CLOSED.add(d.dataset.sk);
     try{localStorage.setItem("hamnet.sessClosed",JSON.stringify([...SESS_CLOSED].slice(-200)))}catch(err){}}
   if(d.matches&&d.matches("details.hrow"))d.open?HEARD_OPEN.add(d.dataset.hk):HEARD_OPEN.delete(d.dataset.hk);},true);
-function sessHtml(rid,s,latest){
-  const fin=s.tx.filter(t=>t.status==="final"),calls=new Set(fin.flatMap(t=>t.callsigns||[]));
+// The callsigns a transmission is counted under: corrected > agreed (consensus) > accurate > live (station/ics.py view)
+function callsOf(t){
+  if(t.corrected)return t.corrected.callsigns||[];
+  if(t.consensus&&t.consensus.callsigns)return t.consensus.callsigns;
+  return (t.accurate||t).callsigns||[];
+}
+const sessKey=(rid,s)=>{const sn=(s.tx.find(t=>t.net)||{}).net,f=s.tx.find(t=>t.status==="final")||s.tx[0];return sn?sn.key:`${rid}@${f.start}`};
+// On the air = the newest net/conversation on this radio, still within 15 quiet minutes and not closed by net control
+// (a close in its 2-minute tail for the 73s is still on the air). Everything else is completed.
+function isActive(rid,s){const c=closeOf(rid,sessKey(rid,s));return Date.now()-Date.parse(s.end)<GAP_MS&&!(c&&c.state==="closed")}
+function sessInfo(rid,s,latest){
+  const fin=s.tx.filter(t=>t.status==="final"),calls=new Set(fin.flatMap(callsOf));
   const net=latest?((S.hints||{})[rid]||{}).net:null;
   const sn=(s.tx.find(t=>t.net)||{}).net;                 // the scheduled net it belongs to
   const title=sn?sn.name:net&&net.type&&net.type!=="unknown"?net.label:(calls.size>2?"Net":"Conversation");
   const kind=sn&&net&&net.type&&net.type!=="unknown"?` <span class="badge ${esc(net.type)}">${esc(net.label)}</span>`:"";
-  const ikey=sn?sn.key:`${rid}@${(fin[0]||s.tx[0]).start}`;
-  const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"")+(latest&&!closeOf(rid,ikey)?" (continuing)":"");
-  const fq=s.freq_mhz?` · ${Number(s.freq_mhz).toFixed(3)} MHz`:"";
+  const ikey=sessKey(rid,s);
+  const span=hhmm(s.start)+(hhmm(s.end)!==hhmm(s.start)?"–"+hhmm(s.end):"");
+  const fq=s.freq_mhz?Number(s.freq_mhz).toFixed(3):"";
   const btn=fin.length?`<button data-wls="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}" title="ICS-309 log + ICS-213 summary of this ${title.toLowerCase()}, addressed to everyone who took part">Winlink messages…</button>`:"";
-  const key=rid+"|"+s.start,open=!SESS_CLOSED.has(key);
   const mins=fin.length?`<button data-mins="${esc(ikey)}" title="Attendance, announcements, schedule, action items, decisions, traffic${sn?"; what is still open":""}">Minutes</button>`:"";
   const cl=closeHtml(rid,ikey,fin,latest,sn);
-  return `<details class="sess" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum"><b>${esc(title)}</b>${kind}${cl.badge} <span class="muted small">${span}${fq} · ${fin.length} tx · ${calls.size} station${calls.size===1?"":"s"}</span></span></summary><div class="sbody"><span class="sbtn">${mins} ${btn}</span>${cl.html}${accHtml(rid,fin,latest)}</div></details>`;
+  const body=`<div class="sbody"><span class="sbtn">${mins} ${cl.html.includes("data-wls")?"":btn}</span>${cl.html}${accHtml(rid,fin,latest)}</div>`;
+  const meta=`${fin.length} tx`+(calls.size?` · ${calls.size} station${calls.size===1?"":"s"}`:"");
+  return {fin,calls,sn,title,kind,ikey,span,fq,cl,body,meta};
 }
+// the net or conversation on the air now: its header (sticky) above its transmissions, newest first
+function sessHtml(rid,s){
+  const i=sessInfo(rid,s,true),key=rid+"|"+s.start,open=!SESS_CLOSED.has(key);
+  const c=closeOf(rid,i.ikey),ov=i.sn&&((S.net||{}).running||[]).some(x=>x.key===i.sn.key&&x.overrun);
+  const tag=c&&c.state==="tail"?`<span class="tag ps" title="Net control closed it; recording the 73s">closing</span>`
+    :`<span class="tag on">${ov?"running over":"on the air"}</span>`;
+  return `<details class="sess live" data-sk="${esc(key)}"${open?" open":""}><summary><span class="sum">${tag} <b>${esc(i.title)}</b>${i.kind}${i.cl.badge} <span class="muted small">${i.span}${c?"":" (continuing)"}${i.fq?" · "+i.fq+" MHz":""} · ${i.meta}</span></span></summary>${i.body}</details>`;
+}
+// a completed net or conversation: one line, collapsed; opening it shows its buttons and every transmission
+function doneHtml(rid,s){
+  const i=sessInfo(rid,s,false),key=rid+"|"+s.start,open=SESS_OPEN.has(key),st=accState(rid,i.fin);
+  const acc=!st?"":st.active?`<span class="pill run" title="Accurate pass ${st.active.state}">accurate ${st.active.done+st.active.failed}/${st.active.total}</span>`
+    :!st.missing.length?`<span class="pill ok" title="Accurate text for every transmission">✓ accurate</span>`:"";
+  return `<details class="sess done" data-sk="${esc(key)}" data-rid="${esc(rid)}"${open?" open":""}><summary>`+
+    `<span class="tt">${i.span}</span><span class="nm"><b>${esc(i.title)}</b>${i.cl.badge}</span>${acc}`+
+    `<span class="meta">${i.fq?`<span class="fq">${i.fq} · </span>`:""}${i.meta}</span></summary>`+
+    `<div class="txs">${open?doneBody(rid,s):""}</div></details>`;
+}
+function doneBody(rid,s){return sessInfo(rid,s,false).body+[...s.tx].reverse().map(txHtml).join("")}
+const dayLabel=iso=>{const d=new Date(iso),t=new Date(),y=new Date(t-864e5),same=(a,b)=>a.toDateString()===b.toDateString();
+  return same(d,t)?"Today":same(d,y)?"Yesterday":d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})};
 // ---------- the end of a net (station/netclose.py): net control closed it, or End net ----------
 let ENDASK=null;   // "radio|key" whose End net is asking "End the net now?" (inline: confirm() is blocked in some viewers)
 const NC=()=>S.netclose||{closes:[],soon:{},learned:{}};
@@ -584,7 +659,7 @@ function accHtml(rid,fin,latest){
   const run=(label,cls="")=>`<button class="${cls}" data-acc="${esc(rid)}" data-s="${esc(fin[0].start)}" data-e="${esc(fin[fin.length-1].start)}">${label}</button>`;
   if(st.active){const j=st.active,pct=j.total?Math.round((j.done+j.failed)/j.total*100):0;
     return `<div class="acc"><b>Accurate pass ${j.state==="queued"?"queued":"running"}</b> <span class="bar"><i style="width:${pct}%"></i></span> ${j.done+j.failed} of ${j.total} · ${j.eta_s!=null?dur(j.eta_s)+" left":""}</div>`}
-  if(!st.missing.length)return `<div class="acc ok">✓ Accurate text for all ${fin.length}${st.last&&st.last.model?` (${esc(st.last.model)})`:""}. The Winlink messages use it.</div>`;
+  if(!st.missing.length)return `<div class="acc ok" title="Accurate text for all ${fin.length}${st.last&&st.last.model?` (${esc(st.last.model)})`:""}. The Winlink messages use it.">✓ Accurate text for all ${fin.length}</div>`;
   if(st.last&&st.last.state==="unreachable")return `<div class="acc"><span class="bad">Accurate pass waiting: ${esc(st.last.error||"the home server is not reachable")}</span> <span class="muted">(tries again every 2 min)</span> ${run("Try now")}</div>`;
   if(st.last&&st.last.state==="error")return `<div class="acc"><span class="bad">Accurate pass failed: ${esc(st.last.error||"")}</span> ${run("Try again")}</div>`;
   const n=st.missing.length;
@@ -628,7 +703,7 @@ function renderTest(){
   $("testBody").innerHTML=`<h3>Transcription test · ${esc(rn)}</h3>
    <p class="small">1. Have someone transmit (or key a second radio) and read this at a normal pace, about 3 cm across the microphone:</p>
    <div class="testref">${esc(T.text)}</div>
-   <p class="small">2. After they unkey and the text appears under On the air, press Score. Lower is better: 0% = every word right.</p>
+   <p class="small">2. After they unkey and the text appears in the log, press Score. Lower is better: 0% = every word right.</p>
    <div class="row"><button id="tScore" class="primary">Score the last transmission</button> <button onclick="$('testDlg').close()">Close</button> <span class="bad small">${esc(T.msg)}</span></div>
    ${res}${hist}<div id="accFix">${accFixHtml(T.acc)}</div>`;
   $("tScore").onclick=()=>scoreTest();
@@ -650,18 +725,55 @@ async function scoreTest(tx){
 function testOnTx(t){ // the pending accurate pass for the scored transmission came back: score it again
   if(TEST&&TEST.result&&TEST.result.accurate_pending&&t.id===TEST.result.tx&&t.accurate&&$("testDlg").open)scoreTest(t.id);
 }
-function renderFeed(rid){ // one transcript per radio, grouped into nets / conversations, newest first
+// The log of one radio: the net or conversation on the air (open, its transmissions newest first), or above the log a
+// one-line On the air / Up next for the scheduled net; then Completed: one collapsed line per earlier net or
+// conversation, newest first, under a day heading. A collapsed row renders no transmissions until it is opened.
+const ACTIVE={};   // rid -> the on-the-air row key at the last render (the half-minute tick re-renders when it changes)
+function feedParts(rid){
+  const mine=S.tx.filter(t=>t.radio===rid),ss=mine.length?groupSessions(mine):[],last=ss[ss.length-1];
+  const act=last&&isActive(rid,last)?last:null;
+  return {act,done:ss.filter(s=>s!==act).reverse()};
+}
+function renderFeed(rid){
   for(const r of S.radios){
     if(rid&&r.id!==rid)continue;
     const f=document.getElementById("feed-"+r.id);if(!f)continue;
-    const mine=S.tx.filter(t=>t.radio===r.id);
-    if(!mine.length){f.innerHTML='<p class="muted">Waiting for the first transmission.</p>';continue}
-    const ss=groupSessions(mine),now=Date.now();let rows=0,html="";
-    for(let i=ss.length-1;i>=0&&(rows<300||i===ss.length-1);i--){const s=ss[i];rows+=s.tx.length;   // whole nets, newest first
-      html+=sessHtml(r.id,s,i===ss.length-1&&now-Date.parse(s.end)<GAP_MS)+[...s.tx].reverse().map(txHtml).join("")}
-    f.innerHTML=html;
+    const {act,done}=feedParts(r.id);
+    ACTIVE[r.id]=act?r.id+"|"+act.start:"";
+    FEED[r.id]=Object.fromEntries(done.map(s=>[r.id+"|"+s.start,s]));
+    let html=act?`<div class="onair">${sessHtml(r.id,act)+[...act.tx].reverse().map(txHtml).join("")}</div>`:"";   // its header sticks only over its own transmissions
+    if(done.length){
+      html+=`<div class="grp"><span>Completed</span> <span class="n">${done.length}</span></div>`;
+      let day="";
+      for(const s of done){const d=dayLabel(s.start);if(d!==day){day=d;html+=`<div class="day">${esc(d)}</div>`}html+=doneHtml(r.id,s)}
+    }
+    f.innerHTML=html||'<p class="muted small">Nothing heard yet.</p>';
+    renderNow(r.id);
   }
 }
+// above the log when nothing is on the air: the scheduled net on now (waiting for its first transmission) or Up next
+function renderNow(rid){
+  const box=document.getElementById("now-"+rid);if(!box)return;
+  const r=S.radios.find(x=>x.id===rid)||{},n=S.net||{};let h="";
+  if(!ACTIVE[rid]){
+    const on=(n.running||[]).find(x=>x.radio===rid),nx=(n.next_by_radio||{})[rid];
+    const skip=x=>((n.today||[]).find(y=>y.key===x.key)||{}).skipped;
+    const tm=iso=>new Date(iso).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+    const day=iso=>{const d=dayLabel(iso);return d==="Today"?"":d==="Yesterday"?d+" ":(Date.parse(iso)-Date.now()<6*864e5?new Date(iso).toLocaleDateString([],{weekday:"short"}):d)+" "};
+    const when=x=>`${day(x.start)}${tm(x.start)}<span class="te">–${tm(x.end)}</span>`;
+    const fq=x=>x.freq_mhz?`<span class="fq">${Number(x.freq_mhz).toFixed(3)} ${esc(x.mode||"")}</span>`:"";
+    const line=(x,tag,cls,note)=>`<button class="nowl ${cls}" data-goto="schedule" data-net="${esc(x.id)}" title="${esc(x.name)} — open in Nets"><span class="tag">${tag}</span><b class="nm">${esc(x.name)}</b><span class="tt">${when(x)}</span>${fq(x)}<span class="note">${note}</span></button>`;
+    if(on)h=line(on,r.paused?"radio paused":on.overrun?"running over":"on the air",r.paused?"ps":"on",r.paused?"press Resume to record it":"waiting for the first transmission");
+    else if(nx){const m=Math.round((Date.parse(nx.start)-Date.now())/60000);
+      h=line(nx,"up next","next",skip(nx)?"skipped":m<=0?"starting":m<60?`in ${m} min`:m<24*60?`in ${Math.floor(m/60)} h${m%60?` ${m%60} min`:""}`:"")}
+    else h=`<div class="nowl quiet"><span class="muted">${r.paused?"Radio paused":"Listening"} · no net scheduled on this radio</span></div>`;
+  }
+  if(box.dataset.h!==h){box.dataset.h=h;box.innerHTML=h}
+  box.hidden=!h;
+}
+// each half minute: Up next counts down, and a net quiet for 15 minutes moves to Completed
+setInterval(()=>{for(const r of S.radios){const {act}=feedParts(r.id),k=act?r.id+"|"+act.start:"";
+  if(k!==(ACTIVE[r.id]||""))renderFeed(r.id);else renderNow(r.id)}},30000);
 function upsertTx(t){
   const i=S.tx.findIndex(x=>x.id===t.id);
   if(i>=0)S.tx[i]=t;else S.tx.push(t);
@@ -707,7 +819,7 @@ function ensureCard(r){
   el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
   try{if(localStorage.getItem("hamnet.fold."+r.id))col.classList.add("folded")}catch(e){}
   const sec=document.createElement("section");sec.className="logbox";
-  sec.innerHTML=`<h2>On the air</h2><div class="urg" id="urg-${id}" hidden></div><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
+  sec.innerHTML=`<div class="urg" id="urg-${id}" hidden></div><div class="nowbar" id="now-${id}" hidden></div><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
   const sp=document.createElement("div");sp.className="split";sp.title="Drag to resize · double-click to reset";
   sp.setAttribute("role","separator");sp.setAttribute("aria-orientation","horizontal");sp.dataset.rid=r.id;
   const ab=document.createElement("div");ab.className="abox";ab.id="ab-"+r.id;ab.hidden=true;
@@ -812,6 +924,7 @@ function renderNet(){
   else h='<span class="muted">No net scheduled</span>';
   $("net").innerHTML=h;
   renderToday();
+  for(const r of S.radios)renderNow(r.id);
 }
 // Today: one line per net still to come today (and the one on the air), the next one highlighted
 function renderToday(){
@@ -867,7 +980,7 @@ function renderHeard(rid){
     const box=document.getElementById("heard-"+r.id);if(!box)continue;
     const seen={};
     for(const t of S.tx){if(t.radio!==r.id||t.status!=="final")continue;
-      for(const c of (t.accurate||t).callsigns||[]){const s=seen[c]||(seen[c]={call:c,count:0,last:t.start});s.count++;if(t.start>s.last)s.last=t.start}}
+      for(const c of callsOf(t)){const s=seen[c]||(seen[c]={call:c,count:0,last:t.start});s.count++;if(t.start>s.last)s.last=t.start}}
     const list=Object.values(seen).sort((a,b)=>b.last.localeCompare(a.last));
     box.innerHTML=list.length?list.map(e=>heardRow(r.id,cards[e.call]||{call:e.call},e)).join(""):'<p class="muted small">None yet.</p>';
     const n=document.querySelector(`#col-${CSS.escape(r.id)} .hn`);if(n)n.textContent=list.length?`(${list.length})`:"";
