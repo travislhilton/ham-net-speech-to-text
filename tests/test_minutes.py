@@ -113,3 +113,22 @@ def test_a_garbled_fragment_is_not_an_urgent_fire_outside_an_emergency_net():
     assert not [i for i in extract(v) if i["kind"] == "urgent"]
     v[0]["text"] = "There is a house burning on Main Street, two people outside."
     assert [i["category"] for i in extract(v) if i["kind"] == "urgent"] == ["fire"]
+
+
+def test_a_bare_alarm_word_on_a_routine_net_is_not_urgent():
+    """Owner 2026-11-03: banners fired on a fire station's tactical name and a check-in with a mis-heard word."""
+    from station.minutes import extract
+    u = lambda s, em=False: [i["category"] for i in extract([{"id": "1", "start": "2026-11-03T21:00", "text": s,
+                                                               "callsigns": []}], emergency=em) if i["kind"] == "urgent"]
+    for s in ("Now calling a lad fire.", "Ambulance, outstanding signal, and welcome to the net.",
+              "This is K7ABC checking in for the Springfield Fire Station", "This is K7ABC checking in from Springfield Fire.",
+              "Springfield Fire, go ahead.", "Calling Springfield fire, Springfield fire.", "Thank you, Springfield Fire. Good signal.",
+              "Shelbyville Fire checking in with no traffic.", "Fire.", "Next on the list, Ambulance."):
+        assert u(s) == [], s
+    for s, cat in (("There is a structure fire at 450 Oak Street.", "fire"), ("The house is on fire.", "fire"),
+                   ("We have a brush fire spreading toward the highway.", "fire"), ("There's a fire on Main Street.", "fire"),
+                   ("We need an ambulance at the school.", "injury"), ("Someone is not breathing here.", "injury"),
+                   ("Smoke coming from the hillside behind the church.", "fire"), ("Fire reported near the canyon mouth.", "fire"),
+                   ("Springfield Fire is responding to a structure fire on Elm.", "fire"), ("Mayday mayday.", "emergency")):
+        assert u(s) == [cat], s
+    assert u("Fire.", em=True) == ["fire"]                     # an emergency net stays as sensitive as before

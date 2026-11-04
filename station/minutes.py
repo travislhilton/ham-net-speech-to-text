@@ -127,6 +127,45 @@ NEGATED = re.compile(r"\b(?:no|not|zero|nothing|negative|without any|none)\b[\w\
 PREAMBLE = re.compile(r"\b(?:stations? with|anyone with|if (?:you|anyone) ha(?:s|ve)|call now|please call|take|taking|"
                       r"calling for|this net is|for any|first,? then|will be handled|reserved for)\b", re.I)
 WEAK = {"medical", "shelter", "roads", "power", "resources"}     # alone, on a net that is not an emergency: needs a place
+# A cue that is one bare alarm word ("fire", "ambulance", "crash") says nothing happened by itself: on a net that is not
+# an emergency it needs something REPORTED in the sentence, a second category or a place (owner 2026-11-03: banners
+# fired on "Now calling <town> Fire." and "Ambulance, outstanding signal, and welcome to the net.").
+BARE = re.compile(r"(?:fires?|flames|smoke|ambulance|crash|trauma|floods?|EMS|paramedics?|medical|closure|blocked|"
+                  r"outage|shelters?)", re.I)
+REPORTED = re.compile(r"\b(?:there(?:'s| is| are| was| were)|we(?:'ve| have| had)(?: got)?|i(?:'ve| have)(?: got)?|"
+                      r"(?:they|he|she)(?:'ve| have| has)(?: got)?|report(?:ed|ing|s)?|responding|on scene|working|"
+                      r"active|spreading|involved|out of control|need(?:s|ed)?|requesting|called? for|send|dispatch(?:ed)?|"
+                      r"(?:a|an) \w+ (?:fire|crash|accident)|(?:near|at|on) (?:the )?(?:corner|intersection|mile|\d+))\b", re.I)
+# the station at a fire station, called by its tactical name: "<Town> Fire", "calling ... fire", "checking in for ... Fire"
+FIRE_NAME = re.compile(r"(?:\b(?:calling|this is|checking in (?:for|from)|for the|from the|at the|go ahead,?)\s+(?:[\w-]+\s+){0,3}fire\b"
+                       r"(?!\s+(?:is|was|at|on|in|near|has|spreading|burning)))", re.I)   # FIRE_NAME_TITLE: case matters
+FIRE_NAME_TITLE = re.compile(r"\b[A-Z][a-z]+ Fire\b(?! (?:is|was|at|on|in|near|has|spreading))")
+CHECKIN = re.compile(r"\b(?:checking in|check(?:ed)?[- ]in|welcome to the net|(?:good|great|outstanding|excellent|strong|"
+                     r"fine|nice|clear) (?:signal|audio|copy)|loud and clear|thank(?:s| you) for (?:checking|the check)|"
+                     r"roll call|now calling|calling for|go ahead|you're (?:good|in)|got you)\b", re.I)
+
+
+def _bare_only(s: str) -> bool:
+    """Every urgent cue in the sentence is a bare alarm word (or a fire station's name), not a report."""
+    for k, rx in URGENT_RES.items():
+        for m in rx.finditer(s):
+            if NEGATED.search(s[max(0, m.start() - 30):m.start()]):
+                continue
+            w = m.group(0)
+            if k == "fire" and _fire_is_a_name(s, m):
+                continue
+            if not BARE.fullmatch(w.strip()):
+                return False
+    return True
+
+
+def _fire_is_a_name(s: str, m: re.Match) -> bool:
+    for n in list(FIRE_NAME.finditer(s)) + list(FIRE_NAME_TITLE.finditer(s)):
+        if n.start() <= m.start() < n.end() or n.start() <= m.end() - 1 < n.end():
+            return True
+    return False
+
+
 QUESTION = re.compile(r"^\s*(?:any|is there any|are there any|does anyone have|do we have any|who has)\b", re.I)
 
 
@@ -263,6 +302,8 @@ def urgent_categories(s: str) -> list[str]:
     out = []
     for k, rx in URGENT_RES.items():
         for m in rx.finditer(s):
+            if k == "fire" and _fire_is_a_name(s, m):
+                continue                                  # "Shelbyville Fire", "calling Springfield fire": a station
             if not NEGATED.search(s[max(0, m.start() - 30):m.start()]):
                 out.append(k)
                 break
@@ -318,6 +359,10 @@ def extract(views: list[dict], ref: date | None = None, emergency: bool = False)
                 # ("He's burning river!"): it needs a second cue or a place, or at least 5 words
                 strong = emergency or len(cats) > 1 or find_place(s) or \
                     (set(cats) - WEAK and (len(s.split()) >= 5 or "emergency" in cats))
+                if cats and not emergency and _bare_only(s):
+                    # one alarm word and nothing reported (a check-in, a name, a mis-heard word): not urgent
+                    strong = bool(REPORTED.search(s) and not CHECKIN.search(s)) or \
+                        (len(set(cats)) > 1 and not CHECKIN.search(s))
                 if cats and strong:
                     add("urgent", s, category=cats[0], categories=cats, people=find_people(s, calls),
                         place=find_place(s))

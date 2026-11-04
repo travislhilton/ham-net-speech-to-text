@@ -169,7 +169,10 @@ you chose is remembered. Each column shows:
     transcript by rules as the net runs, offline: **attendance** in check-in order with net control, **urgent**
     issues, **announcements** (with the date or place they are about), **schedule** (events), **action items**
     (who, due), **decisions** and **traffic**, each linked to the transmission it came from. Items the station drafted
-    say *suggested*: tick **done**, **Edit**, or **Not right** (hidden, and not drafted again). Add items, add or remove
+    say *suggested*: tick **done**, **Edit**, or **Not right** (hidden, and not drafted again). On a net that is not
+    an emergency net, a lone alarm word ("fire", "ambulance", "crash") is urgent only with something reported
+    ("there's a fire on Main", "we need an ambulance at…") or a place; a fire station called by its name
+    ("Springfield Fire, go ahead") and check-in talk never raise the Urgent banner. Add items, add or remove
     a station from the attendance, set net control, write **Notes**. Your changes are a layer of their own and never
     overwritten when the net is drafted again. Open action items and traffic carry forward to the next time. **‹ ›**
     step to the time before/after. **Download .md** or **Copy as text**; **Winlink messages…** puts the minutes in
