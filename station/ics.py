@@ -45,13 +45,18 @@ def session_bounds(tx: list[dict], rid: str, gap_min: int = 15) -> tuple[str, st
     return (s[-1]["start"], s[-1]["end"]) if s else None
 
 
-def view(t: dict) -> dict:
+def view(t: dict, agreed: bool = True) -> dict:
     """A transmission as the forms see it: the operator's correction when there is one (tap-to-correct), else the
     accurate pass's text and callsigns, else the live text; and the best speaker (station/speaker.py best:
-    operator-set > corrected text > stated > net control > voice)."""
+    operator-set > corrected text > stated > net control > voice). `agreed`: with the net-wide callsign agreement
+    and local-name fix-ups applied (station/consensus.py; the heard text kept as heard_text) — never over the
+    operator's correction."""
     a = t.get("corrected") or t.get("accurate")
     v = {**t, **{k: a[k] for k in ("text", "callsigns", "noise") if k in a}} if a else dict(t)
     v["speaker"], v["speaker_how"] = speaker.best(t)
+    if agreed and t.get("consensus") and not t.get("corrected"):      # the operator's correction always wins
+        from .consensus import apply_view
+        v = apply_view(v, t["consensus"])
     return v
 
 

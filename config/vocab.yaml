@@ -65,3 +65,22 @@ tacticals:
 #   roster: [K7ABC, W9XYZ]
 repeaters: []
 roster: []
+
+# Fix-ups applied to the text AFTER transcription (station/fixups.py; never put in Whisper's prompt, which made it
+# echo the prompt). Each: heard (whole words, any case) -> say; `context` = a regex that must match elsewhere in the
+# same sentence. Your area, club and net names go in config/local.yaml under the same key, for example
+#   fixups:
+#     - {heard: Springfeld, say: Springfield}
+#   net_names: ["Springfield County ARES net"]     # the net's name as net control says it (repaired by sound)
+# Pairs the dashboard learns from your corrections are read from data/fixups_learned.yaml (same format).
+fixups:
+  - {heard: Aries, say: ARES, context: '\b(net|nets|members?|county|emergency|EOC|amateur|radio|check(ing)? ?in|volunteers?|team|group|club|exercise|drill|coordinator|RACES|ham)\b'}
+  - {heard: Ares, say: ARES, context: '\b(net|nets|members?|county|emergency|EOC|amateur|radio|check(ing)? ?in|volunteers?|team|group|club|exercise|drill|coordinator|RACES|ham)\b'}
+  - {heard: A.R.E.S., say: ARES}
+  - {heard: Windlink, say: Winlink}
+  - {heard: Wind link, say: Winlink}
+  - {heard: Win link, say: Winlink}
+  - {heard: nest control, say: net control}
+  - {heard: neck control, say: net control}
+  - {heard: nett control, say: net control}
+  - {heard: Vera FM, say: VARA FM}

@@ -394,9 +394,11 @@ $("whoForm").addEventListener("submit",e=>{e.preventDefault();e.stopPropagation(
 $("whoAuto").onclick=()=>saveWho("");
 $("whoPick").addEventListener("click",e=>{const b=e.target.closest("[data-whopick]");if(b){e.stopPropagation();saveWho(b.dataset.whopick)}});
 function txHtml(t0){
-  const a=t0.accurate,c=t0.status==="final"?t0.corrected:null;   // corrected > accurate > live (station/ics.py view)
+  const a=t0.accurate,c=t0.status==="final"?t0.corrected:null;   // corrected > agreed accurate > live (station/ics.py view)
+  const t1=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections,maybe:a.maybe}:t0;
+  const k=!c&&t0.status==="final"&&t0.consensus;   // net-wide agreement (station/consensus.py), never over a correction
   const t=c?{...t0,text:c.text,callsigns:c.callsigns,speaker:c.speaker,noise:false,corrections:[],maybe:[]}
-    :a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections,maybe:a.maybe}:t0;
+    :k?{...t1,callsigns:k.callsigns,text:k.text||t1.text,corrections:[...(t1.corrections||[]),...(k.moved||[])]}:t1;
   const editing=t0.status==="final"&&FIX&&FIX.where==="log"&&FIX.id===t0.id;
   const fx=Object.fromEntries((t.corrections||[]).map(f=>[f.call,f]));  // near-miss corrections: keep what was heard
   const w=t0.who||null,sp=w&&w.call;

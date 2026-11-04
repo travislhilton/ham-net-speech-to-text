@@ -205,6 +205,8 @@ class Station:
                     self.refix_ended_nets()
                 except Exception as e:  # noqa: BLE001
                     print(f"refix: {type(e).__name__}: {e}", flush=True)
+            if n % 60 == 30:                             # net-wide callsign agreement, in its own thread
+                self.agree_recent_async()
             if n % 15 == 0 and getattr(self, "accurate", None):
                 try:
                     self.accurate.tick()
@@ -407,12 +409,14 @@ class Station:
         return {"radio": rid, "cleared_at": at}
 
     def _rebuild_heard(self):
-        """Stations heard = callsigns in the transmissions still on screen (cards kept, no new lookups)."""
+        """Stations heard = callsigns in the transmissions still on screen, after the net-wide agreement (cards
+        kept, no new lookups)."""
+        from .consensus import calls_of
         old, self.heard = self.heard, {}
         for tx in self.tx:
             if tx.get("status") != "final":
                 continue
-            for c in (tx.get("corrected") or tx.get("accurate") or tx).get("callsigns", []):
+            for c in calls_of(tx):                       # corrected > agreed (accurate) > live
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"],
                                               "card": (old.get(c) or {}).get("card")})
                 e["count"] += 1; e["last"] = tx["start"]
@@ -604,6 +608,7 @@ class Station:
                 if not tx:
                     return
                 tx.pop("accurate", None); tx["accurate_echo"] = echo
+                tx.pop("consensus", None)                # made from other text: the next agreement redoes it
                 self._rebuild_heard()
                 tx = dict(tx)
             self._log({"update": tid, "accurate_echo": echo})
@@ -622,6 +627,7 @@ class Station:
             acc["speaker"], acc["speaker_how"] = speaker.from_text(text, calls, self._ncs_at(tx))
             tx["accurate"] = acc
             tx.pop("accurate_echo", None)
+            tx.pop("consensus", None)                    # made from other text: the next agreement redoes it
             new = [c for c in calls if c not in self.heard]
             self._rebuild_heard()
             for c in new:
@@ -765,10 +771,117 @@ class Station:
                             continue
                         acc["speaker"], acc["speaker_how"] = speaker.from_text(text, calls, self._ncs_at(live))
                         live["accurate"] = acc
+                        live.pop("consensus", None)
                         self._rebuild_heard()
                         pub = dict(live)
                     self._log({"update": t["id"], "accurate": acc})
                     self.bus.publish("tx", pub)
+
+    # ---------- net-wide callsign agreement + local-name fix-ups (station/consensus.py, station/fixups.py) ----------
+    def _licences(self):
+        from .consensus import Licences
+        cb = self.callbook
+        if not (cb and getattr(cb, "con", None)):
+            return None
+        lic = self.__dict__.get("_licences_obj")
+        if lic is None or lic.con is not cb.con:
+            lic = self._licences_obj = Licences(cb.con, getattr(cb, "lock", None))
+        return lic
+
+    def _sched_entry(self, net_id: str | None) -> dict | None:
+        return next((n for n in (self.cfg.get("schedule") or []) if net_id and n.get("id") == net_id), None)
+
+    def agree_session(self, rid: str, start: str, end: str) -> dict:
+        """Run the net-wide agreement over one net or conversation (start..end on `rid`) and keep, on each
+        transmission it changes, a `consensus` record (an update line in the day log, like the accurate pass).
+        Idempotent: a record equal to the one kept is not written again."""
+        from . import consensus, fixups
+        with self.lock:
+            rows = sorted((t for t in self.tx if t.get("radio") == rid and t.get("status") == "final"
+                           and start <= t["start"] <= end), key=lambda t: t["start"])
+            rows = [json.loads(json.dumps(t)) for t in rows]           # a copy: the agreement runs unlocked
+        if not rows:
+            return {"radio": rid, "start": start, "end": end, "changed": 0}
+        net_id = next(((t.get("net") or {}).get("id") for t in rows if (t.get("net") or {}).get("id")), None)
+        try:
+            key = self.history.instance_of(rid, start)
+            prior = self.history.prior_checkins(net_id, start, exclude=key)
+        except Exception:  # noqa: BLE001 — history is evidence, never a requirement
+            prior = {}
+        fx = fixups.load(self.root / "config", self.data)
+        recs, res = consensus.for_session(rows, self._licences(), prior, callfix.home_state(self), self.roster,
+                                          self.me, fx, fixups.net_names_for(self._sched_entry(net_id)))
+        changed = []
+        with self.lock:
+            for t in rows:
+                live = self._find(t["id"])
+                if not live:
+                    continue
+                rec = recs.get(t["id"])
+                if live.get("corrected"):
+                    continue          # the operator's text wins; the record made before it stays (accuracy uses it)
+                if (live.get("accurate") or live).get("text") != (t.get("accurate") or t).get("text"):
+                    continue                                          # new text arrived meanwhile: next time
+                if live.get("consensus") == rec:
+                    continue
+                if rec:
+                    live["consensus"] = rec
+                else:
+                    live.pop("consensus", None)
+                changed.append(dict(live))
+            if changed:
+                self._rebuild_heard()
+                for c, e in self.heard.items():
+                    if e.get("card") is None:
+                        e["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
+        for t in changed:
+            self._log({"update": t["id"], "consensus": t.get("consensus")})
+            self.bus.publish("tx", t)
+        if changed:
+            self.bus.publish("heard", {"heard": self.heard_list()})
+        return {"radio": rid, "start": start, "end": end, "changed": len(changed),
+                "moved": {h: e for h, e in res["calls"].items() if e["call"] != h},
+                "unverified": sorted(h for h, e in res["calls"].items() if e["status"] in ("unverified", "lapsed"))}
+
+    def agree_recent(self, now: datetime | None = None, hours: float = 12) -> list[dict]:
+        """The agreement for every net heard in the last `hours` whose transcript changed since its last run: while a
+        net runs (the net so far, cheap: FCC answers are cached) and once more after it, with the final text."""
+        from . import ics
+        if not self.cfg.get("consensus", True):
+            return []
+        now = now or self.clock()
+        seen = self.__dict__.setdefault("_agreed", {})
+        out = []
+        with self.lock:
+            tx = list(self.tx)
+        for rid in self.radios:
+            for s in ics.sessions(tx, rid):
+                if now - datetime.fromisoformat(s["end"]) > timedelta(hours=hours):
+                    continue
+                fp = hash(tuple((t["id"], (t.get("accurate") or t).get("text"), bool(t.get("consensus")))
+                                for t in tx if t.get("radio") == rid and t.get("status") == "final"
+                                and s["start"] <= t["start"] <= s["end"]))
+                if seen.get((rid, s["start"])) == fp:
+                    continue
+                out.append(self.agree_session(rid, s["start"], s["end"]))
+                with self.lock:
+                    seen[(rid, s["start"])] = hash(tuple(
+                        (t["id"], (t.get("accurate") or t).get("text"), bool(t.get("consensus")))
+                        for t in self.tx if t.get("radio") == rid and t.get("status") == "final"
+                        and s["start"] <= t["start"] <= s["end"]))
+        return out
+
+    def agree_recent_async(self):
+        th = self.__dict__.get("_agree_thread")
+        if th and th.is_alive():
+            return
+        def run():
+            try:
+                self.agree_recent()
+            except Exception as e:  # noqa: BLE001 — the agreement is extra; never stop the station
+                print(f"consensus: {type(e).__name__}: {e}", flush=True)
+        self._agree_thread = threading.Thread(target=run, daemon=True, name="consensus")
+        self._agree_thread.start()
 
     def accurate_now(self, rid: str, start: str | None = None, end: str | None = None, force=False) -> dict:
         from . import ics
@@ -1172,14 +1285,16 @@ class Station:
                 for t in self.tx:
                     if t.get("id") == tx["update"]:
                         t.update({k: v for k, v in tx.items() if k in ("accurate", "accurate_echo", "speaker_set",
-                                                                      "net", "after", "corrected")})
-                        for k in ("net", "after", "corrected"):   # a net close / a correction undone
+                                                                      "net", "after", "corrected", "consensus")})
+                        for k in ("net", "after", "corrected", "consensus"):   # a net close / a correction undone
                             if k in tx and tx[k] is None:
                                 t.pop(k, None)
                         if "accurate" in tx:
                             t.pop("accurate_echo", None)
                         if "accurate_echo" in tx:
                             t.pop("accurate", None)
+                        if ("accurate" in tx or "accurate_echo" in tx) and "consensus" not in tx:
+                            t.pop("consensus", None)            # new text: the agreement is made again
                 continue
             cut = (self.radios.get(tx.get("radio")) or {}).get("cleared_at")
             if cut and tx.get("start", "") < cut:

@@ -232,6 +232,28 @@ you chose is remembered. Each column shows:
   then no tail: recording stops (the radio is paused, as if you pressed Pause; its later nets still resume it),
   the final pass starts, and **Winlink messages ready** appears when it is done. `close_detect: false` turns the
   listening for closes off (End net stays). Kept in `data\netclose.json`.
+- **One station, one call, across the net** (net-wide agreement). Whisper hears the same station several ways
+  in one net ("KD7ABP" and "KD7ABD"), clips the prefix ("87QF"), or writes a call the transcript did not list.
+  Every minute, for each net heard in the last 12 hours whose text changed (and once more when the final accurate
+  text is in), the station weighs, for every call heard, the calls it could be: the other calls heard in the net
+  one or two sound-alike letters away, and FCC licences that close. The evidence: an **Active FCC licence**; the
+  licensee's **first name said near the call** (after it, or net control's "Thank you, Bob" in the next two
+  transmissions; nicknames count: Bob = Robert, Wally = Wallace); **the town said** being the licence's city, or
+  the licence being in your state; **earlier check-ins to this same net** (the history); how often it was heard.
+  A call only changes when one reading clearly wins; a licence never heard needs a name, a town or a history behind
+  it, and a call nothing supports stays as heard, marked *unverified*. The transmission keeps its heard text; its
+  calls, Stations heard, attendance and minutes, and the Winlink ICS-309/213 use the agreed calls (tooltip: "heard
+  KD7ABP, corrected: FCC: active; name Bob matches; licensed in IL"). Re-run a past day (stop the station first):
+  `.\.venv\Scripts\python.exe -m tools.consensus 2026-11-03` (`--dry-run` only reports; running it again changes
+  nothing). `consensus: false` in `station.yaml` turns it off.
+- **Local names fixed after transcription** (never put in Whisper's prompt, which makes Whisper echo the prompt):
+  `fixups:` in `config\vocab.yaml` (ARES heard as "Aries" — only when the sentence is about a net, members, the
+  county…; "Windlink" -> Winlink; "nest control" -> net control) plus your own in `config\local.yaml` (same
+  format: `- {heard: Springfeld, say: Springfield}`, optional `context:` regex) and the pairs the dashboard learns
+  from your corrections (`data\fixups_learned.yaml`). The scheduled net's own name is repaired by sound when it
+  clearly is that name ("Springfeld Country Aries net" -> "Springfield County ARES net"): put the name as net
+  control says it in the schedule entry (`spoken: [Springfield County ARES net]`) or in `local.yaml`
+  (`net_names: [...]`). The text shown, the minutes and the forms use the fixed text; the heard text is kept.
 - **Accurate pass** (home network, optional), in two stages. As soon as each transmission's live text is done,
   the station sends its recording **with the ~25 s of the net before it** to the home server (Whisper large-v3) and
   puts a *provisional* accurate text beside the live text, a few seconds later. When the net has been quiet for
@@ -286,6 +308,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |
+| Net-wide callsign agreement: variants of one station merged by FCC licence, first name, town, earlier check-ins; clipped and unlisted calls found only with a name/town/history; nothing supported = kept, *unverified* | working (`station/consensus.py`, `tools/consensus.py`, `consensus: false`); 11-03 FM net (140 transmissions, FCC on the dev Mac, no history yet): 11 readings moved, 5 calls found in the text, none contradicted by the transcript, the ambiguous ones left as heard; history evidence untested on real data until deployed |
+| Local-name fix-ups after transcription (`fixups:` in vocab/local.yaml, learned pairs, the net's own name by sound) | working (`station/fixups.py`); 11-03 net: "Aries" x3, "Windlink" x1 |
 | Near-miss callsign correction ('W9XVZ' -> W9XYZ heard in this net, 'K7ABD Springfield' -> K7ABC of Springfield); only when one reading clearly wins, what was heard kept (dotted underline + tooltip), live and accurate text, stations heard and Winlink use the corrected call; 15 min after a net ends it runs once more with the whole net known; uncertain ones show as "WV78? KV7RMV KB7XT" to click; expired licences are not ticked in the Winlink To: list | working (`hamkit/callfix.py`, `callfix: false` turns it off); 3.915 net: 8 corrections, none contradicted, most garbles left as heard |
 | QRZ.com online lookups (grid, international names), cached for offline use | working (`hamkit.qrz set-login`) |
 | Q-code / proword / abbreviation explanations | working (`config/glossary.yaml`) |

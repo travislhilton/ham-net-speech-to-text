@@ -182,13 +182,17 @@ class History:
                 return
             raw = json.loads(row["raw"])
             raw.update({k: v for k, v in e.items() if k in ("accurate", "accurate_echo", "speaker_set", "net", "after",
-                                                            "corrected")})
+                                                            "corrected", "consensus")})
             if "corrected" in e and e["corrected"] is None:        # Undo correction
                 raw.pop("corrected", None)
             if "accurate" in e:
                 raw.pop("accurate_echo", None)
             if "accurate_echo" in e:
                 raw.pop("accurate", None)
+            if ("accurate" in e or "accurate_echo" in e) and "consensus" not in e:
+                raw.pop("consensus", None)                 # new text: the net-wide agreement is made again
+            if "consensus" in e and not e["consensus"]:
+                raw.pop("consensus", None)
             key = row["inst"]
             if "after" in e or "net" in e:                         # a net close undone: back into the net
                 for k in ("net", "after"):
@@ -494,6 +498,16 @@ class History:
         with self.lock:
             self.con.execute("UPDATE inst SET closed_at=NULL, closed_by=NULL, closed_tx=NULL, dirty=1 WHERE key=?",
                              (key,))
+
+    def prior_checkins(self, net_id: str | None, before: str, exclude: str | None = None) -> dict[str, int]:
+        """{call: how many earlier times of this scheduled net it took part in (net control or checked in)} — the
+        net-wide callsign agreement's "has checked in here before" (station/consensus.py)."""
+        if not net_id:
+            return {}
+        rows = self._q("SELECT part.call, COUNT(DISTINCT part.inst) n FROM part JOIN inst ON inst.key=part.inst"
+                       " WHERE inst.net_id=? AND inst.start<? AND inst.key!=? AND part.role IN ('checkin','ncs')"
+                       " GROUP BY part.call", (net_id, before, exclude or ""))
+        return {r["call"]: r["n"] for r in rows}
 
     def instance_of(self, radio: str, start: str) -> str | None:
         r = self._one("SELECT inst FROM tx WHERE radio=? AND start>=? ORDER BY start LIMIT 1", (radio, start))

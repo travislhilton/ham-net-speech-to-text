@@ -5,6 +5,9 @@ callsign: N0CALL
 qrz_online: true            # look up new callsigns on QRZ.com when online (needs hamkit.qrz set-login)
 port: 8091
 callfix: true               # correct near-miss callsigns ('WB6BQW' -> WB6DQW heard in this net); what was heard is kept
+consensus: true             # one station, one call across a net: variants merged by FCC licence, name, town, history
+# A schedule entry can say its name as net control says it, for the fix-ups (station/fixups.py):
+#   spoken: [Springfield County ARES net]
 # region_state: IL          # your state for callsign correction, when your licence address is elsewhere (default: FCC)
 
 radios:                     # one entry per radio; each needs its own sound input (never the VARA one)
