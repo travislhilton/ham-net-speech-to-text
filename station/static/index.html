@@ -831,7 +831,10 @@ function connect(){
   es.addEventListener("urgent",e=>{S.urgent=JSON.parse(e.data).urgent;renderUrgent()});
   es.addEventListener("inst",e=>{const d=JSON.parse(e.data);   // a net's history changed: refresh what is open on it (never while typing)
     if(!$("netsDlg").open||$("netsBody").contains(document.activeElement)&&document.activeElement.matches("input,textarea,select"))return;
-    if(NV.tab==="minutes"&&NV.key===d.key)renderMinutes();else if(NV.tab==="history")renderHistory()});
+    const go=()=>{INST_T=null;
+      if(POINTER_DOWN||Date.now()-LAST_TOUCH<2000){INST_T=setTimeout(go,1000);return}   // never swap a button under the pointer
+      if(NV.tab==="minutes"&&NV.key===d.key)renderMinutes();else if(NV.tab==="history")renderHistory()};
+    if(!INST_T)INST_T=setTimeout(go,3000)});
   es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;S.accurate_where=d.where;S.accurate_rate=d.rate;renderFeed();wlAccNote()});
 }
 // ---------- the Nets area: Schedule | History | Analysis | Minutes | Still open ----------
@@ -1060,6 +1063,17 @@ function itemForm(i){
    <label>Place <input name="place" value="${esc(i.place||"")}"></label></div>
    <div class="row"><button class="primary" type="submit">Save</button> <button type="button" data-icancel>Cancel</button> <span class="err"></span></div></form>`}
 let MIN=null;
+let INST_T=null,POINTER_DOWN=false,LAST_TOUCH=0;
+document.addEventListener("pointerdown",()=>{POINTER_DOWN=true;LAST_TOUCH=Date.now()},true);
+document.addEventListener("pointerup",()=>{POINTER_DOWN=false;LAST_TOUCH=Date.now()},true);
+document.addEventListener("pointercancel",()=>{POINTER_DOWN=false},true);
+// copy that also works on plain http (no secure context, so no navigator.clipboard): a selected textarea + execCommand
+function copyText(text){
+  if(window.isSecureContext&&navigator.clipboard)return navigator.clipboard.writeText(text).then(()=>true,()=>legacyCopy(text));
+  return Promise.resolve(legacyCopy(text))}
+function legacyCopy(text){const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");
+  ta.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";(document.querySelector("dialog[open]")||document.body).appendChild(ta);
+  ta.select();ta.setSelectionRange(0,text.length);let ok=false;try{ok=document.execCommand("copy")}catch(e){}ta.remove();return ok}   // refresh the open minutes/history at most every 3 s while a pass streams updates
 async function renderMinutes(){
   const box=$("netsBody");
   if(!NV.key){if(!NV.net){box.innerHTML=pickNetHtml("its latest minutes (or open any net from History)");return}
@@ -1075,6 +1089,8 @@ async function renderMinutes(){
     return `<section class="msec k-${k}"><h4>${KIND[k]} <span class="muted">(${its.length})</span></h4><ul class="items">${its.map(i=>itemHtml(i,{from:i.inst!==d.key})).join("")}</ul></section>`};
   const carried=(d.carried||[]).map(i=>({...i}));
   const txrows=d.tx.map(t=>`<li id="mtx-${esc(t.id)}" class="${t.noise?"noise":""}"><span class="t">${hhmm(t.start)}</span> <b>${esc(t.speaker||"")}</b> ${esc(t.text||"")} ${t.wav?`<button data-play="${esc(t.id)}" title="Play">▶</button>`:""}</li>`).join("");
+  const keep=$("netsBody").dataset.mkey===d.key?{top:$("netsBody").scrollTop,open:[...$("netsBody").querySelectorAll("details[id]")].filter(x=>x.open).map(x=>x.id)}:null;
+  $("netsBody").dataset.mkey=d.key;
   $("netsBody").innerHTML=`<div class="mhead">
      <div class="mnav">${d.prev?`<button data-mins="${esc(d.prev)}" title="The time before">‹</button>`:""}<div><div class="mtitle">${esc(net?d.name:"Conversation")} ${d.emergency?'<span class="badge emergency">Emergency net</span>':""}</div>
      <div class="small muted">${esc(fmtDate(d.occ_date||d.start))} · ${hhmm(d.start)}–${hhmm(d.end)}${d.freq_mhz?" · "+mhz(d.freq_mhz,d.mode):""} · ${d.tx_count} transmissions${acc?" · "+acc:""}${(d.winlink||[]).length?` · ✉ Winlink sent ${(d.winlink||[]).length}×`:""}</div></div>${d.next?`<button data-mins="${esc(d.next)}" title="The time after">›</button>`:""}</div>
@@ -1090,14 +1106,22 @@ async function renderMinutes(){
    ${sec("announcement")}${sec("event")}${sec("action",carried.filter(i=>i.kind==="action"))}${sec("decision")}${sec("traffic",carried.filter(i=>i.kind==="traffic"))}${sec("note")}
    <section class="msec"><h4>Add to the minutes</h4><div id="iAddBox">${itemForm({kind:"action"})}</div></section>
    <section class="msec"><h4>Notes</h4><textarea id="mNotes" rows="4" placeholder="Anything else for the record. Saved when you click outside the box.">${esc(d.notes||"")}</textarea><span class="small muted" id="mNotesSt"></span></section>
-   ${d.dismissed.length?`<details><summary class="small">Marked not right (${d.dismissed.length})</summary><ul class="items">${d.dismissed.map(i=>`<li class="item"><div class="itx muted">${esc(i.text)}</div><button data-istatus="${i.id}" data-v="open">Put back</button></li>`).join("")}</ul></details>`:""}
+   ${d.dismissed.length?`<details id="mDis"><summary class="small">Marked not right (${d.dismissed.length})</summary><ul class="items">${d.dismissed.map(i=>`<li class="item"><div class="itx muted">${esc(i.text)}</div><button data-istatus="${i.id}" data-v="open">Put back</button></li>`).join("")}</ul></details>`:""}
    <details id="mTx"${NV.hl?" open":""}><summary>Transcript (${d.tx.length})</summary><ol class="mtx">${txrows}</ol></details>`;
   $("mNcs").onchange=e=>saveMin({ncs:e.target.value});
   $("mNotes").onblur=e=>saveMin({notes:e.target.value},true);
   $("attAdd").onsubmit=e=>{e.preventDefault();const c=e.target.call.value.trim().toUpperCase();if(c)saveMin({add:c})};
   $("mWl").onclick=()=>wlPreview({radio:d.radio,start:d.start,end:d.end});
-  $("mCopy").onclick=async()=>{const t=await (await fetch(`/api/history/minutes?key=${enc(d.key)}&format=txt`)).text();
-    try{await navigator.clipboard.writeText(t);$("mCopy").textContent="Copied ✓"}catch(err){const w=window.open("","_blank");if(w){w.document.title="Minutes";w.document.body.innerHTML="<pre></pre>";w.document.body.firstChild.textContent=t}}};
+  // the text is fetched ahead, so the copy happens inside the click (browsers only allow a copy during the click itself)
+  let mtxt=null;fetch(`/api/history/minutes?key=${enc(d.key)}&format=txt`).then(r=>r.text()).then(x=>{mtxt=x}).catch(()=>{});
+  $("mCopy").onclick=async()=>{const b=$("mCopy");
+    if(mtxt==null){try{mtxt=await (await fetch(`/api/history/minutes?key=${enc(d.key)}&format=txt`)).text()}catch(e){b.textContent="Could not load";return}}
+    const ok=await copyText(mtxt);
+    if(ok){b.textContent="Copied ✓";setTimeout(()=>{if(b.isConnected)b.textContent="Copy as text"},2500);return}
+    // last resort: show the text, selected, to copy by hand
+    b.insertAdjacentHTML("afterend",`<textarea class="mcopybox" rows="8" readonly style="width:100%;margin-top:6px">${esc(mtxt)}</textarea><div class="small muted">Select all and copy (Cmd+C / long-press → Copy).</div>`);
+    const box=b.parentElement.querySelector(".mcopybox");box.focus();box.select()};
+  if(keep){keep.open.forEach(id=>{const x=$(id);if(x)x.open=true});$("netsBody").scrollTop=keep.top}
   if(NV.hl){const el=$("mtx-"+NV.hl);if(el){el.classList.add("flash");el.scrollIntoView({block:"center"})}NV.hl=null}
 }
 async function saveMin(body,quiet){
