@@ -27,7 +27,7 @@ What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing
   accurate pass; plus faster-whisper large-v3 on a PC with an NVIDIA card) and **benchmarks this PC** to choose the
   live engine (`tools/pick_engine.py` → `config/engine.yaml`): Intel graphics, NVIDIA (CUDA) or CPU;
 - **measures what this PC can do for the accurate pass on its own** (`tools/pick_accurate.py` → `accurate:` in
-  `config/engine.yaml`): each accurate model on each device (Intel GPU, NPU, CPU; NVIDIA), then decides *both
+  `config/engine.yaml`): each accurate model on each device (Intel GPU, CPU; NVIDIA; not the NPU, see below), then decides *both
   stages* (fast enough to follow every transmission), *final text only* (after each net) or *none*;
 - downloads the FCC amateur license database and the world country file, and schedules a daily
   update (task "HamNet Callbook Update", 04:15, only when online);
@@ -50,7 +50,9 @@ on; when it is done it puts your plan and mode back (also at its next start, if 
 can favour the battery. Measured: the station's hold brought the laptop out of Modern Standby by itself, and the
 same work took 0.5 s instead of 6 s. `keep_awake:` in `station.yaml`: `listening` (the default), `always`, `off`.
 With "Listen only during nets" on a radio, the HamNet plan is on only during nets. Between nets the station keeps
-running in Modern Standby (it answered every 30 s with the screen off). Set once on the laptop itself:
+running in Modern Standby (it answered every 30 s with the screen off). The NPU is not used: with OpenVINO 2026.4 its Whisper pipeline refused the
+station's callsign prompt and the large models did not finish compiling for it; at full speed the graphics did the
+final text at 0.07x real time anyway. Set once on the laptop itself:
 - the maker's performance profile to **Performance** (ASUS: MyASUS → Fan Profile; a quiet profile capped the whole
   processor to ~0.5 GHz);
 - Settings → System → Power & battery → Presence sensing: **Turn off my screen when I leave** off;
