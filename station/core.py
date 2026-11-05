@@ -139,6 +139,8 @@ class Station:
         self.hints: dict = {r["id"]: {"cards": [], "reminders": [], "net": self.hinters[r["id"]].classify()}
                             for r in config["radios"]}
         self.meters = {r["id"]: self.make_meter(r) for r in config["radios"]}
+        import collections
+        self.level_recent = {r["id"]: collections.deque(maxlen=150) for r in config["radios"]}   # Set level… (15 s)
         self.radio_cfg = {r["id"]: r for r in config["radios"]}
         self.radios = {r["id"]: {"id": r["id"], "name": r.get("name", r["id"]), "device": r.get("device"),
                                  "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode", "FM"),
@@ -407,6 +409,44 @@ class Station:
         print(f"{datetime.now():%H:%M:%S} winlink: {len(msgs)} message(s) to {', '.join(to)} in {install}\\{account} Outbox",
               flush=True)
         return res
+
+    def _level_ctx(self, rid: str):
+        from . import levels
+        if rid not in self.radios:
+            raise KeyError(rid)
+        r = self.radios[rid]
+        band = levels.band_for(r.get("mode"), r.get("gate"))
+        return levels, r, band, levels.WinGain(r.get("device") or "")
+
+    def level(self, rid: str, step: str = "noise") -> dict:
+        """Set level… : the last 3 s against the target for this step, and the Windows recording level."""
+        levels, r, band, gain = self._level_ctx(rid)
+        st = levels.stats(list(self.level_recent[rid]), time.time() - levels.WINDOW_S, voice=step == "voice")
+        return {"radio": rid, "step": step, "mode": r.get("mode"), "gate": r.get("gate"), "state": r.get("state"),
+                "band": list(band) if step == "noise" else list(levels.VOICE_PEAK), "stats": st,
+                "advice": levels.advise(step, st, band), "gain": gain.get()}
+
+    def set_level(self, rid: str, body: dict) -> dict:
+        """{"action": "auto"} brings the noise into the target with the Windows level; {"db": x} or {"step": ±1}
+        sets it by hand. The radio must be listening (not paused)."""
+        levels, r, band, gain = self._level_ctx(rid)
+        if r.get("state") != "listening":
+            raise RuntimeError("the radio is not listening: press Resume first")
+        if gain.get() is None:
+            raise RuntimeError("this PC's recording level can't be set from here: use the radio's volume "
+                               "(or Windows Sound settings → Recording → Properties → Levels)")
+        act = body.get("action")
+        if act == "auto":
+            res = levels.auto(lambda since: levels.stats(list(self.level_recent[rid]), since), gain, band)
+            print(f"{datetime.now():%H:%M:%S} {rid} level set automatically: {res['advice']['say']} "
+                  f"(Windows {res['gain']['db'] if res['gain'] else '?'} dB)", flush=True)
+            return self.level(rid) | {"auto": res}
+        if "db" in body:
+            gain.set_db(float(body["db"]))
+        elif "step" in body:
+            g = gain.get()
+            gain.set_db(g["db"] + max(-6.0, min(6.0, float(body["step"]))))
+        return self.level(rid, str(body.get("for") or "noise"))
 
     def set_paused(self, rid: str, paused: bool, by: str = "operator") -> dict:
         """Stop (or resume) listening to a radio: the sound input is closed, nothing is recorded or
@@ -1161,6 +1201,7 @@ class Station:
                         if m:
                             m["id"] = rid
                             self.bus.publish("m", m)
+                            self.level_recent[rid].append((time.time(), m["rms"], m["peak"], m["rx"]))
                         if time.time() - last > 0.25:
                             last = time.time()
                             self._set_radio(rid, level_db=round(seg.level_db, 1), carrier=seg.active,

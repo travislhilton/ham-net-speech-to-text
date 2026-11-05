@@ -13,3 +13,4 @@ faster-whisper>=1.0       # previous offline fallback; kept until the OpenVINO e
 pyserial>=3.5
 keyring>=25           # QRZ password in Windows Credential Manager
 segno>=1.6           # QR codes for "Open on a phone" (pure Python, works offline)
+pycaw>=20240316       # Set level…: read/set the Windows recording level of a radio's sound input

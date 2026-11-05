@@ -152,6 +152,10 @@ body.dragging{user-select:none;cursor:row-resize}
 .bar .fill{position:absolute;left:0;top:3px;bottom:3px;border-radius:3px;width:0;transition:width .08s linear;background:var(--muted)}
 .bar .fill.ok{background:var(--ok)}.bar .fill.warn{background:var(--warnc)}.bar .fill.bad{background:var(--bad)}.bar .fill.idle{background:var(--muted)}
 .bar .pk{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);left:0}
+/* Set level…: the meter with its target band */
+#levelDlg .bar{height:26px;margin:6px 0 2px}#levelDlg .tgt{position:absolute;top:0;bottom:0;background:rgba(40,160,80,.22);border-left:2px solid var(--ok);border-right:2px solid var(--ok)}
+#levelDlg .scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}#levelDlg .big{font-size:20px;font-weight:600;margin:6px 0}
+#levelDlg .say.ok{color:var(--ok)}#levelDlg .say.low,#levelDlg .say.high{color:var(--warnc)}#levelDlg .say.clip,#levelDlg .say.dead{color:var(--bad)}#levelDlg ol{padding-left:20px}
 .mv.ok{color:var(--ok)}.mv.warn{color:var(--warn)}.mv.bad{color:var(--bad)}.mv.idle{color:var(--muted)}
 .wf{display:block;width:100%;height:120px;margin-top:9px;border-radius:6px;background:#080c28;image-rendering:auto}
 .axis{position:relative;height:16px;font-size:11px;color:var(--muted)}.axis span{position:absolute;transform:translateX(-50%)}.axis span:first-child{transform:none}
@@ -378,6 +382,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
 <dialog id="testDlg"><div id="testBody"></div></dialog>
+<dialog id="levelDlg"><div id="levelBody"></div></dialog>
 <dialog id="netsDlg" class="big" aria-labelledby="netsTitle"><div class="dhead"><h3 id="netsTitle">Nets</h3><label class="small">Net <select id="netPick"></select></label><button id="netsClose" class="x" aria-label="Close">✕</button></div>
 <nav id="netsTabs" class="ntabs" role="tablist" aria-label="Nets"><button role="tab" data-ntab="schedule">Schedule</button><button role="tab" data-ntab="history">History</button><button role="tab" data-ntab="analysis">Analysis</button><button role="tab" data-ntab="minutes">Minutes</button><button role="tab" data-ntab="open">Still open</button></nav>
 <div id="netsBody" class="dbody" role="tabpanel"></div></dialog>
@@ -693,6 +698,68 @@ async function runAcc(radio,start,end){
   const d=await r.json();if(!r.ok){alert(d.error||"Could not start the accurate pass");return}
   const i=S.accurate.findIndex(j=>j.key===d.key);if(i>=0)S.accurate[i]=d;else S.accurate.push(d);renderFeed(radio);wlAccNote();
 }
+// ---------- Set level…: the radio's audio against a target, and the Windows recording level (station/levels.py) ----------
+let LVD=null;
+function openLevel(rid){
+  LVD={rid,step:"noise",d:null,busy:"",msg:"",auto:null};renderLevel();
+  if(!$("levelDlg").open)$("levelDlg").showModal();pollLevel();
+}
+async function pollLevel(){
+  if(!LVD||!$("levelDlg").open){LVD=null;return}
+  const me=LVD;
+  try{me.d=await api(`/api/radios/${encodeURIComponent(me.rid)}/level?step=${me.step}`);if(!me.busy)me.msg=""}catch(e){me.msg=e.message}
+  if(LVD===me){renderLevelLive();setTimeout(pollLevel,800)}
+}
+async function levelPost(body,busy){
+  if(!LVD)return;LVD.busy=busy;LVD.msg="";renderLevelLive();
+  try{const r=await fetch(`/api/radios/${encodeURIComponent(LVD.rid)}/level`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({for:LVD.step},body))});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||"could not set the level");
+    if(LVD){LVD.d=d;LVD.auto=d.auto||null}}
+  catch(e){if(LVD)LVD.msg=e.message}
+  if(LVD){LVD.busy="";renderLevelLive()}
+}
+function renderLevel(){
+  const L=LVD,r=S.radios.find(x=>x.id===L.rid)||{},rn=r.name||L.rid,fm=r.gate==="carrier"||["FM","NFM","DIG"].includes((r.mode||"FM").toUpperCase());
+  const how=L.step==="noise"
+    ?(r.gate==="carrier"?"This radio's data jack always carries hiss between transmissions: nothing to change on the radio."
+      :fm?"<b>Open the squelch</b> (or press the radio's MONI button) so you hear steady hiss. Close it again when you are done."
+      :"Tune to a <b>quiet frequency</b> (band noise only), AGC on, as you would listen.")
+    :"<b>Close the squelch.</b> Have someone talk (or wait for traffic). Peaks should stay in the green, never reach the red line.";
+  $("levelBody").innerHTML=`<h3>Set level · ${esc(rn)}</h3>
+   <ol class="small"><li${L.step==="noise"?' class="cur"':""}><b>Noise level</b>: ${L.step==="noise"?how:"done"}</li>
+   <li${L.step==="voice"?' class="cur"':""}><b>Voice check</b>${L.step==="voice"?": "+how:""}</li></ol>
+   <div class="bar" id="lvBar"><div class="tgt" id="lvTgt"></div><div class="fill" id="lvFill"></div><div class="pk" id="lvPk"></div></div>
+   <div class="scale"><span>-70</span><span>-50</span><span>-30</span><span>-10</span><span>0 dBFS</span></div>
+   <div class="big"><span id="lvNow">…</span> <span class="say" id="lvSay"></span></div>
+   <div id="lvGain"></div>
+   <div class="row">${L.step==="noise"?'<button id="lvNext">Next: voice check</button>':'<button id="lvBack">Back to the noise level</button>'} <button onclick="$('levelDlg').close()">Done</button> <span class="bad small" id="lvMsg"></span></div>
+   <p class="small muted">The green band is the target for this step (${L.step==="noise"?(fm?"steady hiss: -30 to -20 dBFS":"band noise: -45 to -32 dBFS"):"voice peaks: -12 to -3 dBFS"}). The bar is the level now, the black line the loudest peak.</p>`;
+  const nx=$("lvNext");if(nx)nx.onclick=()=>{L.step="voice";renderLevel()};
+  const bk=$("lvBack");if(bk)bk.onclick=()=>{L.step="noise";renderLevel()};
+  renderLevelLive();
+}
+function renderLevelLive(){
+  const L=LVD;if(!L||!$("lvSay"))return;const d=L.d;
+  if(d){const b=d.band;$("lvTgt").style.left=pc(b[0],LV)+"%";$("lvTgt").style.width=(pc(b[1],LV)-pc(b[0],LV))+"%";
+    const a=d.advice||{};$("lvSay").textContent=L.busy||a.say||"";$("lvSay").className="say "+(L.busy?"":a.state||"");
+    const st=d.stats||{};$("lvNow").textContent=st.n?`${L.step==="voice"?"peak "+st.peak:st.rms} dBFS`:"…";
+    if(d.state!=="listening")$("lvSay").textContent="This radio is not listening: press Resume on its card first.";
+    const g=d.gain;
+    $("lvGain").innerHTML=g?`<div class="row"><span>Windows recording level: <b>${g.pct}%</b> <span class="muted small">(${g.db} dB of ${g.min}…${g.max})</span></span>
+       <button data-lvs="-3">−3 dB</button><button data-lvs="-1">−1</button><button data-lvs="1">+1</button><button data-lvs="3">+3 dB</button>
+       ${L.step==="noise"?`<button class="primary" id="lvAuto"${L.busy?" disabled":""}>Adjust automatically</button>`:""}</div>
+       ${L.auto&&L.step==="noise"?`<p class="small muted">Adjusted in ${L.auto.steps.length} step(s): ${esc(L.auto.advice.say)}</p>`:""}`
+      :'<p class="small muted">This PC\'s recording level can\'t be set from here: turn the radio\'s volume (or Windows Sound settings → Recording → this input → Properties → Levels) and watch the bar.</p>';
+    for(const x of $("lvGain").querySelectorAll("[data-lvs]"))x.onclick=()=>levelPost({step:+x.dataset.lvs},"Setting…");
+    const au=$("lvAuto");if(au)au.onclick=()=>levelPost({action:"auto"},"Adjusting… keep the squelch open (about 15 s)");}
+  $("lvMsg").textContent=L.msg||"";
+}
+function levelMeter(m){ // the live bar, ten times a second
+  if(!LVD||m.id!==LVD.rid||!$("lvFill"))return;
+  const v=LVD.step==="voice"?m.peak:m.rms;
+  $("lvFill").style.width=pc(v,LV)+"%";$("lvPk").style.left=pc(m.peak,LV)+"%";
+  const b=LVD.d&&LVD.d.band;$("lvFill").className="fill "+(m.peak>=-1?"bad":b&&v>=b[0]&&v<=b[1]?"ok":"warn");
+}
 // ---------- the over-the-air transcription test ----------
 let TEST=null;
 async function openTest(rid){
@@ -818,7 +885,7 @@ function ensureCard(r){
    <canvas class="wf" width="${m.bins||128}" height="120" aria-label="Waterfall"></canvas>
    <div class="axis">${axis(r)}</div><div class="cap small muted"></div><div class="err"></div>
    <div class="why"></div><div class="endnet"></div><div class="sch"></div>
-   <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-nets="${esc(r.id)}" title="This radio's nets, and listening only while they are on">Nets…</button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button></div>`;
+   <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-nets="${esc(r.id)}" title="This radio's nets, and listening only while they are on">Nets…</button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button> <button data-level="${esc(r.id)}" title="Set this radio's audio level just right, with a meter and a target">Set level…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
   top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button><button class="fold" data-fold="${id}" title="Fold this panel away to see more of the log (or tap the open tab)"></button></div>
@@ -907,6 +974,7 @@ function renderRadios(){
   }
 }
 function onMeter(d){
+  levelMeter(d);
   const el=document.getElementById("r-"+d.id);if(!el)return;
   const dot=$("dot-"+d.id);if(dot)dot.classList.toggle("rx",!!d.rx);
   const rx=el.querySelector(".rx");rx.textContent=d.rx?"RX":"idle";rx.className="rx"+(d.rx?" on":"");
@@ -1084,6 +1152,7 @@ document.addEventListener("click",e=>{
       fetch(`/api/radios/${encodeURIComponent(cl.dataset.clear)}/clear`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})}
   const ac=e.target.closest("[data-acc]");if(ac)runAcc(ac.dataset.acc,ac.dataset.s,ac.dataset.e);
   const te=e.target.closest("[data-test]");if(te)openTest(te.dataset.test);
+  const lvb=e.target.closest("[data-level]");if(lvb)openLevel(lvb.dataset.level);
   const w=e.target.closest("[data-wls]");if(w)wlPreview({radio:w.dataset.wls,start:w.dataset.s,end:w.dataset.e});
   const ea=e.target.closest("[data-endask]");if(ea){e.preventDefault();ENDASK=ea.dataset.endask+"|"+ea.dataset.key;renderFeed(ea.dataset.endask);renderRadios()}
   if(e.target.closest("[data-endcancel]")){e.preventDefault();ENDASK=null;renderFeed();renderRadios()}

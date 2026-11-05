@@ -101,6 +101,14 @@ you chose is remembered. Each column shows:
   voice over the noise floor; green 20 dB+, yellow 10–20, red under 10), and a **waterfall** of the
   receiver's audio on the current frequency (the PC gets audio, not RF, so this is the audio passband,
   like WSJT-X/fldigi). Bounds can be changed per radio in `station.yaml` (`meter:`).
+- **Set level…** (on each radio card): sets the audio level just right, once per radio and cable. Step 1, *noise*:
+  FM — open the squelch (MONI) for steady hiss (a data jack always has it); SSB/AM — a quiet frequency. The meter
+  shows the level against a green target band (hiss -30 to -20 dBFS; band noise -45 to -32) with advice in words,
+  the Windows recording level of that input with −/+ buttons, and **Adjust automatically**, which measures, sets
+  the Windows level and measures again until the hiss is in the band (or says to turn the radio's volume, when
+  Windows' range is not enough). Step 2, *voice*: close the squelch and let someone talk; peaks should stay
+  between -12 and -3 dBFS. A handheld's speaker/earphone jack is very loud: set the radio's volume low and leave
+  it, and let the Windows level do the fine adjustment (`station/levels.py`).
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
   transmission after that is logged with it (kept across restarts in `data\operator.json`).
 - **Pause / Resume** (on each radio card): stop listening to that radio. Its sound input is closed and
@@ -376,6 +384,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Piece | State |
 |---|---|
 | Live signal + SNR meters and waterfall per radio; several radios at once | working |
+| Set level… per radio: noise and voice against a target, Windows recording level read/set, Adjust automatically | working (handheld's speaker jack into a Digirig: -13 dBFS clipping → -24 dBFS in one step) |
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |
 | Repeaters / carrier that stays up between speakers: split at speech pauses (>= 0.8 s) and carrier dips, cut in the middle of the pause, a fragment ("Over.", the end of a call sign) kept with its neighbour, a voiceless repeater tail never its own transmission | working (`split_pause_ms`, `dip_split_ms`, carrier-gate radios; see "Segmenting"); 2026-11-03 FM net replayed: 140 → 105 transmissions, blank ones 31 → 3, words lost in dropped pieces 79 → 0 |

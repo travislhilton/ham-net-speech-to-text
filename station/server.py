@@ -72,6 +72,12 @@ def make_handler(station):
                 return self._json({"addresses": out})
             if u.path == "/api/state":
                 return self._json(with_who("snapshot", station.snapshot()))
+            lv = re.fullmatch(r"/api/radios/([\w-]+)/level", u.path)          # Set level…: meter vs target
+            if lv:
+                try:
+                    return self._json(station.level(lv.group(1), (parse_qs(u.query).get("step") or ["noise"])[0]))
+                except KeyError:
+                    return self._json({"error": "no such radio"}, 404)
             if u.path == "/api/lookup":
                 call = (parse_qs(u.query).get("call") or [""])[0].upper()
                 if not re.fullmatch(r"[A-Z0-9/]{3,12}", call) or not station.callbook:
@@ -138,7 +144,7 @@ def make_handler(station):
 
         def do_POST(self):
             u = urlparse(self.path)
-            m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen))?", u.path)
+            m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen|level))?", u.path)
             who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
@@ -208,6 +214,8 @@ def make_handler(station):
                     return self._json(station.nets.set_listen(m.group(1), body))
                 if m.group(2) == "clear":
                     return self._json(station.clear_radio(m.group(1)))
+                if m.group(2) == "level":                        # Set level…: {"action": "auto"} | {"db"} | {"step"}
+                    return self._json(station.set_level(m.group(1), body))
                 return self._json(station.set_radio(m.group(1), body.get("freq_mhz"), body.get("mode")))
             except (RuntimeError, FileNotFoundError) as e:
                 return self._json({"error": str(e)}, 409)
