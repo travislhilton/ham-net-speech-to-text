@@ -4,6 +4,8 @@ import threading
 import urllib.error
 import urllib.request
 
+import numpy as np
+
 from station import levels
 from station.server import serve
 from tests.test_station import station  # noqa: F401 — the fixture
@@ -104,5 +106,57 @@ def test_level_route(station):  # noqa: F811
             raise AssertionError("expected 404")
         except urllib.error.HTTPError as e:
             assert e.code == 404
+    finally:
+        srv.shutdown()
+
+
+def test_crest_tells_clean_hiss_from_a_clipping_amplifier():
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal(16000 * 3) * 0.05
+    clean = levels.analyze(x)
+    assert 10 <= clean["crest"] <= 11.5 and abs(clean["rms"] - 20 * np.log10(0.05)) < 0.5
+    clipped = levels.analyze(np.clip(x, -0.06, 0.06))
+    assert clipped["crest"] < levels.CREST_MIN
+    t = np.arange(16000 * 3) / 16000
+    assert levels.analyze(0.05 * np.sin(2 * np.pi * 60 * t) + x * 0.1)["hum"] > -3
+
+
+def pt(knob, o_rms, c_rms, crest=10.5, o_gain=10.0, c_gain=10.0):
+    return {"knob": knob, "open": {"rms": o_rms, "peak": o_rms + 12, "crest": crest, "hum": -40},
+            "closed": {"rms": c_rms, "peak": c_rms + 12, "crest": 10, "hum": -40},
+            "open_gain_db": o_gain, "closed_gain_db": c_gain}
+
+
+def test_margin_compensates_for_a_windows_level_change_between_open_and_closed():
+    assert levels.knob_point(pt("1/4", -25, -60))["margin"] == 35
+    assert levels.knob_point(pt("1/4", -25, -55, o_gain=10, c_gain=15))["margin"] == 35
+
+
+def test_best_knob_is_the_lowest_clean_one_near_the_best_margin():
+    res = levels.best_knob([pt("1/2", -25, -64), pt("1/4", -25, -56), pt("3/8", -25, -63), pt("3/4", -25, -70, crest=6)])
+    assert res["best"] == "3/8" and "3/8" in res["say"]               # 3/4 distorts; 1/2 is only 1 dB better
+    assert levels.best_knob([pt("3/4", -25, -70, crest=6)])["best"] is None
+    assert levels.best_knob([{"knob": "1/4", "open": pt("1/4", -25, -60)["open"]}])["best"] is None
+
+
+def test_knob_route(station):  # noqa: F811
+    srv = serve(station, "127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        station.knob_points["ftm"]["1/4"] = pt("1/4", -25, -60)
+        d = json.loads(urllib.request.urlopen(base + "/api/radios/ftm/level?step=knob").read())
+        assert d["knobs"] == levels.KNOBS and d["result"]["best"] == "1/4"
+        assert station.level("ftm", "knob")["result"]["margin"] == 35
+        station.radios["ftm"]["state"] = "listening"
+        station._level_ctx = lambda rid: (levels, station.radios[rid], levels.NOISE_FM, FakeGain(5.0))
+        assert station.set_level("ftm", {"action": "knob_reset"})["result"]["best"] is None
+        station.level_tap.clear()
+        threading.Timer(0.2, lambda: station.level_tap["ftm"].extend([np.full(16000, 0.01, np.float32)] * 4)).start()
+        out = station.set_level("ftm", {"action": "knob", "knob": "1/2", "squelch": "closed"})
+        assert out["result"]["points"][0]["closed"]["rms"] == -40.0
+        import pytest
+        with pytest.raises(ValueError):
+            station.set_level("ftm", {"action": "knob", "knob": "11", "squelch": "open"})
     finally:
         srv.shutdown()

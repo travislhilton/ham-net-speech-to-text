@@ -101,13 +101,18 @@ you chose is remembered. Each column shows:
   voice over the noise floor; green 20 dB+, yellow 10–20, red under 10), and a **waterfall** of the
   receiver's audio on the current frequency (the PC gets audio, not RF, so this is the audio passband,
   like WSJT-X/fldigi). Bounds can be changed per radio in `station.yaml` (`meter:`).
-- **Set level…** (on each radio card): sets the audio level just right, once per radio and cable. Step 1, *noise*:
+- **Set level…** (on each radio card): sets the audio level just right, once per radio and cable. Step 1, *radio
+  volume*: a handheld's amplifier adds hiss and hum as its volume goes up and distorts near the top, so for each knob
+  position (1/8 … 7/8 of a turn) the station measures squelch-open hiss (after setting the Windows level) and the
+  squelch-closed floor; the *margin* between them, and the hiss's crest factor (clean ≈ 10–11 dB, a clipping
+  amplifier < 8), pick the cleanest position: the lowest one within 1.5 dB of the best undistorted margin. Step 2,
+  *noise*:
   FM — open the squelch (MONI) for steady hiss (a data jack always has it); SSB/AM — a quiet frequency. The meter
   shows the level against a green target band (hiss -30 to -20 dBFS; band noise -45 to -32) with advice in words,
   the Windows **input volume** of that input (Windows 11: Settings → System → Sound → Input → the input → Input
   volume; same as the old panel's Levels → Microphone) with −/+ buttons, and **Adjust automatically**, which measures, sets
   the Windows level and measures again until the hiss is in the band (or says to turn the radio's volume, when
-  Windows' range is not enough). Step 2, *voice*: close the squelch and let someone talk; peaks should stay
+  Windows' range is not enough). Step 3, *voice*: close the squelch and let someone talk; peaks should stay
   between -12 and -3 dBFS. A handheld's speaker/earphone jack is very loud: set the radio's volume low and leave
   it, and let the Windows level do the fine adjustment (`station/levels.py`).
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every

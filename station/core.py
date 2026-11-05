@@ -141,6 +141,8 @@ class Station:
         self.meters = {r["id"]: self.make_meter(r) for r in config["radios"]}
         import collections
         self.level_recent = {r["id"]: collections.deque(maxlen=150) for r in config["radios"]}   # Set level… (15 s)
+        self.level_tap: dict = {}                       # rid -> list of raw frames while a knob position is measured
+        self.knob_points: dict = {r["id"]: {} for r in config["radios"]}
         self.radio_cfg = {r["id"]: r for r in config["radios"]}
         self.radios = {r["id"]: {"id": r["id"], "name": r.get("name", r["id"]), "device": r.get("device"),
                                  "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode", "FM"),
@@ -422,6 +424,10 @@ class Station:
         """Set level… : the last 3 s against the target for this step, and the Windows recording level."""
         levels, r, band, gain = self._level_ctx(rid)
         st = levels.stats(list(self.level_recent[rid]), time.time() - levels.WINDOW_S, voice=step == "voice")
+        if step == "knob":
+            pts = [self.knob_points[rid][k] for k in levels.KNOBS if k in self.knob_points[rid]]
+            return {"radio": rid, "step": step, "state": r.get("state"), "knobs": levels.KNOBS,
+                    "result": levels.best_knob(pts), "gain": gain.get()}
         return {"radio": rid, "step": step, "mode": r.get("mode"), "gate": r.get("gate"), "state": r.get("state"),
                 "band": list(band) if step == "noise" else list(levels.VOICE_PEAK), "stats": st,
                 "advice": levels.advise(step, st, band), "gain": gain.get()}
@@ -436,6 +442,22 @@ class Station:
             raise RuntimeError("this PC's input volume can't be set from here: Windows Settings → System → Sound → "
                                "Input → this input → Input volume (and the radio's volume knob)")
         act = body.get("action")
+        if act == "knob_reset":
+            self.knob_points[rid] = {}
+            return self.level(rid, "knob")
+        if act == "knob":                               # {"knob": "1/4", "squelch": "open"|"closed"}
+            k, sq = str(body.get("knob")), str(body.get("squelch"))
+            if k not in levels.KNOBS or sq not in ("open", "closed"):
+                raise ValueError("knob must be one of " + ", ".join(levels.KNOBS) + "; squelch open or closed")
+            if sq == "open":                            # the Windows level into the band first: fair comparison
+                levels.auto(lambda since: levels.stats(list(self.level_recent[rid]), since), gain, band)
+            x = self._capture(rid, 3.0)
+            a = levels.analyze(x, SR)
+            p = self.knob_points[rid].setdefault(k, {"knob": k})
+            p[sq] = a
+            p[sq + "_gain_db"] = (gain.get() or {}).get("db")
+            print(f"{datetime.now():%H:%M:%S} {rid} knob {k} squelch {sq}: {a}", flush=True)
+            return self.level(rid, "knob")
         if act == "auto":
             res = levels.auto(lambda since: levels.stats(list(self.level_recent[rid]), since), gain, band)
             print(f"{datetime.now():%H:%M:%S} {rid} level set automatically: {res['advice']['say']} "
@@ -447,6 +469,20 @@ class Station:
             g = gain.get()
             gain.set_db(g["db"] + max(-6.0, min(6.0, float(body["step"]))))
         return self.level(rid, str(body.get("for") or "noise"))
+
+    def _capture(self, rid: str, seconds: float) -> np.ndarray:
+        """The radio's raw audio for `seconds` (while it is listening)."""
+        tap: list = []
+        self.level_tap[rid] = tap
+        try:
+            t = time.time()
+            while sum(len(f) for f in tap) < seconds * SR and time.time() - t < seconds + 5:
+                time.sleep(0.1)
+        finally:
+            self.level_tap.pop(rid, None)
+        if not tap:
+            raise RuntimeError("no audio came from the radio's input")
+        return np.concatenate(tap)
 
     def set_paused(self, rid: str, paused: bool, by: str = "operator") -> dict:
         """Stop (or resume) listening to a radio: the sound input is closed, nothing is recorded or
@@ -1196,6 +1232,9 @@ class Station:
                             break
                         frame = frames.get(timeout=5)
                         raw.add(frame)
+                        tap = self.level_tap.get(rid)
+                        if tap is not None:
+                            tap.append(frame)
                         self.handle(rid, seg, frame)
                         m = meter.feed(frame, seg.active, seg.gate)
                         if m:

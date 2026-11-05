@@ -726,8 +726,9 @@ function renderLevel(){
       :"Tune to a <b>quiet frequency</b> (band noise only), AGC on, as you would listen.")
     :"<b>Close the squelch.</b> Have someone talk (or wait for traffic). Peaks should stay in the green, never reach the red line.";
   $("levelBody").innerHTML=`<h3>Set level · ${esc(rn)}</h3>
-   <ol class="small"><li${L.step==="noise"?' class="cur"':""}><b>Noise level</b>: ${L.step==="noise"?how:"done"}</li>
-   <li${L.step==="voice"?' class="cur"':""}><b>Voice check</b>${L.step==="voice"?": "+how:""}</li></ol>
+   <div class="row">${[["knob","1. Radio volume"],["noise","2. Noise level"],["voice","3. Voice check"]].map(([k,n])=>`<button data-lvstep="${k}"${L.step===k?' class="primary"':""}>${n}</button>`).join(" ")}</div>
+   ${L.step==="knob"?`<p class="small">Find the <b>cleanest radio volume</b>, once per radio: a handheld's amplifier adds hiss and hum as its volume goes up, and distorts near the top. For each knob position (start low): set the knob, press <b>Squelch open</b> while the radio hisses (MONI held or squelch at 0; the station sets the Windows level first), then <b>Squelch closed</b>. About 10 s each.</p><div id="lvKnob"></div>`
+   :`<p class="small">${how}</p>`}
    <div class="bar" id="lvBar"><div class="tgt" id="lvTgt"></div><div class="fill" id="lvFill"></div><div class="pk" id="lvPk"></div></div>
    <div class="scale"><span>-70</span><span>-50</span><span>-30</span><span>-10</span><span>0 dBFS</span></div>
    <div class="big"><span id="lvNow">…</span> <span class="say" id="lvSay"></span></div>
@@ -735,14 +736,17 @@ function renderLevel(){
    <details class="small"><summary>Adjust by hand</summary><ol>
     <li><b>Radio output volume</b> first (set once, then leave it): a handheld's speaker/earphone jack is very loud. Turn its volume knob low, about a quarter, so Windows has room in both directions.</li>
     <li><b>Windows 11 input volume</b> (the fine adjustment): <b>Settings</b> → <b>System</b> → <b>Sound</b> → under <b>Input</b> choose <b>${esc(r.device||"the radio's input")}</b> → <b>Input volume</b> slider. Watch the bar here while you move it. (Older panel: More sound settings → Recording → the input → Properties → Levels → Microphone; it is the same level.)</li></ol></details>
-   <div class="row">${L.step==="noise"?'<button id="lvNext">Next: voice check</button>':'<button id="lvBack">Back to the noise level</button>'} <button onclick="$('levelDlg').close()">Done</button> <span class="bad small" id="lvMsg"></span></div>
-   <p class="small muted">The green band is the target for this step (${L.step==="noise"?(fm?"steady hiss: -30 to -20 dBFS":"band noise: -45 to -32 dBFS"):"voice peaks: -12 to -3 dBFS"}). The bar is the level now, the black line the loudest peak.</p>`;
+   <div class="row">${L.step==="noise"?'<button id="lvNext">Next: voice check</button>':L.step==="voice"?'<button id="lvBack">Back to the noise level</button>':""} <button onclick="$('levelDlg').close()">Done</button> <span class="bad small" id="lvMsg"></span></div>
+   <p class="small muted">The green band is the target for this step (${L.step!=="voice"?(fm?"steady hiss: -30 to -20 dBFS":"band noise: -45 to -32 dBFS"):"voice peaks: -12 to -3 dBFS"}). The bar is the level now, the black line the loudest peak.</p>`;
   const nx=$("lvNext");if(nx)nx.onclick=()=>{L.step="voice";renderLevel()};
   const bk=$("lvBack");if(bk)bk.onclick=()=>{L.step="noise";renderLevel()};
+  for(const b of $("levelBody").querySelectorAll("[data-lvstep]"))b.onclick=()=>{L.step=b.dataset.lvstep;L.d=null;renderLevel()};
   renderLevelLive();
 }
 function renderLevelLive(){
   const L=LVD;if(!L||!$("lvSay"))return;const d=L.d;
+  if(d&&L.step==="knob"&&d.knobs){renderKnob(L,d);$("lvMsg").textContent=L.msg||"";$("lvSay").textContent=L.busy||"";$("lvSay").className="say";return}
+  if(d&&d.knobs)return;
   if(d){const b=d.band;$("lvTgt").style.left=pc(b[0],LV)+"%";$("lvTgt").style.width=(pc(b[1],LV)-pc(b[0],LV))+"%";
     const a=d.advice||{};$("lvSay").textContent=L.busy||a.say||"";$("lvSay").className="say "+(L.busy?"":a.state||"");
     const st=d.stats||{};$("lvNow").textContent=st.n?`${L.step==="voice"?"peak "+st.peak:st.rms} dBFS`:"…";
@@ -756,6 +760,19 @@ function renderLevelLive(){
     for(const x of $("lvGain").querySelectorAll("[data-lvs]"))x.onclick=()=>levelPost({step:+x.dataset.lvs},"Setting…");
     const au=$("lvAuto");if(au)au.onclick=()=>levelPost({action:"auto"},"Adjusting… keep the squelch open (about 15 s)");}
   $("lvMsg").textContent=L.msg||"";
+}
+function renderKnob(L,d){
+  const res=d.result||{},pts={};for(const p of res.points||[])pts[p.knob]=p;
+  const cell=(p,sq)=>p&&p[sq]?`${p[sq].rms} dBFS`:"—";
+  const rows=d.knobs.map(k=>{const p=pts[k];
+    const verdict=!p?"":p.distorted?'<span class="bad">distorts</span>':p.margin!=null?`<b>${p.margin.toFixed(0)} dB</b>${res.best===k?' <span class="ok">✓ best</span>':""}`:"";
+    return `<tr><td>${k} turn</td><td>${cell(p,"open")}${p&&p.open?` <span class="muted small">crest ${p.open.crest}</span>`:""}</td><td>${cell(p,"closed")}${p&&p.closed&&p.closed.hum>-20?' <span class="warnc small">hum</span>':""}</td><td>${verdict}</td>
+     <td><button data-kn="${k}" data-sq="open"${L.busy?" disabled":""}>Squelch open</button> <button data-kn="${k}" data-sq="closed"${L.busy?" disabled":""}>Squelch closed</button></td></tr>`}).join("");
+  $("lvKnob").innerHTML=`<table class="hist"><tr><th>Knob</th><th>Open (hiss)</th><th>Closed (floor)</th><th>Margin</th><th></th></tr>${rows}</table>
+   <p class="small ${res.best?"ok":"muted"}">${esc(res.say||"")}</p><div class="row"><button id="lvKR">Start over</button></div>`;
+  for(const b of $("lvKnob").querySelectorAll("[data-kn]"))b.onclick=()=>levelPost({action:"knob",knob:b.dataset.kn,squelch:b.dataset.sq},
+    b.dataset.sq==="open"?"Measuring with the squelch open (about 10 s)…":"Measuring with the squelch closed (3 s)…");
+  $("lvKR").onclick=()=>levelPost({action:"knob_reset"},"");
 }
 function levelMeter(m){ // the live bar, ten times a second
   if(!LVD||m.id!==LVD.rid||!$("lvFill"))return;

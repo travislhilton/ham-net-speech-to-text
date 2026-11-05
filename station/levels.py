@@ -16,6 +16,8 @@ from __future__ import annotations
 import statistics
 import time
 
+import numpy as np
+
 NOISE_FM = (-30.0, -20.0)          # rms dBFS of open-squelch / data-jack hiss
 NOISE_SSB = (-45.0, -32.0)         # rms dBFS of band noise on a quiet frequency
 VOICE_PEAK = (-12.0, -3.0)         # peak dBFS while someone talks
@@ -69,6 +71,60 @@ def advise(step: str, st: dict, band: tuple[float, float]) -> dict:
         return {"state": "low", "change_db": round(centre - rms, 1),
                 "say": f"Too quiet: turn it up about {round(centre - rms):.0f} dB."}
     return {"state": "ok", "change_db": 0.0, "say": "Just right."}
+
+
+# ---- the radio's volume knob: the cleanest setting --------------------------------------------------------
+# A handheld's audio amplifier adds its own hiss and hum as its volume goes up, and distorts near the top. At
+# each knob position: squelch OPEN (hiss = the receiver's own noise, the reference) and squelch CLOSED (what is
+# left = the amplifier, hum, the cable and the sound input). Margin = open minus closed; bigger is cleaner.
+# Distortion: the crest factor (peak over rms per 100 ms) of open-squelch hiss is ~10.8 dB for clean noise and
+# falls toward ~3.6 dB when the amplifier clips; a live handheld at a good setting measured 10.0 (2026-11-05).
+CREST_MIN = 8.0
+KNOBS = ["1/8", "1/4", "3/8", "1/2", "5/8", "3/4", "7/8"]   # of the knob's full turn, low to high
+MARGIN_SLACK = 1.5                 # within this of the best margin, the LOWER volume wins (headroom for voices)
+
+
+def analyze(x: np.ndarray, sr: int = 16000) -> dict:
+    x = np.asarray(x, dtype=np.float64)
+    n = int(sr / 10)
+    b = x[: len(x) // n * n].reshape(-1, n) if len(x) >= n else x.reshape(1, -1)
+    rms = np.sqrt((b ** 2).mean(1)) + 1e-12
+    pk = np.abs(b).max(1) + 1e-12
+    f = np.fft.rfftfreq(len(x), 1 / sr)
+    p = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
+    hum = sum(p[(f > h - 3) & (f < h + 3)].sum() for h in (50, 60, 100, 120, 150, 180))
+    tot = p[(f > 40) & (f < 4000)].sum() + 1e-30
+    return {"rms": round(float(20 * np.log10(np.median(rms))), 1), "peak": round(float(20 * np.log10(pk.max())), 1),
+            "crest": round(float(np.median(20 * np.log10(pk / rms))), 1),
+            "hum": round(float(10 * np.log10(hum / tot + 1e-12)), 1)}
+
+
+def knob_point(p: dict) -> dict:
+    """One knob position: {open, closed} analyses → margin, distortion, a word for it."""
+    o, c = p.get("open"), p.get("closed")
+    out = dict(p)
+    if o:
+        out["distorted"] = o["peak"] >= CLIP or o["crest"] < CREST_MIN
+    if o and c:                    # the closed reading at the open one's Windows level (dB for dB)
+        shift = (p.get("open_gain_db") or 0.0) - (p.get("closed_gain_db") or 0.0) \
+            if p.get("open_gain_db") is not None and p.get("closed_gain_db") is not None else 0.0
+        out["margin"] = round(o["rms"] - (c["rms"] + shift), 1)
+    return out
+
+
+def best_knob(points: list[dict]) -> dict:
+    """The lowest knob position whose margin is within MARGIN_SLACK of the best undistorted one."""
+    done = [knob_point(p) for p in points]
+    good = [p for p in done if "margin" in p and not p.get("distorted")]
+    if not good:
+        bad = [p for p in done if p.get("distorted")]
+        return {"best": None, "points": done, "say": "Every position measured distorts: try lower volume settings." if bad
+                else "Measure at least one position with the squelch open and closed."}
+    top = max(p["margin"] for p in good)
+    pick = min((p for p in good if p["margin"] >= top - MARGIN_SLACK), key=lambda p: KNOBS.index(p["knob"]))
+    return {"best": pick["knob"], "margin": pick["margin"], "points": done,
+            "say": f"Cleanest: “{pick['knob']}” ({pick['margin']:.0f} dB between hiss and the floor). Set the knob "
+                   "there, open the squelch and press Adjust automatically."}
 
 
 class WinGain:
