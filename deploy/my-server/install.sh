@@ -28,7 +28,7 @@ STT_DATA_DIR=$HOME/data/emcomm-voice
 STT_MODEL=mlx-community/whisper-large-v3-turbo
 STT_PORT=8090
 # LITELLM_URL=http://<llm-gateway>:4000/v1   # optional: analyze/ only
-# LITELLM_KEY=   # per-app virtual key (LITELLM_EMCOMM_KEY on LLM server); needed by analyze/, not by transcribe/
+# LITELLM_KEY=   # your gateway's key for this app; needed by analyze/, not by transcribe/
 ENV
   umask 022
 fi

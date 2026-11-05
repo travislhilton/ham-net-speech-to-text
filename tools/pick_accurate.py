@@ -5,7 +5,7 @@ For each accurate model present (OpenVINO whisper-large-v3-int8-ov, whisper-larg
 large-v3 on an NVIDIA card) on each device (Intel GPU, NPU, CPU), in a child process each (a GPU pipeline must not
 share a process with an openvino.Core, and its unload can hang: the child is ended with TerminateProcess), the same
 decoder the station runs (transcribe/decoders.py: word timestamps, 30 s windows) decodes a ~55 s test block built
-from install/windows/bench.wav (the owner's voice, at three speeds, so Whisper does not skip repeats). rtf = seconds
+from install/windows/bench.wav (a synthetic voice, at three speeds, so Whisper does not skip repeats). rtf = seconds
 of work per second of audio for ONE decode; peak memory of the child is the model's RAM.
 
 Decision (station/accurate_local.decide): large-v3 when a device runs it at rtf <= 1.0, else turbo, else none;

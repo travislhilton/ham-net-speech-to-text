@@ -8,11 +8,11 @@ when the home network is there it also hands recordings to a bigger machine for 
 second pass and net reports (ICS-309 / ICS-213).
 
 > **Status (2026-11-02): early build.** What works today is listed under "Status" below; this README
-> is updated as each piece lands. Private repository.
+> is updated as each piece lands.
 
 ## Install on a Windows 11 PC
 
-1. On GitHub (signed in; the repo is private): **Code → Download ZIP**, then extract it anywhere.
+1. On GitHub: **Code → Download ZIP**, then extract it anywhere.
 2. Open the extracted folder → `install\windows` → double-click **`install.cmd`** and allow
    administrator access.
 3. Type your callsign when asked. The first run downloads about 4 GB (Python packages, Whisper
@@ -579,8 +579,8 @@ net 5–7 minutes).
 
 When the station is on the home network it can upload each transmission to the home server
 (`transcribe/`, FastAPI + mlx-whisper) for the accurate pass, which stores nets and transmissions in
-PostgreSQL; `analyze/` uses LLMs on the LLM server for structuring and summaries, and falls back to
-rules when the LLM server is unreachable. `python -m tools.net start|stop|status` opens and closes a net.
+PostgreSQL; `analyze/` uses LLMs on an optional OpenAI-compatible LLM server for structuring and summaries, and falls back to
+rules when it is unreachable. `python -m tools.net start|stop|status` opens and closes a net.
 Details: `docs/ARCHITECTURE.md`, deploy: `deploy/my-server/`.
 
 ## Development
@@ -589,5 +589,6 @@ Details: `docs/ARCHITECTURE.md`, deploy: `deploy/my-server/`.
 python3 -m venv .venv && .venv/bin/pip install -r transcribe/requirements.txt -r analyze/requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest -q
 ```
-Design and history: `docs/WEBAPP-DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/HANDOFF.md`,
-`continuation-prompt.md`.
+Design: `docs/ARCHITECTURE.md`, including which settings live in which local config file. Your callsign,
+server addresses, keys and logins go only in those files (`config/station.yaml`, `config/local.yaml`,
+`config/secrets.env`, `capture/config.yaml`, `~/.config/emcomm-stt/env`); git ignores them.

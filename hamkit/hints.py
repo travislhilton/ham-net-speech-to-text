@@ -1,5 +1,5 @@
 """Operator hints and net recognition from what was just said. Rules only, so it runs offline;
-the LLM server LLM can refine net classification when online.
+the optional LLM server can refine net classification when online.
 
     h = Hinter(my_call="W9XYZ")
     h.on_transmission(text, callsigns, at=datetime)  -> {"cards": [...], "reminders": [...], "net": {...}}

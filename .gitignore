@@ -12,3 +12,15 @@ config/secrets.env
 private/
 deploy/windows/ssh-keys.txt
 capture/config.yaml
+# local settings, keys and data — never committed
+config/station.yaml
+config/engine.yaml
+config/*.bak*
+**/secrets.env
+*.key
+*.pem
+data/
+models/
+*.sqlite
+*.db
+.DS_Store

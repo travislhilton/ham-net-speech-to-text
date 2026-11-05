@@ -1,6 +1,6 @@
 """LiteLLM gateway client (OpenAI-compatible). Aliases live in your LiteLLM gateway config.
 
-The LLM steps run on the LLM server (models already resident there; the aliases add no memory).
+The LLM steps run on an optional OpenAI-compatible gateway (LITELLM_URL + LITELLM_KEY), e.g. a LiteLLM proxy.
 The home server stays the system of record: when the LLM server is unreachable or no key is set,
 callers get LLMUnavailable quickly and fall back to rules (see analyze/rules.py)."""
 import os
@@ -32,7 +32,7 @@ def _get_client():
 
 def chat(model, system, user, json_mode=False, max_tokens=1500):
     if not configured():
-        raise LLMUnavailable("LITELLM_KEY is not set (the owner's LLM server step: mint LITELLM_EMCOMM_KEY)")
+        raise LLMUnavailable("LITELLM_KEY is not set (set it in the server's env file)")
     import openai
     kw = {"response_format": {"type": "json_object"}} if json_mode else {}
     try:

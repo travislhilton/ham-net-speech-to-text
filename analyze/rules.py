@@ -41,7 +41,7 @@ def roster(rows: list[dict]) -> list[dict]:
 def summary_md(net_id: int, rows: list[dict], reason: str) -> str:
     lines = [f"# Net {net_id} — rules-only report", "",
              f"_The LLM summary was not produced: {reason}. Re-run `python -m analyze.net_report "
-             f"--net-id {net_id}` once the LLM server aliases are live._", "",
+             f"--net-id {net_id}` once the LLM server is reachable._", "",
              f"Transmissions: {len(rows)}", "", "| Callsign | First heard (UTC) | Last heard (UTC) | Transmissions |",
              "|---|---|---|---|"]
     lines += [f"| {e['callsign']} | {e['first_utc']} | {e['last_utc']} | {e['count']} |" for e in roster(rows)]

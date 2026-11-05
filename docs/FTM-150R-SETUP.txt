@@ -1,4 +1,4 @@
-FTM-150R + DRA-50M SETUP FOR NET RECORDING (W9XYZ-5)
+FTM-150R + DRA-50M SETUP FOR NET RECORDING
 From the Yaesu FTM-150R Operating Manual and Advance Manual, 2026-11-02.
 The radio only listens. The recorder never transmits.
 
