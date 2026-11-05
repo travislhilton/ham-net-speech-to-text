@@ -26,7 +26,9 @@ EXPECT = "K7ABC"
 
 def openvino_runner(model_dir: Path, device: str):
     import openvino_genai as ov
-    pipe = ov.WhisperPipeline(str(model_dir), device)
+    cache = ROOT / "data" / "ov-cache"          # the live engine's cache: a GPU/NPU compile done here is reused
+    cache.mkdir(parents=True, exist_ok=True)
+    pipe = ov.WhisperPipeline(str(model_dir), device, CACHE_DIR=str(cache))
     cfg = pipe.get_generation_config(); cfg.max_new_tokens = 200
     if ".en-" not in model_dir.name:
         cfg.language = "<|en|>"; cfg.task = "transcribe"
@@ -60,7 +62,11 @@ def candidates(models: Path):
     for name, role in (("whisper-large-v3-turbo-int8-ov", "final"), ("whisper-small.en-int8-ov", "final"),
                        ("whisper-base.en-int8-ov", "partial")):
         if (models / name).exists():
-            for d in [x for x in devs if x.startswith("GPU")] + (["CPU"] if "CPU" in devs else []):
+            # The NPU only for base.en (words while talking): its first compile takes ~3 min (cached after); small.en
+            # took 9 min and turbo did not finish in 30 (test laptop, 2026-11-04). There base.en ran 3x faster than on
+            # the GPU and leaves the GPU to the final text.
+            npu = ["NPU"] if "NPU" in devs and name == "whisper-base.en-int8-ov" else []
+            for d in [x for x in devs if x.startswith("GPU")] + npu + (["CPU"] if "CPU" in devs else []):
                 out.append({"engine": "openvino", "device": d, "model": name, "role": role,
                             "make": (lambda n=name, dv=d: openvino_runner(models / n, dv))})
     if has_nvidia():
@@ -84,6 +90,16 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--models", default=str(ROOT / "models"))
     ap.add_argument("--out", default=str(ROOT / "config" / "engine.yaml")); a = ap.parse_args()
     audio = sf.read(CLIP, dtype="float32")[0]
+    from station.awake import KeepAwake              # measure at full speed: laptops crawl with the screen dark
+    awake = KeepAwake("HamNet engine benchmark", snapshot=ROOT / "data" / "power_snapshot_bench.json")
+    awake.set(True)
+    try:
+        return _measure_all(a, audio)
+    finally:
+        awake.set(False)
+
+
+def _measure_all(a, audio):
     results = []
     for c in candidates(Path(a.models)):
         try:

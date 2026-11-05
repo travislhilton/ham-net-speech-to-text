@@ -101,8 +101,9 @@ def has_nvidia() -> bool:
 def candidates(models: Path, devices=None) -> list[dict]:
     out = []
     devs = devices or openvino_devices()
-    order = [d for d in devs if d.startswith("GPU")] + [d for d in devs if d.startswith("NPU")] + \
-            [d for d in devs if d == "CPU"]
+    # No NPU: large-v3 and turbo did not finish compiling for it in 20 min each (test laptop, Intel NPU, 2026-11-04),
+    # which only added 40 min to the install. The live words-while-talking model uses it instead (pick_engine.py).
+    order = [d for d in devs if d.startswith("GPU")] + [d for d in devs if d == "CPU"]
     for name in OV_MODELS:
         if (models / name).exists():
             out += [{"engine": "openvino", "model": name, "device": d} for d in order]
@@ -145,10 +146,16 @@ def main():
     choice = (yaml.safe_load(out.read_text()) if out.exists() else None) or {}
     live = (choice.get("final") or {}).get("device")
     rows = []
-    for c in candidates(models, a.devices.split(",") if a.devices else None):
-        r = run_child(c, models, a.quick)
-        row = c | r
-        rows.append(row); print(json.dumps(row), flush=True)
+    from station.awake import KeepAwake              # measure at full speed: laptops crawl with the screen dark
+    awake = KeepAwake("HamNet accurate-pass benchmark", snapshot=ROOT / "data" / "power_snapshot_bench.json")
+    awake.set(True)
+    try:
+        for c in candidates(models, a.devices.split(",") if a.devices else None):
+            r = run_child(c, models, a.quick)
+            row = c | r
+            rows.append(row); print(json.dumps(row), flush=True)
+    finally:
+        awake.set(False)
     pick = decide(rows, live)
     choice["accurate"] = pick | {"measured": rows, "note": "written by tools/pick_accurate.py; re-run after hardware "
                                                          "or driver changes (rtf = work s per audio s, one decode)"}
