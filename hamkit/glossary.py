@@ -20,7 +20,7 @@ SPOKEN_NUMBERS = {"SEVENTY THREE": "73", "SEVEN THREE": "73", "EIGHTY EIGHT": "8
 
 @lru_cache(maxsize=4)
 def load(path: str = str(CONFIG)) -> dict:
-    return yaml.safe_load(Path(path).read_text())
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8-sig"))
 
 
 _PHON = "|".join(sorted(ITU, key=len, reverse=True)).replace("-", r"\-")

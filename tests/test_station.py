@@ -474,9 +474,9 @@ def test_qrz_login_described_in_plain_words():
 def test_help_card_is_served():
     import urllib.request
     from station.server import STATIC
-    html = (STATIC / "card.html").read_text()
+    html = (STATIC / "card.html").read_text(encoding="utf-8")
     assert "Side 1" in html and "Side 2" in html and "<title>" in html
-    assert 'href="/help"' in (STATIC / "index.html").read_text()
+    assert 'href="/help"' in (STATIC / "index.html").read_text(encoding="utf-8")
 
 
 def test_station_yaml_with_byte_order_mark_loads(tmp_path):

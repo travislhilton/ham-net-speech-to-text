@@ -126,7 +126,7 @@ class PowerPlan:
         """Put back the saved plan + mode (and forget them). None when nothing was saved."""
         if not self.snapshot.exists():
             return None
-        snap = json.loads(self.snapshot.read_text())
+        snap = json.loads(self.snapshot.read_text(encoding="utf-8"))
         self.set(snap["plan"], self.own_mode() or snap.get("overlay"))   # the operator's choice for the power source now
         self.snapshot.unlink()
         return snap

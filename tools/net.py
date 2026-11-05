@@ -23,7 +23,7 @@ def api_key(env=os.environ, env_file=ENV_FILE) -> str | None:
     if env.get("EMCOMM_STT_KEY"):
         return env["EMCOMM_STT_KEY"]
     try:
-        for line in Path(env_file).read_text().splitlines():
+        for line in Path(env_file).read_text(encoding="utf-8-sig").splitlines():
             line = line.strip().removeprefix("export ").strip()
             if line.startswith("EMCOMM_STT_KEY="):
                 return line.split("=", 1)[1].strip().strip("'\"") or None

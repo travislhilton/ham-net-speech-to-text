@@ -5,6 +5,8 @@ import io, json, sys, types, wave
 import numpy as np
 import pytest
 
+pytest.importorskip("fastapi", reason="home-server tests (transcribe/requirements.txt)")
+
 
 def _wav(seconds, hz=800, amp=0.3):
     t = np.arange(int(seconds * 16000)) / 16000

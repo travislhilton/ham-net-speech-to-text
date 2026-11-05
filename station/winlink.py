@@ -219,8 +219,8 @@ def registry_line(msg: dict, sender: str) -> str:
     return SEP.join(f)
 
 
-def put_in_outbox(install: str, account: str, messages: list[dict], check_running=express_running) -> dict:
-    if check_running():
+def put_in_outbox(install: str, account: str, messages: list[dict], check_running=None) -> dict:
+    if (check_running or express_running)():
         raise RuntimeError("Winlink Express is open. Close it, then try again (it would overwrite the Outbox list).")
     acc = Path(install) / account
     if not (acc / "Messages").is_dir() or not (acc / "Data").is_dir():

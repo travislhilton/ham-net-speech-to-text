@@ -143,7 +143,7 @@ def main():
         return 0
     from station.accurate_local import decide
     out = Path(a.out)
-    choice = (yaml.safe_load(out.read_text()) if out.exists() else None) or {}
+    choice = (yaml.safe_load(out.read_text(encoding="utf-8-sig")) if out.exists() else None) or {}
     live = (choice.get("final") or {}).get("device")
     rows = []
     from station.awake import KeepAwake              # measure at full speed: laptops crawl with the screen dark

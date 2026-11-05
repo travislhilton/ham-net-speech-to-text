@@ -70,3 +70,11 @@ def test_net_recognition_emergency_wins():
     assert r["net"]["type"] == "emergency" and r["cards"][0]["key"] == "emergency"
     ex = hints.Hinter(); ex.on_transmission("This is an exercise, this is an exercise", [])
     assert ex.classify()["type"] == "exercise"
+
+
+def test_config_yaml_read_as_utf8_on_any_platform():
+    """Windows' default text encoding is cp1252: an em dash in procedures.yaml showed as 'â€”' on the stations."""
+    from hamkit import hints
+    hints.load.cache_clear()
+    titles = [c.get("title", "") for c in hints.load()["cards"].values()]
+    assert any("—" in t for t in titles) and not any("â€" in t for t in titles)

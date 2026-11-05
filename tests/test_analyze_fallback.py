@@ -32,6 +32,7 @@ def test_chat_without_key_raises_unavailable(monkeypatch):
 
 
 def test_chat_to_a_dead_gateway_fails_fast(monkeypatch):
+    pytest.importorskip("openai", reason="analyze/ runs on the home server (analyze/requirements.txt)")
     monkeypatch.setenv("LITELLM_KEY", "x"); monkeypatch.setenv("LITELLM_URL", "http://127.0.0.1:9/v1")
     monkeypatch.setattr(llm, "TIMEOUT_S", 3.0); monkeypatch.setattr(llm, "_client", None)
     with pytest.raises(llm.LLMUnavailable):

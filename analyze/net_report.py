@@ -57,8 +57,8 @@ def run(net_id, out_dir):
         md = rules.summary_md(net_id, rows, reason)
         print(f"warning: LLM unavailable — rules-only report ({reason})", file=sys.stderr)
     os.makedirs(out_dir, exist_ok=True)
-    open(f"{out_dir}/net-{net_id}-ICS309.csv", "w").write(ics309_csv(rows))
-    open(f"{out_dir}/net-{net_id}-summary.md", "w").write(md)
+    open(f"{out_dir}/net-{net_id}-ICS309.csv", "w", encoding="utf-8").write(ics309_csv(rows))
+    open(f"{out_dir}/net-{net_id}-summary.md", "w", encoding="utf-8").write(md)
     print(md)
     return 2 if reason else 0
 

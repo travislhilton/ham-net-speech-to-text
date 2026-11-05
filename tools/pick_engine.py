@@ -118,7 +118,7 @@ def _measure_all(a, audio):
     choice = {"final": pick(final), "partial": pick(partial), "measured": results,
               "note": "written by tools/pick_engine.py; re-run after hardware or driver changes"}
     try:                                     # the accurate pass's own measurement (tools/pick_accurate.py) stays
-        old = yaml.safe_load(Path(a.out).read_text()) or {}
+        old = yaml.safe_load(Path(a.out).read_text(encoding="utf-8-sig")) or {}
         if old.get("accurate"):
             choice["accurate"] = old["accurate"]
     except (OSError, yaml.YAMLError):

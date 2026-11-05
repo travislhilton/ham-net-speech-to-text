@@ -287,7 +287,8 @@ def test_local_child_process_end_to_end(tmp_path):
         paths.append(p)
     busy = [True]
     loc = al.Local({"mode": "both", "engine": "fake", "model": "fake-large", "device": "CPU", "rtf": 0.1},
-                   busy=lambda: busy[0], cfg={"quiet_s": 0.2, "local_on_battery": True}, data_dir=tmp_path)
+                   busy=lambda: busy[0], cfg={"quiet_s": 0.2, "local_on_battery": True}, data_dir=tmp_path,
+                   free_mb=lambda: None)        # the fake model needs no RAM (a live station on this PC holds ~10 GB)
     try:
         clips = [{"id": "a", "start": "2026-11-03T20:00:00", "target": True, "path": paths[0]},
                  {"id": "b", "start": "2026-11-03T20:00:05", "target": True, "path": paths[1]}]

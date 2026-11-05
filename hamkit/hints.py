@@ -37,7 +37,7 @@ NET_TYPES = [  # (type, label, cue regexes) — first hit order matters only for
 
 @lru_cache(maxsize=2)
 def load(path: str = str(CONFIG)) -> dict:
-    return yaml.safe_load(Path(path).read_text())
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8-sig"))
 
 
 def phonetic(call: str) -> str:

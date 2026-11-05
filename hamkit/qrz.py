@@ -51,7 +51,7 @@ def _env_file(path: Path = None) -> dict:
     path = path or ENV_FILE
     out = {}
     try:
-        for line in Path(path).read_text().splitlines():
+        for line in Path(path).read_text(encoding="utf-8-sig").splitlines():
             line = line.strip().removeprefix("export ").strip()
             if "=" in line and not line.startswith("#"):
                 k, v = line.split("=", 1); out[k.strip()] = v.strip().strip("'\"")
@@ -82,7 +82,7 @@ def credentials() -> tuple[str, str] | None:
         return env["QRZ_USERNAME"], env["QRZ_PASSWORD"]
     f = ROOT / "config" / "local.yaml"
     if f.exists():
-        q = (yaml.safe_load(f.read_text()) or {}).get("qrz") or {}
+        q = (yaml.safe_load(f.read_text(encoding="utf-8-sig")) or {}).get("qrz") or {}
         if q.get("username") and q.get("password"):
             return str(q["username"]), str(q["password"])
     return None
@@ -264,7 +264,7 @@ def main(argv=None):
         creds = credentials()
         if not creds:
             print(f"no QRZ login found ({_cred_error}); run set-login first"); return 1
-        lines = [l for l in (target.read_text().splitlines() if target.exists() else [])
+        lines = [l for l in (target.read_text(encoding="utf-8-sig").splitlines() if target.exists() else [])
                  if not l.startswith(("QRZ_USERNAME=", "QRZ_PASSWORD="))]
         lines += [f"QRZ_USERNAME={creds[0]}", f"QRZ_PASSWORD={creds[1]}"]
         target.parent.mkdir(parents=True, exist_ok=True)
