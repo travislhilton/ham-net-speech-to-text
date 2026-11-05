@@ -1,3 +1,4 @@
+from station import awake
 from station.awake import KeepAwake, wanted
 
 
@@ -31,3 +32,30 @@ def test_installer_and_station_use_the_same_plan_guid():
     from station.awake import HAMNET_PLAN
     ps1 = (Path(__file__).resolve().parent.parent / "install" / "windows" / "install.ps1").read_text()
     assert f"$hn = '{HAMNET_PLAN}'" in ps1
+
+
+def _plan(tmp_path, active, saved=None):
+    """A PowerPlan with Windows replaced by a dict (no ctypes)."""
+    import json
+    p = awake.PowerPlan.__new__(awake.PowerPlan)
+    p.snapshot = tmp_path / "snap.json"
+    if saved:
+        p.snapshot.write_text(json.dumps(saved))
+    p.state = {"plan": active, "overlay": awake.BEST_PERFORMANCE}
+    p.active = lambda: p.state["plan"]
+    p.own_mode = lambda: "own-mode"
+    p.set = lambda plan, overlay: p.state.update(plan=plan, overlay=overlay)
+    return p
+
+
+def test_restore_puts_back_the_saved_plan(tmp_path):
+    p = _plan(tmp_path, awake.HAMNET_PLAN, {"plan": "my-plan", "overlay": "x"})
+    assert p.restore()["plan"] == "my-plan" and p.state == {"plan": "my-plan", "overlay": "own-mode"}
+    assert not p.snapshot.exists()
+
+
+def test_restore_unsticks_the_hamnet_plan_when_nothing_was_saved(tmp_path):
+    p = _plan(tmp_path, awake.HAMNET_PLAN)
+    assert p.restore()["plan"] == awake.BALANCED and p.state == {"plan": awake.BALANCED, "overlay": "own-mode"}
+    q = _plan(tmp_path, "my-plan")                       # the operator's own plan: left alone
+    assert q.restore() is None and q.state["plan"] == "my-plan"

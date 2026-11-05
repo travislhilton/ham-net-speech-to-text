@@ -22,6 +22,7 @@ from pathlib import Path
 
 HAMNET_PLAN = "6f1c2d4e-8a3b-4c5d-9e7f-48616d4e6574"   # the installer's "HamNet Station" plan
 BEST_PERFORMANCE = "ded574b5-45a0-4f42-8737-46345c09c238"                 # Windows power mode overlay
+BALANCED = "381b4222-f694-41f0-9685-ff5bb260df2e"                         # Windows' own Balanced plan
 
 MODES = ("listening", "always", "off")
 
@@ -123,8 +124,12 @@ class PowerPlan:
         return True
 
     def restore(self) -> dict | None:
-        """Put back the saved plan + mode (and forget them). None when nothing was saved."""
+        """Put back the saved plan + mode (and forget them). None when nothing was saved. Stuck on the HamNet plan
+        with nothing saved (the snapshot lost): Windows' Balanced plan and the operator's own power mode."""
         if not self.snapshot.exists():
+            if self.active() == HAMNET_PLAN:
+                self.set(BALANCED, self.own_mode())
+                return {"plan": BALANCED, "overlay": None}
             return None
         snap = json.loads(self.snapshot.read_text(encoding="utf-8"))
         self.set(snap["plan"], self.own_mode() or snap.get("overlay"))   # the operator's choice for the power source now
