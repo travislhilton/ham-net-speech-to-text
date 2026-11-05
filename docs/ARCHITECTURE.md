@@ -10,9 +10,9 @@
   `analyze/llm.py` fails fast (`LLMUnavailable`, 120 s timeout, one retry) and `net_report` falls back to
   `analyze/rules.py` — an ICS-309 from the callsigns Whisper heard plus a roster, never written to the DB, so
   the LLM pass can run later.
-- **Clip-per-transmission**, not one long recording. Each transmission becomes a DB row — the unit of an
-  ICS-309 line. Gate = Silero VAD by default; a radio's carrier-detect line (e.g. Digirig COS on serial CTS)
-  is more reliable on FM.
+- **Clip-per-transmission**, not one long recording. Each transmission becomes a log row — the unit of an
+  ICS-309 line. Gate per radio: `carrier` (an FM data jack's hiss drops when a station keys) or `voice`
+  (Silero VAD, for SSB/HF).
 - **Second audio interface.** Never share the digital-mode (VARA) audio device.
 - **Vocabulary-primed Whisper** (`config/vocab.yaml` + your `config/local.yaml`) + regex phonetic→callsign
   normalization, then LLM structuring with the roster for the residual.
@@ -23,10 +23,10 @@
 | Where | What |
 |---|---|
 | `config/station.yaml` (station) | your callsign, radios, accurate-pass server URLs, download link |
-| `config/local.yaml` | area, repeaters, roster, EOC names, QRZ login (or Windows Credential Manager) |
+| `config/local.yaml` | area, repeaters, roster, EOC names (QRZ login: `python -m hamkit.qrz set-login` stores it in Windows Credential Manager / the macOS Keychain; `qrz:` here is the fallback) |
 | `config/secrets.env` (station) | `EMCOMM_STT_KEY` for uploads to the server |
 | `~/.config/emcomm-stt/env` (server, mode 600) | `EMCOMM_STT_KEY`, `EMCOMM_DB_DSN`, `STT_DATA_DIR`, optional `LITELLM_URL` / `LITELLM_KEY` |
-| `capture/config.yaml` | the capture puck's device and upload settings |
+| `capture/config.yaml` | the older standalone recorder (`capture/recorder.py`); the Windows station uses `config/station.yaml` |
 
 Examples of each are in `config/station.example.yaml`, `capture/config.example.yaml` and
 `deploy/my-server/install.sh`.

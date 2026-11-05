@@ -26,9 +26,9 @@ The radio only listens. The recorder never transmits.
    45 DATA BAND  ->  A-BAND FIX
         Options: MAIN BAND / SUB BAND / A-BAND FIX / B-BAND FIX.
         A-BAND FIX means the DATA jack always carries band A, whichever band is "main".
-   46 DATA SPEED ->  leave at 9600 if you use it that way for other things.
-        The DRA-50M jumper decides which radio pin is recorded (RX 1200 or RX 9600).
-        Either works: Claude measures a test recording and filters the audio in software if needed.
+   46 DATA SPEED ->  either; leave it as your other data modes need it.
+        The DRA-50M jumper decides which radio pin is recorded: RX 1200 (de-emphasized voice-band
+        audio) or RX 9600 (flat). Either works for the station; Test transcription shows the result.
 
 
 3. DUAL RECEIVE: KEEP IT ON
@@ -55,14 +55,10 @@ The radio only listens. The recorder never transmits.
 
 
 5. TEST IT
-   - On W9XYZ-5: Win+R, type mmsys.cpl, open the Recording tab.
+   - On the station PC: Win+R, type mmsys.cpl, open the Recording tab.
    - Watch the green level bar on NET-REC.
      It should move when band A hears traffic, and stay still when band A is quiet.
    - Turning the radio's volume knob should not change the bar much. The DATA jack has its own level.
-   - If the bar shows constant hiss between transmissions, tell Claude. The squelch line can be used.
-
-
-6. TELL CLAUDE
-   - The band A frequency or channel you set.
-   - What cable connects the radio to the DRA-50M.
-   - Whether the NET-REC bar moved with traffic.
+   - If the bar shows constant hiss between transmissions, raise the squelch a little, or use
+     gate: voice for that radio in config\station.yaml.
+   - Then in the dashboard: set the radio's frequency (Change) and run Test transcription.

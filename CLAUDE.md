@@ -15,7 +15,10 @@
   `private/CLAUDE.md` and `private/continuation-prompt.md` first. Commit and push them in that repo.
 - **README + installer evolve with every change**: update README "Status" and the install steps in the same
   commit as the feature; `install/windows/install.ps1` must stay idempotent.
-- Tests: `.venv/bin/python -m pytest -q` from the repo root (327 green 2026-11-04).
+- Tests: `.venv/bin/python -m pytest -q` from the repo root (328 green 2026-11-05).
+- **The repo is PUBLIC** (MIT, https://github.com/travislhilton/ham-net-speech-to-text, since 2026-11-05): every push
+  is published. The reference card's download link defaults to it (`station/phone.py` REPO_URL). Real callsigns
+  heard on nets never go in tests: use calls checked unassigned in the FCC database.
 - Whisper runs only through `transcribe/engine.py` on the server; the station's engines are in `station/engine.py`.
 - OpenVINO on Windows: never create an `openvino.Core` in a process that runs a GPU WhisperPipeline — the
   process hangs forever at exit. List devices in a child process (`tools/pick_engine.py`).

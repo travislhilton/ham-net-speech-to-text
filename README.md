@@ -7,12 +7,13 @@ recognizes what kind of net is on the air. It works with **no network** (portabl
 when the home network is there it also hands recordings to a bigger machine for a more accurate
 second pass and net reports (ICS-309 / ICS-213).
 
-> **Status (2026-11-02): early build.** What works today is listed under "Status" below; this README
+> **Status (2026-11-05): early build, in use on two station PCs.** What works today is listed under "Status" below; this README
 > is updated as each piece lands.
 
-## Install on a Windows 11 PC
+## Install on a Windows 10 or 11 PC
 
-1. On GitHub: **Code → Download ZIP**, then extract it anywhere.
+1. Open **https://github.com/travislhilton/ham-net-speech-to-text**, press the green **Code** button, then
+   **Download ZIP**, and extract it anywhere (right-click → Extract all).
 2. Open the extracted folder → `install\windows` → double-click **`install.cmd`** and allow
    administrator access.
 3. Type your callsign when asked. The first run downloads about 4 GB (Python packages, Whisper
@@ -81,7 +82,8 @@ the device → Properties → name, e.g. `NET-REC`.
 
 After installing, the station starts by itself whenever you sign in to Windows. Open the
 **HamNet Station** shortcut on the desktop, or browse to `http://localhost:8091/` on the station PC,
-or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale.
+or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale. On a phone, press
+**Open on phone** at the top of the dashboard and point the phone's camera at the code.
 
 The dashboard has one column per radio, with everything about that radio in it. The top of each column is
 one set of tabs, **Radio** (meters, waterfall, frequency) | **What you can do now** |
@@ -100,7 +102,7 @@ you chose is remembered. Each column shows:
   receiver's audio on the current frequency (the PC gets audio, not RF, so this is the audio passband,
   like WSJT-X/fldigi). Bounds can be changed per radio in `station.yaml` (`meter:`).
   When you retune a radio, press **Change** on its card and enter the new frequency and mode; every
-  transmission after that is logged with it (kept across restarts in `data\\operator.json`).
+  transmission after that is logged with it (kept across restarts in `data\operator.json`).
 - **Pause / Resume** (on each radio card): stop listening to that radio. Its sound input is closed and
   nothing is recorded or transcribed until you press Resume; a transmission in progress is finished first.
   **A scheduled net is always recorded:** a paused radio is resumed 1 minute before each of its nets and paused
@@ -194,7 +196,7 @@ you chose is remembered. Each column shows:
     done, minute items, urgent issues and whether its Winlink messages went out. Tick **Include conversations** for
     what was heard outside any net. Tap one for its minutes. Kept in `data\history.db`, built from `data\logs` the
     first time the station starts (older logs included) and kept up to date as transmissions are logged.
-  - **Analysis** (per net): times met, stations on average, the **stations each time** chart (a table too), last
+  - **Analysis** (per net; **Who takes part** on a net's card opens it): times met, stations on average, the **stations each time** chart (a table too), last
     time's **newcomers** and **regulars not heard**, the **regulars** with the rule written under them (took part in
     at least half of the last 8 times, and at least twice), the **net control** rota, and every station that ever took
     part: times, of the last 8, first and last time, and streak. Taking part = spoke, checked in, or was
@@ -334,7 +336,7 @@ you chose is remembered. Each column shows:
   5 minutes (`final_after_min`) it sends the **whole net** in 4-minute blocks (30 s of context each side) for the
   *final* accurate text, which replaces the provisional one. Whisper hears whole turns instead of 1–3 s pieces, so
   the final text gets far more right (see "How the accurate pass works" below). Anything missed (home server
-  unreachable) is caught up 15 quiet minutes after the net; **Run now** on a net's header starts that at once. The header shows what it is doing: how many are done, a progress bar
+  unreachable) is caught up 15 quiet minutes after the net; **Run now** on a net's header starts that at once (**Try now** when the home server was unreachable). The header shows what it is doing: how many are done, a progress bar
   and about how long is left, then **✓ Accurate text for all N**. Corrected transmissions show the new text,
   with the live text a click away. The Winlink window says the same thing: send now with the live text, or
   wait; when the pass finishes it offers **Load the accurate text** (the forms then use it). If the home server is
@@ -350,12 +352,13 @@ you chose is remembered. Each column shows:
 - **Help** (top right): opens the two-sided reference card (`/help`, from `station/static/card.html`) in a new tab.
   Print it double-sided on letter paper (flip on the long edge) and keep it by the radio.
 - **Settings** (top right): your callsign, name and grid; which Winlink Express folder (found
-  automatically: `C:\\RMS Express` and any other install) and which callsign account sends; **Net alerts**: the chime, and
-  notifications on the station PC.
+  automatically: `C:\RMS Express` and any other install) and which callsign account sends; **Net alerts**: the chime, and
+  notifications on the station PC; **VHF/UHF reach, km** (300 by default: calls licensed farther away that nothing
+  else confirms are not counted; raise it for a linked repeater system); **Learned fixes** (your ✎ Fix corrections).
 
 Which radios exist (and their sound inputs) and the first nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
 `config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HamNet Station** →
-End, then Run (or sign out and back in). Everything heard is kept in `data\logs\<date>.jsonl` and
+End, then Run (or sign out and back in; after End it also comes back by itself within 2 minutes). Everything heard is kept in `data\logs\<date>.jsonl` and
 `data\recordings\<date>\`; the nets' history, minutes and search index in `data\history.db` (rebuilt from the logs if
 deleted, except your edits to the minutes); problems are written to `data\station.log`.
 
@@ -406,8 +409,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Listen only during scheduled nets (auto resume 1 min before, pause 5 min after; optional log at the net's frequency) | working, per radio |
 | The end of a net: net control's close heard (wording, roll-call-learned net control, questions/plans/quotes excluded), 2 min tail, pause only a radio the station turned on, final accurate pass at once, minutes, Winlink messages ready; End net by hand; Not closed undoes | working (`station/netclose.py`; built from the 2026-11-03 FM net, where the close had no speaker); not yet seen on a live net |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
-| Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | built + measured, not deployed yet (synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
-| Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/NPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | built + measured on an i5-12600H station PC, not deployed yet (see "The accurate pass on this PC") |
+| Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | working (home server; synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
+| Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | working on both station PCs (i5-12600H desktop: final text only; Core Ultra laptop: large-v3 on the GPU at 0.34× real time), see "The accurate pass on this PC" |
 | Full speed while transcribing on laptops: your power plan + mode saved, the installer's HamNet Station plan + Best performance + the screen held on while a radio listens or the accurate pass has work, all put back after (and at the next start after a crash) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
 | Compiled-model cache for the live engine (`data/ov-cache`, shared with the accurate pass) | working; test laptop: turbo on the GPU 36 s → 16 s to load, small.en on the NPU 555 s → 11 s |
 | Over-the-air transcription test with word-error score and history | working |
@@ -508,7 +511,7 @@ same method (`transcribe/context.py`) runs on the station PC's own spare compute
 a key is set and it answers, else this PC, else the job waits and is retried.
 
 - **What it runs** (`transcribe/decoders.py`): OpenVINO GenAI `WhisperPipeline` with word timestamps on the Intel
-  GPU, NPU or CPU (model `whisper-large-v3-int8-ov`, 1.5 GB, downloaded by the installer), or faster-whisper
+  GPU or CPU (not the NPU: large-v3 did not compile for it; model `whisper-large-v3-int8-ov`, 1.5 GB, downloaded by the installer), or faster-whisper
   (CTranslate2) on an NVIDIA card. Whisper's 30 s long-form walk is done one window at a time by the station's own
   code, so the pass can stop between windows. OpenVINO gives word *times* but no word *probabilities*: the merge of
   the two decodes then prefers the words farther from a window cut, a lone "Thank you."-style text is always set
@@ -516,8 +519,7 @@ a key is set and it answers, else this PC, else the job waits and is retried.
   word errors, see below).
 - **What the PC can sustain** (`tools/pick_accurate.py`, run by the installer; re-run after a hardware change):
   each model on each device decodes a ~55 s test block; rtf = seconds of work per second of audio. Large-v3 if it
-  runs at rtf ≤ 1.0 (the final text of a net then arrives within ~2.5× its speaking time), else turbo, else none; a
-  an NPU wins when it is at most 2× slower than the fastest device (it has no live text on it), otherwise the
+  runs at rtf ≤ 1.0 (the final text of a net then arrives within ~2.5× its speaking time), else turbo, else none; the
   fastest device — not the CPU just because the live text is on the GPU (measured below: the CPU slowed the live
   text more than sharing the GPU did); **both stages** only at rtf ≤ 0.12 (a provisional text for every transmission), otherwise **final text
   only** (after each net). Written to `config\engine.yaml` (`accurate:`).

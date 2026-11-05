@@ -1,8 +1,8 @@
 # Copy to capture/config.yaml (not committed) and edit. Example hardware: Yaesu FTM-150R → DATA jack → USB sound card.
 # If a digital-mode station uses the SAME model of sound card, rename this card's recording endpoint in
 # Windows Sound settings to "NET-REC" and match on that — never on "USB Audio Device".
-# Radio: Set 45 DATA BAND = A-BAND FIX (tune band A to the net), 46 DATA SPEED = 1200
-# (the 1200 pin is de-emphasized voice-band audio; the 9600 pin is flat discriminator audio).
+# Radio: Set 45 DATA BAND = A-BAND FIX (tune band A to the net), 46 DATA SPEED: either;
+# the DRA-50M jumper picks RX 1200 (de-emphasized voice-band audio) or RX 9600 (flat discriminator audio).
 device_name: "NET-REC"               # substring match; run `recorder.py --list-devices`
 sample_rate: 16000
 channels: 1

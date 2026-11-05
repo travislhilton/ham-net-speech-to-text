@@ -1,4 +1,4 @@
-# Standalone Windows station (W9XYZ-5 and any Windows 11 PC). Installed by install.ps1.
+# Standalone Windows station (any Windows 10/11 PC). Installed by install.ps1.
 numpy>=1.26
 sounddevice>=0.5
 soundfile>=0.12

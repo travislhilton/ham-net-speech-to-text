@@ -1,7 +1,7 @@
 <#
 ham-net-speech-to-text: install or update the standalone Windows station. Idempotent: run it again
-after every update. Needs administrator rights and internet the first time (~2.5 GB of downloads:
-Python packages, two Whisper models, the FCC license database).
+after every update. Needs administrator rights and internet the first time (~4 GB of downloads:
+Python packages, four Whisper models, the FCC license database; more with an NVIDIA card).
 
   install.cmd                              (double-click; elevates and runs this)
   install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz]
@@ -42,7 +42,7 @@ Write-Host "  $freeGB GB free on $drive"
 $online = $false
 try { $online = (Invoke-WebRequest -UseBasicParsing -Method Head -TimeoutSec 15 'https://pypi.org/simple/pip/').StatusCode -eq 200 } catch {}
 if (-not $online -and -not (Test-Path "$InstallDir\.venv")) {
-  throw 'No internet: the first install downloads about 2.5 GB. Connect to the internet and run it again (after that the station works offline).'
+  throw 'No internet: the first install downloads about 4 GB. Connect to the internet and run it again (after that the station works offline).'
 }
 Write-Host "  internet: $(if ($online) { 'yes' } else { 'no (update skipped where possible)' })"
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12

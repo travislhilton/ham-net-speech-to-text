@@ -90,7 +90,8 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
         <h2>You need</h2>
         <ul>
           <li>A Windows 10 or 11 PC (64-bit) with about 8 GB free.</li>
-          <li>Internet for the first install only (about 2.5 GB, 10–20 minutes).</li>
+          <li>Internet for the first install only (about 4 GB, 10–20 minutes; more with an NVIDIA card).</li>
+          <li>On a laptop: keep it plugged in and set the maker's fan/power profile to Performance. While a radio listens the station keeps the screen on and runs at full speed, then puts your power plan back.</li>
           <li>The radio's receive audio on a USB sound input of its own, for example a data jack cable to a USB sound card. Never the input VARA or another digital mode uses.</li>
         </ul>
       </section>
@@ -186,7 +187,8 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
           <tr><th>Grey words</th><td>Rough text while the station is still talking.</td></tr>
           <tr><th>Black text</th><td>The text, 2–3 seconds after they unkey.</td></tr>
           <tr><th><span class="pend">Blue edge</span><br><i>improving…</i></th><td>Better text is on its way; the line updates by itself (accurate pass).</td></tr>
-          <tr><th><span class="call">K7ABC</span></th><td>A callsign: tap it for the station's card. <b>Underlined</b>: corrected from a near miss. A dotted <b>maybe</b>: a guess to check.</td></tr>
+          <tr><th><span class="call">K7ABC</span></th><td>A callsign: tap it for the station's card. <b>Dotted underline</b>: corrected from a near miss (hover: what was heard). <i>heard?</i> with calls to pick: a guess; tap the right one.</td></tr>
+          <tr><th><span class="call">K7ABC?</span></th><td><b>Dashed, with ?</b>: no callbook confirms it; still counted. <b>Faded, struck through</b>: too far away for VHF/UHF, not counted; <b>✎ Fix</b> it if it was real.</td></tr>
           <tr><th>Underlined word</th><td>A Q-code or proword, meaning below (untick <b>Explain radio terms</b> to hide).</td></tr>
           <tr><th><span class="btn">▶ 4 s</span></th><td>Play that transmission.</td></tr>
           <tr><th><i>probably noise</i></th><td>No speech in it. Ignore it.</td></tr>
@@ -209,7 +211,7 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
           <li>Tune the radio. If the frequency changed, press <span class="btn">Change</span> and enter it.</li>
           <li>Schedule it once: <span class="btn">Nets</span> → <span class="btn">+ Add a net</span>: name, radio, start, length, frequency, <b>net control</b> and how it <b>Repeats</b> (every Tuesday, 1st and 3rd Sunday, last Friday…). <b>Skip</b> or <b>Move…</b> one date without changing the rest.</li>
           <li><b>5 minutes before</b>, a yellow alert: “set FTM-150R to 146.940 MHz FM”. Tune, then <span class="btn">Radio is set</span> (or <span class="btn">Remind me in 1 min</span>, <span class="btn">Skip this net</span>). 🔔 mutes the chime.</li>
-          <li>Optional: <b>Listen only during scheduled nets</b>: on 1 minute before, off 5 minutes after.</li>
+          <li>Optional: <span class="btn">Nets</span> → <b>Schedule</b> → <b>Listen only during scheduled nets</b>: on 1 minute before, off 5 minutes after.</li>
         </ol>
       </section>
 
@@ -263,9 +265,10 @@ footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:f
           <tr><th>No text</th><td>Is the radio <b>Paused</b>? Does <b>Signal</b> move? Is the squelch opening on traffic?</td></tr>
           <tr><th>Signal red</th><td>Too loud: turn the data level down. None: check the cable and <span class="mono">device</span> in station.yaml.</td></tr>
           <tr><th>Lots of <i>noise</i></th><td>Raise the squelch a little.</td></tr>
-          <tr><th>Wrong calls</th><td>Use <span class="btn">Who?</span>. Low SNR means more mistakes.</td></tr>
+          <tr><th>Wrong speaker</th><td>Use <span class="btn">Who?</span>.</td></tr>
+          <tr><th>Wrong words or call</th><td>Use <span class="btn">✎ Fix</span>. Low SNR means more mistakes.</td></tr>
           <tr><th>Outbox refused</th><td>Winlink Express is still open. Close it.</td></tr>
-          <tr><th>Phone won't open it</th><td>Same Wi-Fi as the PC? Use the address under the code.</td></tr>
+          <tr><th>Phone won't open it</th><td>Same Wi-Fi as the PC (or Tailscale on)? Use the address under the code.</td></tr>
           <tr><th>Page won't open</th><td>Sign in to Windows on the PC. The station starts at sign-in.</td></tr>
         </table>
       </section>

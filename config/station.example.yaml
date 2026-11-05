@@ -6,6 +6,8 @@ qrz_online: true            # look up new callsigns on QRZ.com when online (need
 port: 8091
 callfix: true               # correct near-miss callsigns ('WB6BQW' -> WB6DQW heard in this net); what was heard is kept
 consensus: true             # one station, one call across a net: variants merged by FCC licence, name, town, history
+# keep_awake: listening      # laptops: full speed + screen on while a radio listens; always / off (README "On a laptop")
+# VHF/UHF reach (300 km by default) is set in the dashboard: Settings → VHF/UHF reach.
 # A schedule entry can say its name as net control says it, for the fix-ups (station/fixups.py):
 #   spoken: [Springfield County ARES net]
 # region_state: IL          # your state for callsign correction, when your licence address is elsewhere (default: FCC)
@@ -88,8 +90,9 @@ accurate:                   # the accurate second pass: the home server when rea
   auto_after_min: 15        # catch-up for anything missed, this many quiet minutes after a net; 0 = off
   # the key goes in config\secrets.env as EMCOMM_STT_KEY=... (never in this file; kept across updates)
 
-# The download link printed on the reference card (Help) with its QR code, for people you train.
-# download_url: https://github.com/OWNER/ham-net-speech-to-text
+# The download link printed on the reference card (Help) with its QR code, for people you train. Default: the public
+# project page, https://github.com/travislhilton/ham-net-speech-to-text; set your club's own copy here, or "" to print "ask the instructor" instead.
+# download_url: https://github.com/travislhilton/ham-net-speech-to-text
 
 # A net still being heard after its scheduled end keeps going (recording, its own transmissions) until net control
 # closes it, it is quiet this many minutes, or just before the next net on the same radio; at most overrun_max_min.

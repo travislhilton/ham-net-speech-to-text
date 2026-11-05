@@ -64,10 +64,15 @@ def qr_svg(text: str) -> str:
     return segno.make(text, error="m").svg_inline(scale=5, border=2, dark="#000", light="#fff", omitsize=True)
 
 
-def card_with_download(html: str, url: str | None) -> str:
-    """The reference card with this station's download link (config/station.yaml `download_url`) and its QR code.
-    Without one, the card asks the reader to get the link from whoever runs the training."""
+REPO_URL = "https://github.com/travislhilton/ham-net-speech-to-text"   # the public project page (Code → Download ZIP)
+
+
+def card_with_download(html: str, url: str | None = REPO_URL) -> str:
+    """The reference card with the download link and its QR code: config/station.yaml `download_url` when set
+    (a club's own copy), else the public project page. `download_url: ""` prints "ask the instructor" instead."""
     import html as h
+    if url is None:
+        url = REPO_URL
     if url:
         try:
             qr = qr_svg(url)
