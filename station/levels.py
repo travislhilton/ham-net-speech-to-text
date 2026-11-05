@@ -75,11 +75,10 @@ class WinGain:
     """The Windows recording level of the sound input whose name contains `name` (None elsewhere)."""
 
     def __init__(self, name: str):
-        self.name = name
+        self.name, self.friendly = name, None
         self.vol = self._find(name)
 
-    @staticmethod
-    def _find(name: str):
+    def _find(self, name: str):
         if not name or name.startswith("file:"):
             return None
         try:
@@ -88,6 +87,7 @@ class WinGain:
             for d in AudioUtilities.GetAllDevices(data_flow=EDataFlow.eCapture.value,
                                                   device_state=DEVICE_STATE.ACTIVE.value):
                 if name.lower() in (d.FriendlyName or "").lower():
+                    self.friendly = d.FriendlyName
                     return d.EndpointVolume
         except Exception:  # noqa: BLE001 — not Windows, pycaw missing, COM refused: advice only
             return None
@@ -99,7 +99,8 @@ class WinGain:
         try:
             lo, hi, _ = self.vol.GetVolumeRange()
             return {"db": round(self.vol.GetMasterVolumeLevel(), 1), "min": round(lo, 1), "max": round(hi, 1),
-                    "pct": round(self.vol.GetMasterVolumeLevelScalar() * 100), "muted": bool(self.vol.GetMute())}
+                    "pct": round(self.vol.GetMasterVolumeLevelScalar() * 100), "muted": bool(self.vol.GetMute()),
+                    "device": self.friendly}
         except Exception:  # noqa: BLE001
             return None
 

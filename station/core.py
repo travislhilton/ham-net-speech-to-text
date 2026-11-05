@@ -433,8 +433,8 @@ class Station:
         if r.get("state") != "listening":
             raise RuntimeError("the radio is not listening: press Resume first")
         if gain.get() is None:
-            raise RuntimeError("this PC's recording level can't be set from here: use the radio's volume "
-                               "(or Windows Sound settings → Recording → Properties → Levels)")
+            raise RuntimeError("this PC's input volume can't be set from here: Windows Settings → System → Sound → "
+                               "Input → this input → Input volume (and the radio's volume knob)")
         act = body.get("action")
         if act == "auto":
             res = levels.auto(lambda since: levels.stats(list(self.level_recent[rid]), since), gain, band)

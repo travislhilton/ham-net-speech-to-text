@@ -732,6 +732,9 @@ function renderLevel(){
    <div class="scale"><span>-70</span><span>-50</span><span>-30</span><span>-10</span><span>0 dBFS</span></div>
    <div class="big"><span id="lvNow">…</span> <span class="say" id="lvSay"></span></div>
    <div id="lvGain"></div>
+   <details class="small"><summary>Adjust by hand</summary><ol>
+    <li><b>Radio output volume</b> first (set once, then leave it): a handheld's speaker/earphone jack is very loud. Turn its volume knob low, about a quarter, so Windows has room in both directions.</li>
+    <li><b>Windows 11 input volume</b> (the fine adjustment): <b>Settings</b> → <b>System</b> → <b>Sound</b> → under <b>Input</b> choose <b>${esc(r.device||"the radio's input")}</b> → <b>Input volume</b> slider. Watch the bar here while you move it. (Older panel: More sound settings → Recording → the input → Properties → Levels → Microphone; it is the same level.)</li></ol></details>
    <div class="row">${L.step==="noise"?'<button id="lvNext">Next: voice check</button>':'<button id="lvBack">Back to the noise level</button>'} <button onclick="$('levelDlg').close()">Done</button> <span class="bad small" id="lvMsg"></span></div>
    <p class="small muted">The green band is the target for this step (${L.step==="noise"?(fm?"steady hiss: -30 to -20 dBFS":"band noise: -45 to -32 dBFS"):"voice peaks: -12 to -3 dBFS"}). The bar is the level now, the black line the loudest peak.</p>`;
   const nx=$("lvNext");if(nx)nx.onclick=()=>{L.step="voice";renderLevel()};
@@ -745,11 +748,11 @@ function renderLevelLive(){
     const st=d.stats||{};$("lvNow").textContent=st.n?`${L.step==="voice"?"peak "+st.peak:st.rms} dBFS`:"…";
     if(d.state!=="listening")$("lvSay").textContent="This radio is not listening: press Resume on its card first.";
     const g=d.gain;
-    $("lvGain").innerHTML=g?`<div class="row"><span>Windows recording level: <b>${g.pct}%</b> <span class="muted small">(${g.db} dB of ${g.min}…${g.max})</span></span>
+    $("lvGain").innerHTML=g?`<div class="row"><span>Windows input volume${g.device?` (${esc(g.device)})`:""}: <b>${g.pct}%</b> <span class="muted small">(${g.db} dB of ${g.min}…${g.max})</span></span>
        <button data-lvs="-3">−3 dB</button><button data-lvs="-1">−1</button><button data-lvs="1">+1</button><button data-lvs="3">+3 dB</button>
        ${L.step==="noise"?`<button class="primary" id="lvAuto"${L.busy?" disabled":""}>Adjust automatically</button>`:""}</div>
        ${L.auto&&L.step==="noise"?`<p class="small muted">Adjusted in ${L.auto.steps.length} step(s): ${esc(L.auto.advice.say)}</p>`:""}`
-      :'<p class="small muted">This PC\'s recording level can\'t be set from here: turn the radio\'s volume (or Windows Sound settings → Recording → this input → Properties → Levels) and watch the bar.</p>';
+      :'<p class="small muted">This PC\'s Microphone level can\'t be set from here: use “Adjust by hand” below and watch the bar.</p>';
     for(const x of $("lvGain").querySelectorAll("[data-lvs]"))x.onclick=()=>levelPost({step:+x.dataset.lvs},"Setting…");
     const au=$("lvAuto");if(au)au.onclick=()=>levelPost({action:"auto"},"Adjusting… keep the squelch open (about 15 s)");}
   $("lvMsg").textContent=L.msg||"";

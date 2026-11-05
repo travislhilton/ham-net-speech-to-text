@@ -104,7 +104,8 @@ you chose is remembered. Each column shows:
 - **Set level…** (on each radio card): sets the audio level just right, once per radio and cable. Step 1, *noise*:
   FM — open the squelch (MONI) for steady hiss (a data jack always has it); SSB/AM — a quiet frequency. The meter
   shows the level against a green target band (hiss -30 to -20 dBFS; band noise -45 to -32) with advice in words,
-  the Windows recording level of that input with −/+ buttons, and **Adjust automatically**, which measures, sets
+  the Windows **input volume** of that input (Windows 11: Settings → System → Sound → Input → the input → Input
+  volume; same as the old panel's Levels → Microphone) with −/+ buttons, and **Adjust automatically**, which measures, sets
   the Windows level and measures again until the hiss is in the band (or says to turn the radio's volume, when
   Windows' range is not enough). Step 2, *voice*: close the squelch and let someone talk; peaks should stay
   between -12 and -3 dBFS. A handheld's speaker/earphone jack is very loud: set the radio's volume low and leave
