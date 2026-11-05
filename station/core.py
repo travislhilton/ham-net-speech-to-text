@@ -155,7 +155,7 @@ class Station:
         from .netclose import NetCloser         # the end of a net: net control closing it, or End net
         self.closer = NetCloser(self, config)
         from .awake import KeepAwake, MODES as AWAKE_MODES   # full speed while transcribing (laptops throttle when dark)
-        self.awake = KeepAwake()
+        self.awake = KeepAwake(snapshot=self.data / "power_snapshot.json")
         self.awake_mode = config.get("keep_awake", "listening")
         if self.awake_mode not in AWAKE_MODES:
             self.awake_mode = "listening"

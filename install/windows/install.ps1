@@ -166,6 +166,31 @@ if (-not $SkipQrz) {
   Pop-Location
 }
 
+Step "Power plan 'HamNet Station' (the station switches to it only while transcribing)"
+# Laptops slow themselves right down when the screen goes dark (README "On a laptop"). While a radio listens or the
+# accurate pass runs, the station saves the operator's own plan + power mode, switches to this one (and Best
+# performance), and puts them back afterwards (station/awake.py). Same GUID as station/awake.py HAMNET_PLAN.
+$hn = '6f1c2d4e-8a3b-4c5d-9e7f-48616d4e6574'
+$old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+powercfg /query $hn 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) { powercfg /duplicatescheme 381b4222-f694-41f0-9685-ff5bb260df2e $hn | Out-Null }   # from Balanced
+powercfg /changename $hn 'HamNet Station' 'Full speed while HamNet Station transcribes; switched on and off by the station' | Out-Null
+$hnSet = @(   # subgroup, setting, value (on mains AND battery: it is active only while transcribing)
+  @('SUB_SLEEP', 'STANDBYIDLE', 0), @('SUB_SLEEP', 'HIBERNATEIDLE', 0), @('SUB_SLEEP', 'UNATTENDSLEEP', 0),
+  @('SUB_VIDEO', 'VIDEOIDLE', 0), @('SUB_VIDEO', 'VIDEOCONLOCK', 0), @('SUB_BUTTONS', 'LIDACTION', 0),
+  @('SUB_PROCESSOR', 'PERFEPP', 0), @('SUB_PROCESSOR', 'PERFEPP1', 0),
+  @('2a737441-1930-4402-8d77-b2bebba308a3', '48e6b7a6-50f5-4782-a5d4-53bb8f07e226', 0),   # USB selective suspend off
+  @('19cbb8fa-5279-450e-9fac-8a3d5fedd0c1', '12bbebe6-58d6-4636-95bb-3217ef867c1a', 0),   # Wi-Fi: max performance
+  @('501a4d13-42af-4429-9fd1-a8218c268e20', 'ee12f906-d277-404b-b6da-e5fa1a576df5', 0),   # PCIe link power off
+  @('44f3beca-a7c0-460e-9df2-bb8b99e0cba6', '3619c3f2-afb2-4afc-b0e9-e7fef372de36', 2)    # Intel graphics: max
+)
+foreach ($v in $hnSet) {
+  powercfg /setacvalueindex $hn $v[0] $v[1] $v[2] 2>$null | Out-Null
+  powercfg /setdcvalueindex $hn $v[0] $v[1] $v[2] 2>$null | Out-Null    # a setting this PC lacks is skipped
+}
+$ErrorActionPreference = $old
+Write-Host '  ready (your own power plan stays active; set it for battery life as you like)'
+
 Step "Daily callbook update (scheduled task, 04:15)"
 $act = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.fcc update' -WorkingDirectory $InstallDir
 $act2 = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.dxcc update' -WorkingDirectory $InstallDir

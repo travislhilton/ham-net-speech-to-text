@@ -24,3 +24,10 @@ def test_keep_awake_is_a_noop_off_windows(monkeypatch):
     k = KeepAwake()
     k.ok = False
     assert k.set(True) is False and k.held is False
+
+
+def test_installer_and_station_use_the_same_plan_guid():
+    from pathlib import Path
+    from station.awake import HAMNET_PLAN
+    ps1 = (Path(__file__).resolve().parent.parent / "install" / "windows" / "install.ps1").read_text()
+    assert f"$hn = '{HAMNET_PLAN}'" in ps1

@@ -8,9 +8,20 @@ paused: with "listen only during nets", that is during nets) or the accurate pas
 Windows power request for the display and the system, the same request a video player makes, and drops it
 otherwise so the PC can idle (and an OLED screen can rest) between nets.
 
+While it holds, the station also switches Windows to the "HamNet Station" power plan the installer makes (full
+speed, no sleep, lid does nothing, USB / Wi-Fi / PCIe power saving off, Intel graphics at maximum) and the power mode
+to Best performance, after saving the operator's own plan and mode to data/power_snapshot.json; it puts them back
+when it lets go, or at its next start if it stopped while holding. The operator's plan can then favour the battery.
+
 station.yaml `keep_awake`: "listening" (default: as above), "always" (whenever the station runs), "off".
 """
+import json
 import sys
+import uuid
+from pathlib import Path
+
+HAMNET_PLAN = "6f1c2d4e-8a3b-4c5d-9e7f-48616d4e6574"   # the installer's "HamNet Station" plan
+BEST_PERFORMANCE = "ded574b5-45a0-4f42-8737-46345c09c238"                 # Windows power mode overlay
 
 MODES = ("listening", "always", "off")
 
@@ -29,14 +40,90 @@ def wanted(mode: str, radios: list[dict], accurate_jobs: list[dict]) -> tuple[bo
     return False, "no radio listening"
 
 
-class KeepAwake:
-    """One Windows power request (display + system required), set and cleared on change. A no-op elsewhere."""
+class PowerPlan:
+    """The active Windows power plan and power mode (overlay): read, set, saved to a file and put back."""
 
-    def __init__(self, reason: str = "HamNet Station is transcribing"):
+    def __init__(self, snapshot: Path):
+        import ctypes
+        self.ct = ctypes
+        self.pp = ctypes.WinDLL("powrprof")
+        self.snapshot = Path(snapshot)
+
+    def _guid(self, s: str):
+        b = uuid.UUID(s).bytes_le
+        return (self.ct.c_ubyte * 16).from_buffer_copy(b)
+
+    def active(self) -> str:
+        p = self.ct.c_void_p()
+        if self.pp.PowerGetActiveScheme(None, self.ct.byref(p)) != 0:
+            raise OSError("PowerGetActiveScheme failed")
+        g = str(uuid.UUID(bytes_le=self.ct.string_at(p, 16)))
+        self.ct.windll.kernel32.LocalFree(p)
+        return g
+
+    def overlay(self) -> str | None:
+        g = (self.ct.c_ubyte * 16)()
+        try:
+            if self.pp.PowerGetEffectiveOverlayScheme(self.ct.byref(g)) != 0:
+                return None
+        except AttributeError:                                   # Windows 10 before 1709: no power modes
+            return None
+        return str(uuid.UUID(bytes_le=bytes(g)))
+
+    def exists(self, guid: str) -> bool:
+        p = self.ct.c_void_p()
+        size = self.ct.c_ulong(0)
+        r = self.pp.PowerReadFriendlyName(None, self.ct.byref(self._guid(guid)), None, None, None, self.ct.byref(size))
+        return r == 0 and size.value > 0
+
+    def set(self, plan: str, overlay: str | None):
+        if self.pp.PowerSetActiveScheme(None, self.ct.byref(self._guid(plan))) != 0:
+            raise OSError(f"PowerSetActiveScheme {plan} failed")
+        if overlay:
+            try:
+                self.pp.PowerSetActiveOverlayScheme(self.ct.byref(self._guid(overlay)))
+            except AttributeError:
+                pass
+
+    def switch(self) -> bool:
+        """Save the operator's plan + mode and switch to the HamNet plan. False when the plan is not installed."""
+        if not self.exists(HAMNET_PLAN):
+            return False
+        if not self.snapshot.exists():                           # never overwrite a saved plan with our own
+            cur = self.active()
+            if cur != HAMNET_PLAN:
+                self.snapshot.write_text(json.dumps({"plan": cur, "overlay": self.overlay()}))
+        self.set(HAMNET_PLAN, BEST_PERFORMANCE)
+        return True
+
+    def restore(self) -> dict | None:
+        """Put back the saved plan + mode (and forget them). None when nothing was saved."""
+        if not self.snapshot.exists():
+            return None
+        snap = json.loads(self.snapshot.read_text())
+        self.set(snap["plan"], snap.get("overlay"))
+        self.snapshot.unlink()
+        return snap
+
+
+class KeepAwake:
+    """One Windows power request (display + system required) and the HamNet power plan, set and cleared on change.
+    A no-op elsewhere."""
+
+    def __init__(self, reason: str = "HamNet Station is transcribing", snapshot: Path | None = None):
         self.held = False
         self.handle = None
         self.ok = sys.platform == "win32"
         self.reason = reason
+        self.plan = None
+        if self.ok and snapshot is not None:
+            try:
+                self.plan = PowerPlan(snapshot)
+                back = self.plan.restore()                       # a previous run stopped while holding
+                if back:
+                    print(f"keep awake: power plan put back after a restart ({back['plan']})", flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"keep awake: power plan: {type(e).__name__}: {e}", flush=True)
 
     def _create(self):
         import ctypes
@@ -65,6 +152,15 @@ class KeepAwake:
                 (self.k.PowerSetRequest if want else self.k.PowerClearRequest)(self.handle, kind)
             if want:                                             # light a screen that is already off
                 self.k.SetThreadExecutionState(0x2 | 0x1)        # ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED, once
+            if self.plan is not None:
+                try:
+                    if want:
+                        if not self.plan.switch():
+                            print("keep awake: no HamNet Station power plan (re-run the installer)", flush=True)
+                    else:
+                        self.plan.restore()
+                except Exception as e:  # noqa: BLE001 — the power request still holds
+                    print(f"keep awake: power plan: {type(e).__name__}: {e}", flush=True)
         except Exception as e:  # noqa: BLE001 — never stop the station over power management
             print(f"keep awake: {type(e).__name__}: {e}", flush=True)
             self.ok = False
