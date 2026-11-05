@@ -62,11 +62,10 @@ def candidates(models: Path):
     for name, role in (("whisper-large-v3-turbo-int8-ov", "final"), ("whisper-small.en-int8-ov", "final"),
                        ("whisper-base.en-int8-ov", "partial")):
         if (models / name).exists():
-            # The NPU only for base.en (words while talking): its first compile takes ~3 min (cached after); small.en
-            # took 9 min and turbo did not finish in 30 (test laptop, 2026-11-04). There base.en ran 3x faster than on
-            # the GPU and leaves the GPU to the final text.
-            npu = ["NPU"] if "NPU" in devs and name == "whisper-base.en-int8-ov" else []
-            for d in [x for x in devs if x.startswith("GPU")] + npu + (["CPU"] if "CPU" in devs else []):
+            # No NPU (test laptop, Intel NPU, OpenVINO 2026.4, 2026-11-04): its static Whisper pipeline refuses the
+            # station's callsign prompt ("roi_end <= max_dim"), first compiles take 3-9 min (turbo did not finish in
+            # 30), and at full speed the GPU ran turbo at 0.07x real time and base.en at 0.03x anyway.
+            for d in [x for x in devs if x.startswith("GPU")] + (["CPU"] if "CPU" in devs else []):
                 out.append({"engine": "openvino", "device": d, "model": name, "role": role,
                             "make": (lambda n=name, dv=d: openvino_runner(models / n, dv))})
     if has_nvidia():
