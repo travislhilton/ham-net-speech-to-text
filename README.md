@@ -592,3 +592,7 @@ python3 -m venv .venv && .venv/bin/pip install -r transcribe/requirements.txt -r
 Design: `docs/ARCHITECTURE.md`, including which settings live in which local config file. Your callsign,
 server addresses, keys and logins go only in those files (`config/station.yaml`, `config/local.yaml`,
 `config/secrets.env`, `capture/config.yaml`, `~/.config/emcomm-stt/env`); git ignores them.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Use it, change it and share it, for your club, ARES group or EOC.
