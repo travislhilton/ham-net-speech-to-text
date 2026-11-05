@@ -41,6 +41,18 @@ What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing
   desktop, and opens port 8091 to your home network and Tailscale only;
 - lists the audio inputs it can record from.
 
+**On a laptop** (measured on a 2026 Intel Core Ultra laptop with Modern Standby and an OLED screen): such laptops
+slow themselves to about a fifth of their speed whenever the screen is off or a screensaver shows, even on mains
+power with sleep set to never. The station therefore keeps the screen on while it is transcribing (a radio is
+listening, or the accurate pass has work) and lets it go dark otherwise (`keep_awake:` in `station.yaml`:
+`listening`, the default; `always`; `off`). With "Listen only during nets" on a radio, that means the screen stays
+on only during nets. Also set, once, on the laptop itself:
+- the maker's performance profile to **Performance** (ASUS: MyASUS → Fan Profile; a quiet profile capped the whole
+  processor to ~0.5 GHz);
+- Settings → System → Power & battery → Presence sensing: **Turn off my screen when I leave** off (it darkens the
+  screen, and so slows the PC, whenever you step away);
+- on mains power: sleep **never**, closing the lid **does nothing**.
+
 ## Your own settings stay on your PC
 
 Everything personal is kept in files the repository never contains (they are git-ignored and the installer
@@ -391,6 +403,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
 | Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | built + measured, not deployed yet (synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
 | Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/NPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | built + measured on an i5-12600H station PC, not deployed yet (see "The accurate pass on this PC") |
+| Full speed while transcribing on laptops: the screen held on (Windows display + system power request) while a radio listens or the accurate pass has work, released otherwise (`station/awake.py`, `keep_awake:`) | built + unit-tested; on the test laptop a lit screen is the difference between 0.85 s and 4.2 s for the same work |
+| Compiled-model cache for the live engine (`data/ov-cache`, shared with the accurate pass) | working; test laptop: turbo on the GPU 36 s → 16 s to load, small.en on the NPU 555 s → 11 s |
 | Over-the-air transcription test with word-error score and history | working |
 | Tap-to-correct (✎ Fix, log + minutes transcript; Enter/Esc; ▶ while editing; Undo correction): corrected > accurate > live in search, minutes, attendance, ICS-309/213, Winlink; Learned fixes proposed from repeats, applied only on Accept (`data/fixups_learned.yaml`); accuracy against the corrections per radio/mode/net (`/api/accuracy`, `python -m tools.accuracy`) | working (`station/corrections.py`); not yet used on a live net |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |

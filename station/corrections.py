@@ -99,7 +99,7 @@ class Learned:
 
     def accepted(self) -> list[dict]:
         try:
-            d = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
+            d = yaml.safe_load(self.path.read_text(encoding="utf-8-sig")) or {}
         except (OSError, yaml.YAMLError):
             return []
         return [f for f in (d.get("fixups") or []) if isinstance(f, dict) and f.get("heard") and f.get("say")]

@@ -42,7 +42,7 @@ def _rules_from(obj, source: str) -> list[dict]:
 
 def _yaml(p: Path):
     try:
-        return yaml.safe_load(Path(p).read_text(encoding="utf-8")) or {}
+        return yaml.safe_load(Path(p).read_text(encoding="utf-8-sig")) or {}
     except (OSError, yaml.YAMLError):
         return {}
 

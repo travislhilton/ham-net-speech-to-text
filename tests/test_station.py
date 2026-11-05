@@ -477,3 +477,12 @@ def test_help_card_is_served():
     html = (STATIC / "card.html").read_text()
     assert "Side 1" in html and "Side 2" in html and "<title>" in html
     assert 'href="/help"' in (STATIC / "index.html").read_text()
+
+
+def test_station_yaml_with_byte_order_mark_loads(tmp_path):
+    """Windows PowerShell 5 writes UTF-8 with a BOM; the station must still read it (a laptop station install, 2026-11-04)."""
+    from station.core import load_config
+    p = tmp_path / "station.yaml"
+    p.write_bytes(b"\xef\xbb\xbf# This station's settings\ncallsign: W9XYZ\nradios: []\n")
+    c = load_config(p)
+    assert c["callsign"] == "W9XYZ" and c["radios"] == []

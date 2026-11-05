@@ -30,7 +30,9 @@ FRAME = 512                       # 32 ms @ 16 kHz
 
 
 def load_config(path: Path = ROOT / "config" / "station.yaml") -> dict:
-    c = yaml.safe_load(path.read_text()) if path.exists() else {}
+    # utf-8-sig: Windows PowerShell 5 (`Set-Content -Encoding utf8`, Notepad of old) writes a byte-order mark, and
+    # with it the first line is not a comment and the file fails to parse (a laptop station install, 2026-11-04).
+    c = yaml.safe_load(path.read_text(encoding="utf-8-sig")) if path.exists() else {}
     c = c or {}
     c.setdefault("callsign", "")
     c.setdefault("radios", [])
@@ -152,6 +154,11 @@ class Station:
                                callbook=callbook, clock=clock, me=self.me, bus=self.bus)
         from .netclose import NetCloser         # the end of a net: net control closing it, or End net
         self.closer = NetCloser(self, config)
+        from .awake import KeepAwake, MODES as AWAKE_MODES   # full speed while transcribing (laptops throttle when dark)
+        self.awake = KeepAwake()
+        self.awake_mode = config.get("keep_awake", "listening")
+        if self.awake_mode not in AWAKE_MODES:
+            self.awake_mode = "listening"
         self.final_q: queue.Queue = queue.Queue()
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
@@ -220,6 +227,8 @@ class Station:
                 self.nets.tick()
             except Exception as e:  # noqa: BLE001 — never let the schedule stop the station
                 print(f"schedule tick: {type(e).__name__}: {e}", flush=True)
+            if n % 5 == 1:                     # hold the screen on (full speed) only while transcribing
+                self._keep_awake_tick()
             with self.lock:
                 radios = list(self.radios.values())
             self.bus.publish("radios", {"radios": radios, "net": self.schedule_now()})
@@ -230,6 +239,18 @@ class Station:
                     self.hints[rid]["reminders"] = rem; changed = True
             if changed:
                 self.bus.publish("hints", self.hints)
+
+    def _keep_awake_tick(self):
+        from .awake import wanted
+        try:
+            with self.lock:
+                radios = [dict(r, id=k) for k, r in self.radios.items()]
+            acc = getattr(self, "accurate", None)
+            want, why = wanted(self.awake_mode, radios, acc.status() if acc else [])
+            if self.awake.set(want):
+                print(f"keep awake: {'on' if want else 'off'} ({why})", flush=True)
+        except Exception as e:  # noqa: BLE001 — power management never stops the station
+            print(f"keep awake: {type(e).__name__}: {e}", flush=True)
 
     # ---------- operator settings (set on the dashboard; the operator tunes the radio) ----------
     KEEP_TX = 6000      # in memory (the day's log keeps all): a busy day on two radios is ~1000; the Winlink span,

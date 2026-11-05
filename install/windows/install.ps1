@@ -108,11 +108,12 @@ $env:HAMNET_HOME = $InstallDir; $env:CALLBOOK_DIR = "$data\callbook"
 $station = "$InstallDir\config\station.yaml"
 if (-not (Test-Path $station)) {
   if (-not $Callsign) { $Callsign = Read-Host 'Your callsign (for hints and IDs)' }
-  @"
+  # No byte-order mark: PowerShell 5's `-Encoding utf8` writes one (the station reads utf-8-sig anyway)
+  [IO.File]::WriteAllText($station, @"
 # This station's settings (kept across updates). Radios are added here as they are connected.
 callsign: $($Callsign.ToUpper())
 radios: []
-"@ | Set-Content $station -Encoding utf8
+"@, (New-Object Text.UTF8Encoding $false))
 }
 
 if (-not $SkipModels) {

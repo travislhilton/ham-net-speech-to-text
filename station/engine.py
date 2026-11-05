@@ -28,7 +28,15 @@ class OpenVINOEngine(Engine):
         import openvino_genai as ov
         self.name = f"{model}@{device}"
         self.english_only = ".en-" in model
-        self.pipe = ov.WhisperPipeline(str(models_dir / model), device)
+        # Compiled-model cache (the accurate pass shares it): a GPU or NPU compile takes minutes on some PCs (a laptop station,
+        # 2026-11-04: turbo on the GPU 36 s -> 16 s, small.en on the NPU 555 s -> 11 s) and would repeat at every start.
+        cache = Path(models_dir).parent / "data" / "ov-cache"
+        try:
+            cache.mkdir(parents=True, exist_ok=True)
+            props = {"CACHE_DIR": str(cache)}
+        except OSError:
+            props = {}
+        self.pipe = ov.WhisperPipeline(str(models_dir / model), device, **props)
         self.prompt = prompt
 
     def transcribe(self, audio, prompt=None):
@@ -71,7 +79,7 @@ class FakeEngine(Engine):
 
 
 def load_choice(path: Path = ROOT / "config" / "engine.yaml") -> dict:
-    return yaml.safe_load(path.read_text()) if path.exists() else {}
+    return yaml.safe_load(path.read_text(encoding="utf-8-sig")) if path.exists() else {}
 
 
 def make(spec: dict | None, models_dir: Path = ROOT / "models", prompt: str | None = None) -> Engine | None:
