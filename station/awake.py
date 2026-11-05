@@ -85,6 +85,32 @@ class PowerPlan:
             except AttributeError:
                 pass
 
+    def on_battery(self) -> bool:
+        class SPS(self.ct.Structure):
+            _fields_ = [("ACLineStatus", self.ct.c_ubyte), ("BatteryFlag", self.ct.c_ubyte),
+                        ("BatteryLifePercent", self.ct.c_ubyte), ("SystemStatusFlag", self.ct.c_ubyte),
+                        ("BatteryLifeTime", self.ct.c_ulong), ("BatteryFullLifeTime", self.ct.c_ulong)]
+        st = SPS()
+        self.ct.windll.kernel32.GetSystemPowerStatus(self.ct.byref(st))
+        return st.ACLineStatus == 0
+
+    def own_mode(self) -> str | None:
+        """The operator's own power mode for the current power source (Settings → Power mode). Windows keeps the
+        plugged-in and battery choices in the registry; a program setting the mode changes only the live one, and
+        Windows re-applies the saved choice when the power source changes (measured 2026-11-04)."""
+        try:
+            import winreg
+            k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes")
+            return winreg.QueryValueEx(k, "ActiveOverlayDcPowerScheme" if self.on_battery()
+                                       else "ActiveOverlayAcPowerScheme")[0]
+        except OSError:
+            return None
+
+    def refresh(self):
+        """While holding: Windows switches the mode itself when the power source changes; put full speed back."""
+        if self.active() != HAMNET_PLAN or self.overlay() != BEST_PERFORMANCE:
+            self.set(HAMNET_PLAN, BEST_PERFORMANCE)
+
     def switch(self) -> bool:
         """Save the operator's plan + mode and switch to the HamNet plan. False when the plan is not installed."""
         if not self.exists(HAMNET_PLAN):
@@ -101,7 +127,7 @@ class PowerPlan:
         if not self.snapshot.exists():
             return None
         snap = json.loads(self.snapshot.read_text())
-        self.set(snap["plan"], snap.get("overlay"))
+        self.set(snap["plan"], self.own_mode() or snap.get("overlay"))   # the operator's choice for the power source now
         self.snapshot.unlink()
         return snap
 
@@ -143,6 +169,11 @@ class KeepAwake:
 
     def set(self, want: bool) -> bool:
         """Hold or release. Returns True when the state changed."""
+        if self.ok and want and self.held and self.plan is not None:
+            try:
+                self.plan.refresh()
+            except Exception as e:  # noqa: BLE001
+                print(f"keep awake: power plan: {type(e).__name__}: {e}", flush=True)
         if not self.ok or want == self.held:
             return False
         try:
