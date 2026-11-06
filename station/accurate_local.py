@@ -36,6 +36,8 @@ WHERE = "this PC"
 PROV_RTF_MAX = 0.12      # provisional: ~26 s decoded per transmission -> <= ~3 s of work each, between transmissions
 FINAL_RTF_MAX = 1.0      # final: ~2.5x the net's audio is decoded (two decodes + context) -> <= ~2.5x the net's audio
                          # (i5-12600H + Iris Xe: large-v3 rtf 0.62-0.68; a net with 30 min of speech: final ~50 min on)
+                         # Memory channels matter: the same PC with ONE SO-DIMM (single channel, the iGPU runs as "UHD")
+                         # measured large-v3 0.846 / turbo live 0.312; with TWO (2x16 GB, Iris Xe) 0.435 / 0.212 (2026-11-05)
 
 
 class LocalError(OSError):
