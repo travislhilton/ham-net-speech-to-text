@@ -72,6 +72,8 @@ def make_handler(station):
                 return self._json({"addresses": out})
             if u.path == "/api/state":
                 return self._json(with_who("snapshot", station.snapshot()))
+            if u.path == "/api/radio-list":                        # Radios…: the list + the sound inputs plugged in
+                return self._json(station.radio_list())
             lv = re.fullmatch(r"/api/radios/([\w-]+)/level", u.path)          # Set level…: meter vs target
             if lv:
                 try:
@@ -147,7 +149,7 @@ def make_handler(station):
             m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen|level))?", u.path)
             who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
-            routes = {"/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
+            routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes", "/api/learned"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
@@ -198,6 +200,8 @@ def make_handler(station):
                                       else station.learned())
                 if u.path == "/api/settings":
                     return self._json(station.set_operator(body))
+                if u.path == "/api/radio-list":                   # Radios…: save the list (the station restarts)
+                    return self._json(station.save_radios(body))
                 if u.path == "/api/winlink/preview":
                     return self._json(station.winlink_preview(body.get("radio"), body.get("start"), body.get("end"),
                                                               body.get("title")))

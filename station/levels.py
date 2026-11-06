@@ -140,11 +140,13 @@ class WinGain:
         try:
             from pycaw.constants import DEVICE_STATE, EDataFlow
             from pycaw.pycaw import AudioUtilities
-            for d in AudioUtilities.GetAllDevices(data_flow=EDataFlow.eCapture.value,
-                                                  device_state=DEVICE_STATE.ACTIVE.value):
-                if name.lower() in (d.FriendlyName or "").lower():
-                    self.friendly = d.FriendlyName
-                    return d.EndpointVolume
+            from .radios import best_endpoint
+            devs = {d.FriendlyName or "": d for d in AudioUtilities.GetAllDevices(
+                data_flow=EDataFlow.eCapture.value, device_state=DEVICE_STATE.ACTIVE.value)}
+            f = best_endpoint(name, list(devs))          # exact name first: "Digirig Lite" ≠ "Digirig Lite NET-REC"
+            if f is not None:
+                self.friendly = f
+                return devs[f].EndpointVolume
         except Exception:  # noqa: BLE001 — not Windows, pycaw missing, COM refused: advice only
             return None
         return None

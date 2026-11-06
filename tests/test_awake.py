@@ -59,3 +59,18 @@ def test_restore_unsticks_the_hamnet_plan_when_nothing_was_saved(tmp_path):
     assert p.restore()["plan"] == awake.BALANCED and p.state == {"plan": awake.BALANCED, "overlay": "own-mode"}
     q = _plan(tmp_path, "my-plan")                       # the operator's own plan: left alone
     assert q.restore() is None and q.state["plan"] == "my-plan"
+
+
+def test_traffic_mode_holds_only_around_traffic_and_nets():
+    on = [{"id": "a", "name": "Net radio", "paused": False}]
+    assert wanted("traffic", on, []) == (False, "listening, no traffic")          # radio on all night: screen may sleep
+    assert wanted("traffic", on, [], busy=True)[0]
+    assert wanted("traffic", on, [], quiet_s=120)[0] and not wanted("traffic", on, [], quiet_s=700)[0]
+    assert wanted("traffic", on, [], quiet_s=700, quiet_min=15)[0]
+    assert wanted("traffic", on, [], net_on="Test net") == (True, "net on the air: Test net")
+    assert wanted("traffic", [{"id": "a", "paused": True}], [], busy=True)[0] is False
+    assert wanted("traffic", [], [{"state": "running"}])[0]
+
+
+def test_listening_mode_unchanged():
+    assert wanted("listening", [{"id": "a", "paused": False}], [], quiet_s=9999)[0]

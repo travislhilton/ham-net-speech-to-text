@@ -13,7 +13,12 @@ speed, no sleep, lid does nothing, USB / Wi-Fi / PCIe power saving off, Intel gr
 to Best performance, after saving the operator's own plan and mode to data/power_snapshot.json; it puts them back
 when it lets go, or at its next start if it stopped while holding. The operator's plan can then favour the battery.
 
-station.yaml `keep_awake`: "listening" (default: as above), "always" (whenever the station runs), "off".
+station.yaml `keep_awake` (or Settings on the dashboard): "traffic" (default since 2026-11-05: during a scheduled net,
+while a transmission is received or transcribed or the accurate pass has work, and for `keep_awake_quiet_min` (10)
+minutes after the last transmission; between those the PC keeps the operator's own plan and screen sleep, and a
+radio still listens: a transmission that starts on a dark screen is held from its first moment), "listening" (the
+whole time a radio listens: with no net schedule that is around the clock), "always" (whenever the station runs),
+"off". The owner's laptop stayed lit all evening on "listening" with one radio always on (2026-11-05).
 """
 import json
 import sys
@@ -24,21 +29,36 @@ HAMNET_PLAN = "6f1c2d4e-8a3b-4c5d-9e7f-48616d4e6574"   # the installer's "HamNet
 BEST_PERFORMANCE = "ded574b5-45a0-4f42-8737-46345c09c238"                 # Windows power mode overlay
 BALANCED = "381b4222-f694-41f0-9685-ff5bb260df2e"                         # Windows' own Balanced plan
 
-MODES = ("listening", "always", "off")
+MODES = ("traffic", "listening", "always", "off")
+DEFAULT_MODE = "traffic"
+QUIET_MIN = 10
 
 
-def wanted(mode: str, radios: list[dict], accurate_jobs: list[dict]) -> tuple[bool, str]:
-    """(hold the power request?, why). Pure: the station's ticker and the tests call it."""
+def wanted(mode: str, radios: list[dict], accurate_jobs: list[dict], busy: bool = False,
+           quiet_s: float | None = None, net_on: str | None = None, quiet_min: float = QUIET_MIN) -> tuple[bool, str]:
+    """(hold the power request?, why). Pure: the station's ticker and the tests call it.
+    busy = a transmission is being received or a live final is queued/transcribing; quiet_s = seconds since the
+    last transmission ended (None: none yet); net_on = the name of a scheduled net on the air now."""
     if mode == "off":
         return False, "keep_awake: off"
     if mode == "always":
         return True, "keep_awake: always"
     live = [r.get("name") or r.get("id") or "?" for r in radios if not r.get("paused")]
-    if live:
+    if mode == "listening" and live:
         return True, "listening: " + ", ".join(sorted(map(str, live)))
     if any(j.get("state") in ("queued", "running") for j in accurate_jobs):
         return True, "accurate pass running"
-    return False, "no radio listening"
+    if mode == "listening":
+        return False, "no radio listening"
+    if not live:
+        return False, "no radio listening"
+    if busy:
+        return True, "receiving / transcribing"
+    if net_on:
+        return True, f"net on the air: {net_on}"
+    if quiet_s is not None and quiet_s < quiet_min * 60:
+        return True, f"traffic in the last {quiet_min:g} min"
+    return False, "listening, no traffic"
 
 
 class PowerPlan:

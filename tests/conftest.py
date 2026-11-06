@@ -21,3 +21,11 @@ def _no_real_recording_levels(monkeypatch):
     like real ones (NET-REC), so on a station PC a test would find, and could change, the real input (2026-11-05)."""
     from station import levels
     monkeypatch.setattr(levels.WinGain, "_find", lambda self, name: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_restart(monkeypatch):
+    """Radios… restarts the station by ending its process; in a test on a station PC that would end pytest, and its
+    `schtasks /run` would start the real station's task."""
+    from station.core import Station
+    monkeypatch.setattr(Station, "restart_soon", lambda self: None)

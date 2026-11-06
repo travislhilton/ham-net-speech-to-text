@@ -32,6 +32,10 @@ def main(argv=None):
         import datetime as _dt; print(f"--- start {_dt.datetime.now().isoformat(timespec='seconds')}")
 
     cfg = load_config(Path(a.config))
+    from . import radios as radmod                       # Radios… on the dashboard: data/radios.json wins once saved
+    cfg["radios"] = radmod.load(ROOT / "data" / "radios.json", cfg["radios"])
+    for r in cfg["radios"]:
+        r.setdefault("gate", "carrier")
     if a.simulate and not cfg["radios"]:
         cfg["radios"] = [{"id": "sim", "name": "Simulated radio", "device": None, "gate": "carrier", "freq_mhz": 146.94}]
     from . import engine

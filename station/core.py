@@ -158,11 +158,14 @@ class Station:
                                callbook=callbook, clock=clock, me=self.me, bus=self.bus)
         from .netclose import NetCloser         # the end of a net: net control closing it, or End net
         self.closer = NetCloser(self, config)
-        from .awake import KeepAwake, MODES as AWAKE_MODES   # full speed while transcribing (laptops throttle when dark)
+        from .awake import KeepAwake, MODES as AWAKE_MODES, DEFAULT_MODE as AWAKE_DEFAULT   # full speed while transcribing (laptops throttle when dark)
         self.awake = KeepAwake(snapshot=self.data / "power_snapshot.json")
-        self.awake_mode = config.get("keep_awake", "listening")
+        self.awake_mode = config.get("keep_awake", AWAKE_DEFAULT)
+        self.awake_quiet_min = float(config.get("keep_awake_quiet_min", 10))
+        self.last_traffic = None                       # time.time() of the last transmission's end (keep awake)
         if self.awake_mode not in AWAKE_MODES:
-            self.awake_mode = "listening"
+            self.awake_mode = AWAKE_DEFAULT
+        self.awake_mode = (self._saved().get("operator") or {}).get("keep_awake") or self.awake_mode
         self.final_q: queue.Queue = queue.Queue()
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
@@ -246,11 +249,25 @@ class Station:
 
     def _keep_awake_tick(self):
         from .awake import wanted
+        lk = self.__dict__.setdefault("_awake_lock", threading.Lock())
+        with lk:
+            self._keep_awake_once(wanted)
+
+    def _keep_awake_once(self, wanted):
         try:
             with self.lock:
                 radios = [dict(r, id=k) for k, r in self.radios.items()]
             acc = getattr(self, "accurate", None)
-            want, why = wanted(self.awake_mode, radios, acc.status() if acc else [])
+            busy = self.live_busy()
+            if busy:
+                self.last_traffic = time.time()
+            try:
+                net = (self.schedule_now().get("current") or {}).get("name")
+            except Exception:  # noqa: BLE001
+                net = None
+            want, why = wanted(self.awake_mode, radios, acc.status() if acc else [], busy=busy,
+                               quiet_s=None if self.last_traffic is None else time.time() - self.last_traffic,
+                               net_on=net, quiet_min=self.awake_quiet_min)
             if self.awake.set(want):
                 print(f"keep awake: {'on' if want else 'off'} ({why})", flush=True)
         except Exception as e:  # noqa: BLE001 — power management never stops the station
@@ -278,7 +295,7 @@ class Station:
     def operator(self) -> dict:
         from . import winlink
         op = {"callsign": self.me, "name": "", "grid": "", "winlink_dir": "", "winlink_account": "",
-              "reach_km": self.reach_km()} | \
+              "reach_km": self.reach_km(), "keep_awake": self.awake_mode} | \
              {k: v for k, v in (self._saved().get("operator") or {}).items() if v is not None}
         op["callsign"] = self.me
         installs = winlink.find_installs([op["winlink_dir"]] if op["winlink_dir"] else [])
@@ -308,6 +325,10 @@ class Station:
         grid = str(body.get("grid", "") or "").strip()
         if grid and not re.fullmatch(r"[A-Ra-r]{2}\d{2}([A-Xa-x]{2})?", grid):
             raise ValueError("grid square must look like EM59 or EM59et")
+        from .awake import MODES as AWAKE_MODES
+        ka = body.get("keep_awake")
+        if ka not in (None, "") and ka not in AWAKE_MODES:
+            raise ValueError("keep awake must be one of " + ", ".join(AWAKE_MODES))
         reach = body.get("reach_km")
         if reach not in (None, ""):
             try:
@@ -327,9 +348,14 @@ class Station:
             op.update(callsign=call, name=str(body.get("name", op.get("name", "")))[:80], grid=grid,
                       winlink_dir=str(body.get("winlink_dir", op.get("winlink_dir", "")))[:260],
                       winlink_account=str(body.get("winlink_account", op.get("winlink_account", ""))).upper()[:12])
+            if ka:
+                op["keep_awake"] = ka
+                self.awake_mode = ka
             saved["operator"] = op
             self._save(saved)
             self._apply_callsign(call)
+        if ka:
+            threading.Thread(target=self._keep_awake_tick, daemon=True).start()
         return self.operator()
 
     def _apply_callsign(self, call: str):
@@ -411,6 +437,52 @@ class Station:
         print(f"{datetime.now():%H:%M:%S} winlink: {len(msgs)} message(s) to {', '.join(to)} in {install}\\{account} Outbox",
               flush=True)
         return res
+
+    # ---------- Radios…: add / replace / remove (station/radios.py) ----------
+    def radio_list(self) -> dict:
+        from . import radios as rmod
+        with self.lock:
+            cur = [{k: self.radio_cfg.get(r, {}).get(k) for k in rmod.EDITABLE}
+                   | {"state": self.radios[r].get("state"), "error": self.radios[r].get("error")} for r in self.radios]
+        nets = {}
+        for n in self.cfg.get("schedule", []):
+            if n.get("radio"):
+                nets.setdefault(n["radio"], []).append(n.get("name"))
+        return {"radios": cur, "inputs": rmod.inputs(), "nets": nets,
+                "from": "dashboard" if (self.data / "radios.json").exists() else "station.yaml",
+                "restart": os.name == "nt"}
+
+    def save_radios(self, body: dict) -> dict:
+        from . import radios as rmod
+        new = rmod.clean(body.get("radios") or [])
+        if not new:
+            raise ValueError("keep at least one radio")
+        gone = {n.get("radio") for n in self.cfg.get("schedule", [])} - {r["id"] for r in new} - {None}
+        if gone:
+            names = [n.get("name") for n in self.cfg.get("schedule", []) if n.get("radio") in gone]
+            raise ValueError("a radio you removed has nets (" + ", ".join(map(str, names)) +
+                             "): move them to another radio in Nets… first")
+        rmod.save(self.data / "radios.json", new)
+        print(f"{datetime.now():%H:%M:%S} radios saved on the dashboard: " +
+              "; ".join(f"{r['id']}={r['name']} @ {r['device']}" for r in new), flush=True)
+        self.restart_soon()
+        return {"ok": True, "radios": new, "restarting": os.name == "nt"}
+
+    def restart_soon(self):
+        """Apply a radio change: on Windows end this process and ask Task Scheduler to start the station again (its
+        2-minute watchdog would anyway). Elsewhere (development) the operator restarts it."""
+        if os.name != "nt" or getattr(self, "no_restart", False):
+            return
+        import subprocess
+
+        def go():
+            self.bus.publish("restarting", {"in_s": 5})
+            subprocess.Popen('cmd /c "ping -n 5 127.0.0.1 >nul & schtasks /run /tn "HamNet Station""',   # no console:
+                             creationflags=0x00000008 | 0x08000000)          # DETACHED_PROCESS | CREATE_NO_WINDOW
+            self.stop.set()
+            time.sleep(1.5)
+            os._exit(0)
+        threading.Timer(0.5, go).start()
 
     def _level_ctx(self, rid: str):
         from . import levels
@@ -1196,8 +1268,8 @@ class Station:
         @contextlib.contextmanager
         def from_device(name):
             import sounddevice as sd
-            idx = next((i for i, d in enumerate(sd.query_devices())
-                        if name.lower() in d["name"].lower() and d["max_input_channels"] > 0), None)
+            from .radios import pick_index
+            idx = pick_index(name, list(sd.query_devices()))    # exact name first: "Digirig Lite" ≠ "… NET-REC"
             if idx is None:
                 raise RuntimeError(f"audio input containing '{name}' not found")
             frames = queue.Queue(maxsize=400)
@@ -1273,6 +1345,8 @@ class Station:
         return self.radios[rid].get("live_tx")
 
     def _tx_start(self, rid, t0):
+        if self.awake_mode == "traffic":                # a dark laptop runs ~5x slower: hold from the first moment
+            threading.Thread(target=self._keep_awake_tick, daemon=True).start()
         with self.lock:
             self.next_id += 1
             tid = str(self.next_id)

@@ -155,6 +155,8 @@ body.dragging{user-select:none;cursor:row-resize}
 /* Set level…: the meter with its target band */
 #levelDlg .bar{height:26px;margin:6px 0 2px}#levelDlg .tgt{position:absolute;top:0;bottom:0;background:rgba(40,160,80,.22);border-left:2px solid var(--ok);border-right:2px solid var(--ok)}
 #levelDlg .scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}#levelDlg .big{font-size:20px;font-weight:600;margin:6px 0}
+#radiosDlg .rad{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0}#radiosDlg .rad input,#radiosDlg .rad select{font:inherit}
+#radiosDlg .rad .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 12px}#radiosDlg label{margin:4px 0 0}
 #levelDlg .say.ok{color:var(--ok)}#levelDlg .say.low,#levelDlg .say.high{color:var(--warnc)}#levelDlg .say.clip,#levelDlg .say.dead{color:var(--bad)}#levelDlg ol{padding-left:20px}
 #levelDlg .sq{border-radius:8px;padding:8px 12px;margin:8px 0;font-weight:600}#levelDlg .sq.open{background:rgba(220,160,0,.18);border:1px solid var(--warnc)}#levelDlg .sq.closed{background:rgba(40,160,80,.15);border:1px solid var(--ok)}#levelDlg .sq .small{font-weight:400}
 .mv.ok{color:var(--ok)}.mv.warn{color:var(--warn)}.mv.bad{color:var(--bad)}.mv.idle{color:var(--muted)}
@@ -356,6 +358,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <form id="searchForm" class="hsearch" role="search"><input id="q" type="search" placeholder="Search everything" aria-label="Search every transmission, callsign, net and the minutes" autocomplete="off"> <button>Search</button></form>
   <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> <span class="xl">Explain radio terms</span><span class="xs">Explain terms</span></label>
   <button id="openNets" title="Schedule, history, who takes part, minutes and what is still open">Nets</button>
+  <button id="openRadios" title="Add, replace or remove a radio and choose its sound input">Radios…</button>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
   <button id="openPhone" title="Show a QR code: point a phone's camera at it to open this dashboard on the phone">Open on phone</button>
   <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the two-sided reference card (printable)">Help</a>
@@ -377,6 +380,12 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <label>Send as (callsign account in that folder) <select name="winlink_account"></select></label>
   <label>VHF/UHF reach, km <input name="reach_km" type="number" min="50" max="5000" step="10" style="width:7em"></label>
   <div class="small muted">On a repeater or simplex net, a callsign licensed farther away than this, heard only once, that the two transcription passes did not read alike and that has no name or earlier check-in with it is shown struck through and not counted. Raise it for a linked repeater system.</div>
+  <label>Full speed and screen on <select name="keep_awake">
+    <option value="traffic">During nets and traffic (then back to my own power settings)</option>
+    <option value="listening">The whole time a radio listens</option>
+    <option value="always">Always, while the station runs</option>
+    <option value="off">Never (my power settings only)</option></select></label>
+  <div class="small muted">Laptops run several times slower once the screen goes dark. “During nets and traffic” switches to full speed for a scheduled net, for every transmission (from its first moment) and for 10 minutes after the last one; the rest of the time your own power plan, screen and sleep settings apply, and the radio still listens.</div>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
@@ -384,6 +393,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
 <dialog id="wl"><div id="wlBody"></div></dialog>
 <dialog id="testDlg"><div id="testBody"></div></dialog>
 <dialog id="levelDlg"><div id="levelBody"></div></dialog>
+<dialog id="radiosDlg"><div id="radiosBody"></div></dialog>
 <dialog id="netsDlg" class="big" aria-labelledby="netsTitle"><div class="dhead"><h3 id="netsTitle">Nets</h3><label class="small">Net <select id="netPick"></select></label><button id="netsClose" class="x" aria-label="Close">✕</button></div>
 <nav id="netsTabs" class="ntabs" role="tablist" aria-label="Nets"><button role="tab" data-ntab="schedule">Schedule</button><button role="tab" data-ntab="history">History</button><button role="tab" data-ntab="analysis">Analysis</button><button role="tab" data-ntab="minutes">Minutes</button><button role="tab" data-ntab="open">Still open</button></nav>
 <div id="netsBody" class="dbody" role="tabpanel"></div></dialog>
@@ -699,6 +709,44 @@ async function runAcc(radio,start,end){
   const d=await r.json();if(!r.ok){alert(d.error||"Could not start the accurate pass");return}
   const i=S.accurate.findIndex(j=>j.key===d.key);if(i>=0)S.accurate[i]=d;else S.accurate.push(d);renderFeed(radio);wlAccNote();
 }
+// ---------- Radios…: add / replace / remove a radio (station/radios.py); saving restarts the station ----------
+let RD=null;
+async function openRadios(){
+  try{RD=await api("/api/radio-list")}catch(e){alert(e.message);return}
+  RD.list=RD.radios.map(r=>({...r}));RD.msg="";renderRadiosDlg();if(!$("radiosDlg").open)$("radiosDlg").showModal();
+}
+function renderRadiosDlg(){
+  const ins=RD.inputs||[],used=new Set(RD.list.map(r=>r.device));
+  const opt=(cur)=>{const have=ins.includes(cur);
+    return `<option value="">— choose —</option>${cur&&!have?`<option selected value="${esc(cur)}">${esc(cur)} (not plugged in now)</option>`:""}${ins.map(n=>`<option value="${esc(n)}"${n===cur?" selected":""}>${esc(n)}${n!==cur&&used.has(n)?" (another radio's)":""}</option>`).join("")}`};
+  const rows=RD.list.map((r,i)=>`<div class="rad" data-i="${i}"><div class="grid">
+     <label>Name <input data-k="name" value="${esc(r.name||"")}" maxlength="60" placeholder="Net radio (handheld)"></label>
+     <label>Sound input <select data-k="device">${opt(r.device||"")}</select></label>
+     <label>Audio from <select data-k="gate"><option value="voice"${r.gate==="voice"?" selected":""}>Speaker / earphone jack, or SSB (squelch closed)</option><option value="carrier"${r.gate==="carrier"?" selected":""}>FM data jack (hiss always on)</option></select></label>
+     <label>Mode <select data-k="mode">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===(r.mode||"FM")?" selected":""}>${m}</option>`).join("")}</select></label>
+     <label>Frequency, MHz <input data-k="freq_mhz" value="${r.freq_mhz??""}" inputmode="decimal" placeholder="146.940" style="width:8em"></label></div>
+     <div class="row small">${r.state?`<span class="muted">now: ${esc(r.state)}${r.error?" · "+esc(r.error):""}</span>`:'<span class="muted">new</span>'}
+     ${(RD.nets[r.id]||[]).length?`<span class="muted">nets: ${esc(RD.nets[r.id].join(", "))}</span>`:""}
+     <button class="linkish" data-rm="${i}">Remove</button></div></div>`).join("");
+  $("radiosBody").innerHTML=`<h3>Radios</h3>
+   <p class="small">Each radio needs its <b>own sound input</b> (never the one Winlink / VARA uses). <b>Replace</b> a radio or its cable: change its sound input below. Two identical adapters: rename one in Windows (Settings → System → Sound → the input → Rename) so they can be told apart. After saving, use <b>Set level…</b> on the radio's card.</p>
+   ${rows}<div class="row"><button id="rdAdd">+ Add a radio</button> <button class="linkish small" id="rdRescan" title="Plugged something in? Look again">Look for sound inputs again</button></div>
+   <div class="row"><button class="primary" id="rdSave">Save and restart the station</button> <button onclick="$('radiosDlg').close()">Cancel</button> <span class="bad small">${esc(RD.msg)}</span></div>
+   <p class="small muted">Saving restarts the station (about 15 s; the page reconnects by itself). The list is then kept in data\radios.json (station.yaml's radios are no longer read).${RD.from==="station.yaml"?"":" Delete that file to go back to station.yaml's list."}</p>`;
+  for(const el of $("radiosBody").querySelectorAll("[data-k]"))el.onchange=el.oninput=()=>{RD.list[+el.closest(".rad").dataset.i][el.dataset.k]=el.value};
+  for(const b of $("radiosBody").querySelectorAll("[data-rm]"))b.onclick=()=>{const r=RD.list[+b.dataset.rm];
+    if((RD.nets[r.id]||[]).length){RD.msg=`${r.name} has nets: move them to another radio in Nets… first`;renderRadiosDlg();return}
+    if(confirm(`Remove ${r.name||"this radio"}? Its log and recordings stay on disk.`)){RD.list.splice(+b.dataset.rm,1);renderRadiosDlg()}};
+  $("rdAdd").onclick=()=>{RD.list.push({name:"",device:"",gate:"voice",mode:"FM",freq_mhz:""});renderRadiosDlg()};
+  $("rdRescan").onclick=async()=>{try{RD.inputs=(await api("/api/radio-list")).inputs}catch(e){}renderRadiosDlg()};
+  $("rdSave").onclick=async()=>{
+    const r=await fetch("/api/radio-list",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({radios:RD.list})});
+    const d=await r.json().catch(()=>({}));if(!r.ok){RD.msg=d.error||"could not save";renderRadiosDlg();return}
+    $("radiosBody").innerHTML=d.restarting?'<h3>Radios saved</h3><p>The station is restarting with the new radios… this page reloads in about 15 s.</p>'
+      :'<h3>Radios saved</h3><p>Restart the station to use them.</p><div class="row"><button onclick="$(\'radiosDlg\').close()">Close</button></div>';
+    if(d.restarting)setTimeout(()=>location.reload(),15000)};
+}
+$("openRadios").onclick=openRadios;
 // ---------- Set level…: the radio's audio against a target, and the Windows recording level (station/levels.py) ----------
 let LVD=null;
 function openLevel(rid){
@@ -1116,7 +1164,7 @@ function fillAccounts(f){
 }
 $("openSettings").onclick=async()=>{
   const op=await loadSettings(),f=$("setForm");
-  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;
+  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
   fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();$("settings").showModal();
@@ -1124,7 +1172,7 @@ $("openSettings").onclick=async()=>{
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
   e.preventDefault();const f=$("setForm");
-  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value,reach_km:f.reach_km.value})});
+  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value,reach_km:f.reach_km.value,keep_awake:f.keep_awake.value})});
   const d=await r.json();if(!r.ok){$("setErr").textContent=d.error||"not saved";return}
   OP=d;$("me").textContent=d.callsign+" station";$("settings").close();
 };
