@@ -596,7 +596,9 @@ class Station:
                 self.radios[rid]["state"] = "starting"
             saved = self._saved()
             saved.setdefault("radios", {}).setdefault(rid, {}).update(paused=bool(paused),
-                                                                     paused_by=by if paused else None)
+                                                                     paused_by=by if paused else None,
+                                                                     resumed_by=None if paused else by)
+            self.radios[rid]["resumed_by"] = None if paused else by
             self._save(saved)
             radio = dict(self.radios[rid])
         print(f"{datetime.now():%H:%M:%S} {rid} {'PAUSED' if paused else 'RESUMED'} by the {by}", flush=True)
@@ -651,6 +653,7 @@ class Station:
                 if "freq_mhz" in s:
                     self._set_tuning(rid, s.get("freq_mhz"), s.get("mode"), s.get("set_at"))
                 self.radios[rid]["paused"] = bool(s.get("paused"))
+                self.radios[rid]["resumed_by"] = s.get("resumed_by")
                 self.radios[rid]["cleared_at"] = s.get("cleared_at")
 
     def _set_tuning(self, rid, freq, mode, at):

@@ -440,5 +440,7 @@ class NetSchedule:
                         self.st.set_radio(rid, f, mode)
                         print(f"{datetime.now():%H:%M:%S} {rid} logged as {f} MHz {mode or ''} for {cur['name']}",
                               flush=True)
-                elif not r.get("paused"):
+                elif not r.get("paused") and not (first and r.get("resumed_by") == "operator"):
+                    # a restart outside a net keeps a Resume the operator chose (two restarts on 11-06 paused a radio
+                    # the operator had just resumed to compare it with another station); the next net's end pauses it
                     self.st.set_paused(rid, True, by="schedule")

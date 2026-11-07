@@ -178,6 +178,25 @@ def test_restart_inside_a_net_keeps_the_operators_pause(tmp_path):
     assert not again.radios["ftm"]["paused"]
 
 
+def test_restart_outside_a_net_keeps_the_operators_resume(tmp_path):
+    """Listen only during nets, the operator resumes the radio between nets (to compare it with another station,
+    2026-11-06); two station restarts paused it again. Now a restart keeps that Resume; the next net's end pauses it."""
+    st = make(tmp_path, Clock(TUE.replace(hour=18)))
+    st.nets.set_listen("ftm", {"scheduled": True})
+    st.nets.tick()
+    assert st.radios["ftm"]["paused"] and st.radios["ftm"]["paused_by"] == "schedule"
+    st.set_paused("ftm", False)                                           # Resume by the operator, between nets
+    again = make(tmp_path, Clock(TUE.replace(hour=18, minute=30)))      # the station restarts
+    again.nets.tick()
+    assert not again.radios["ftm"]["paused"]
+    again.nets.tick(TUE.replace(hour=20, minute=10))                      # the net comes and goes
+    again.nets.tick(TUE.replace(hour=21, minute=30))
+    assert again.radios["ftm"]["paused"] and again.radios["ftm"]["paused_by"] == "schedule"
+    third = make(tmp_path, Clock(TUE.replace(hour=22)))                   # a schedule pause survives a restart
+    third.nets.tick()
+    assert third.radios["ftm"]["paused"]
+
+
 def _post(base, path, body, ctype="application/json"):
     req = urllib.request.Request(base + path, data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": ctype})
