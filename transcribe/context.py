@@ -271,7 +271,9 @@ def _word_time(w) -> float:
     108.24-110.56 s in a transmission that began at 110.16), so its midpoint lands in the previous transmission:
     first words were moved back a turn and the two decodes then disagreed and kept both copies ("…But a friend" /
     "A friend of mine…"). A word's END is reliable. Real QSO, a handheld through a voice gate, 46 transmissions:
-    midpoint 25.5 % disagreement with the live text and 53 wrong first/last words; end 20.2 % and 31."""
+    midpoint 25.5 % disagreement with the live text and 53 wrong first/last words; end 20.2 % and 31 (26 first/last
+    words fixed, 4 broken: a stretched last word now moves forward). Tried and rejected: the side with more
+    voice-band energy under a word that crosses the cut, 24.5 % / 50 — an FM squelch tail is a loud hiss burst."""
     return w["t1"] if WORD_AT == "end" else (w["t0"] + w["t1"]) / 2
 
 
