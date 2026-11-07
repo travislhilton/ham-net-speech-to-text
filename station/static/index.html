@@ -404,7 +404,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
 <dialog id="searchDlg" class="big" aria-labelledby="searchTitle"><div class="dhead"><h3 id="searchTitle">Search</h3><button id="searchClose" class="x" aria-label="Close">✕</button></div><div id="searchBody" class="dbody"></div></dialog>
 <dialog id="phoneDlg"><div id="phoneBody"></div><div class="row"><button onclick="$('phoneDlg').close()">Close</button></div></dialog>
 <dialog id="whoDlg"><form id="whoForm">
-  <h3>Who was talking?</h3><p class="small muted" id="whoText"></p><div class="row" id="whoPick"></div>
+  <h3>Who was talking?</h3><p class="small muted" id="whoText"></p><div class="row" id="whoPick"></div><div class="row small" id="whoVoice"></div>
   <label>Callsign <input name="call" maxlength="12" list="whoList" autocomplete="off"></label><datalist id="whoList"></datalist>
   <div class="row"><button type="submit">Save</button> <button type="button" id="whoAuto" title="Forget my choice; use what was said or heard">Automatic</button> <button type="button" onclick="$('whoDlg').close()">Cancel</button> <span class="err" id="whoErr"></span></div>
 </form></dialog>
@@ -444,7 +444,7 @@ function whoHtml(w,f){
   const fix=f?` · heard "${f.heard}", corrected: ${f.why}`:"";
   return `<span class="spkr${inf?" inf":""}${w.how==="operator"?" op":""}${f?" fixed":""}" data-call="${esc(w.call)}" title="Speaker: ${esc((WHO_HOW[w.how]||w.how)+fix)}">${label}</span>`;
 }
-let WHO=null;
+let WHO=null,WHOSUG;
 function openWho(id){
   const t=S.tx.find(x=>x.id===id);if(!t)return;WHO=id;
   const a=t.accurate,text=(a&&a.text)||t.text||"",calls=[...new Set([...(a&&a.callsigns||[]),...(t.callsigns||[])])];
@@ -452,17 +452,24 @@ function openWho(id){
   $("whoPick").innerHTML=calls.map(c=>`<button type="button" class="call" data-whopick="${esc(c)}">${esc(c)}</button>`).join(" ");
   $("whoList").innerHTML=[...new Set([...calls,...(S.heard||[]).map(h=>h.call)])].map(c=>`<option value="${esc(c)}">`).join("");
   const f=$("whoForm");f.call.value=t.speaker_set||(t.who&&t.who.call)||"";$("whoErr").textContent="";
+  WHOSUG=undefined;$("whoVoice").innerHTML="";
   $("whoDlg").showModal();f.call.focus();f.call.select();
+  // "sounds like …": the closest voice earlier in this net (station/voicehint.py); a suggestion until saved
+  fetch(`/api/tx/${encodeURIComponent(id)}/voice`).then(r=>r.json()).then(d=>{
+    if(WHO!==id)return;WHOSUG=d.call||null;
+    if(!d.call){$("whoVoice").innerHTML=d.none?`<span class="muted">Voice: ${esc(d.none)}.</span>`:"";return}
+    $("whoVoice").innerHTML=`<span>Sounds like</span> <button type="button" class="call" data-whopick="${esc(d.call)}" title="Save ${esc(d.call)} as the speaker">${esc(d.call)}</button> <span class="muted">the voice that said it${d.at?" at "+esc(hhmm(d.at)):""} in this net. A voice match, not certain: compare</span> <button type="button" data-play="${esc(id)}" title="This transmission">▶ this</button> <button type="button" data-play="${esc(d.id)}" title="${esc(d.call)} saying their call">▶ ${esc(d.call)}</button>`;
+    if(!f.call.value){f.call.value=d.call;f.call.select()}}).catch(()=>{});
 }
 async function saveWho(call){
-  try{const r=await fetch(`/api/tx/${encodeURIComponent(WHO)}/speaker`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({call})});
+  try{const r=await fetch(`/api/tx/${encodeURIComponent(WHO)}/speaker`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(WHOSUG===undefined?{call}:{call,suggested:WHOSUG||""})});
     const d=await r.json();if(!r.ok){$("whoErr").textContent=d.error||"not saved";return}
     upsertTx(d);$("whoDlg").close()}
   catch(e){$("whoErr").textContent="not saved: station unreachable"}
 }
 $("whoForm").addEventListener("submit",e=>{e.preventDefault();e.stopPropagation();saveWho(e.target.call.value.trim().toUpperCase())});
 $("whoAuto").onclick=()=>saveWho("");
-$("whoPick").addEventListener("click",e=>{const b=e.target.closest("[data-whopick]");if(b){e.stopPropagation();saveWho(b.dataset.whopick)}});
+for(const el of ["whoPick","whoVoice"])$(el).addEventListener("click",e=>{const b=e.target.closest("[data-whopick]");if(b){e.stopPropagation();saveWho(b.dataset.whopick)}});
 function txHtml(t0){
   const a=t0.accurate,c=t0.status==="final"?t0.corrected:null;   // corrected > agreed accurate > live (station/ics.py view)
   const t1=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections,maybe:a.maybe}:t0;

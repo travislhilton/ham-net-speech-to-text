@@ -162,6 +162,8 @@ class Station:
         self.level_tap: dict = {}                       # rid -> list of raw frames while a knob position is measured
         self.knob_points: dict = {r["id"]: {} for r in config["radios"]}
         from .silence import SilenceWatch                # a radio switched off / asleep / unplugged (station/silence.py)
+        from .voicehint import VoiceHints
+        self.voice = VoiceHints(self.data, enabled=bool(config.get("voice_hints", True)))
         self.silence = {r["id"]: SilenceWatch(r.get("gate", "carrier"), r.get("silence")) for r in config["radios"]}
         from .morse import MorseWatch                     # Morse code (CW) on any radio (station/morse.py)
         self.morse = {r["id"]: MorseWatch() for r in config["radios"]
@@ -202,6 +204,8 @@ class Station:
     # ---------- lifecycle ----------
     def start(self, listen=True):
         self.load_today()
+        for t in list(self.tx):                                  # today's voiceprints, in the background
+            self.voice.queue(t)
         threading.Thread(target=self._index_history, daemon=True, name="history").start()
         threading.Thread(target=self._final_worker, daemon=True, name="final").start()
         if self._partial_factory:
@@ -946,9 +950,19 @@ class Station:
             at = self.clock()
         return (self._current_by_radio(at).get(tx.get("radio")) or {}).get("ncs")
 
-    def set_speaker(self, tid: str, call: str | None) -> dict:
+    def voice_suggest(self, tid: str) -> dict:
+        """Who?'s "sounds like K7ABC" (station/voicehint.py): the closest voice earlier in the same net."""
+        with self.lock:
+            tx = self._find(tid)
+            if tx is None:
+                raise LookupError(tid)
+            items = list(self.tx)
+        return self.voice.suggest(tx, items)
+
+    def set_speaker(self, tid: str, call: str | None, suggested: str | None = None) -> dict:
         """The operator says who was talking ("Who?" on the dashboard); empty = back to automatic. Always wins.
-        Kept like the accurate pass: an update line in the day's log, merged by load_today."""
+        Kept like the accurate pass: an update line in the day's log, merged by load_today. `suggested` = what the
+        voice suggestion offered (kept, so the operator's answers measure the suggestions)."""
         call = (call or "").strip().upper()
         if call and not re.fullmatch(r"[A-Z0-9][A-Z0-9/-]{2,11}", call):
             raise ValueError("not a callsign")
@@ -958,7 +972,10 @@ class Station:
                 raise LookupError(tid)
             tx["speaker_set"] = call or None
             tx = dict(tx)
-        self._log({"update": tid, "speaker_set": call or None})
+        line = {"update": tid, "speaker_set": call or None}
+        if suggested is not None:
+            line["voice_suggested"] = (suggested or "").strip().upper() or None
+        self._log(line)
         self.bus.publish("tx", tx)
         return tx
 
@@ -1663,6 +1680,7 @@ class Station:
         self.bus.publish("tx", tx)
         self.bus.publish("hints", self.hints)
         self.bus.publish("heard", {"heard": self.heard_list()})
+        self.voice.queue(tx)
         if getattr(self, "accurate", None):
             self.accurate.on_final(tx)                           # the accurate pass follows the live text
         self._hear_close(tx)
@@ -1739,7 +1757,7 @@ class Station:
                     if t.get("id") == tx["update"]:
                         t.update({k: v for k, v in tx.items() if k in ("accurate", "accurate_echo", "speaker_set",
                                                                       "net", "after", "corrected", "consensus",
-                                                                      "morse")})
+                                                                      "morse", "voice_suggested")})
                         for k in ("net", "after", "corrected", "consensus"):   # a net close / a correction undone
                             if k in tx and tx[k] is None:
                                 t.pop(k, None)

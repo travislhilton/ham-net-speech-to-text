@@ -4,14 +4,15 @@ after every update. Needs administrator rights and internet the first time (~4 G
 Python packages, four Whisper models, the FCC license database; more with an NVIDIA card).
 
   install.cmd                              (double-click; elevates and runs this)
-  install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz]
+  install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz] [-SkipVoice]
 #>
 param(
   [string]$InstallDir = 'C:\ham-net-speech-to-text',
   [string]$Callsign = '',
   [switch]$SkipModels,
   [switch]$SkipCallbook,
-  [switch]$SkipQrz
+  [switch]$SkipQrz,
+  [switch]$SkipVoice
 )
 $ErrorActionPreference = 'Stop'
 $Src = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -137,6 +138,22 @@ if (-not $SkipModels) {
   # sustain? Both stages / the final text after each net only / none. Written to engine.yaml `accurate:`.
   Step "Measuring the accurate pass on this PC (benchmark, ~2-6 min)"
   Run { & $vpy "$InstallDir\tools\pick_accurate.py" --models "$InstallDir\models" --out "$InstallDir\config\engine.yaml" }
+}
+
+if (-not $SkipVoice) {
+  # Who?'s "sounds like K7ABC" suggestion (station/voicehint.py). Small and separate from the Whisper models, so a
+  # station installed with -SkipModels gets it too. Missing = no suggestions; everything else works.
+  Step "Voice model for Who? suggestions (26 MB, once)"
+  $vm = "$InstallDir\models\voiceprint\voxceleb_resnet34_LM.onnx"
+  if (Test-Path $vm) { Write-Host '  already there' }
+  elseif (-not $online) { Write-Host '  no internet: skipped (Who? works without voice suggestions)' }
+  else {
+    New-Item -ItemType Directory -Force (Split-Path $vm) | Out-Null
+    try { Download 'https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM/resolve/main/voxceleb_resnet34_LM.onnx' "$vm.part"
+          Move-Item -Force "$vm.part" $vm; Write-Host '  ok' }
+    catch { Remove-Item -Force "$vm.part" -ErrorAction SilentlyContinue
+            Write-Host "  could not download it ($($_.Exception.Message)); Who? works without voice suggestions" }
+  }
 }
 
 if (-not $SkipCallbook) {

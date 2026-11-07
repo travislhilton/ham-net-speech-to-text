@@ -181,6 +181,15 @@ you chose is remembered. Each column shows:
   ("K7ABC, do I have it right?") or net control's welcome is never taken as the first station's own; two stations
   checking in together ("K7ABC and K7ABD") are the first one's. An answer closed with a call in a sentence of its own ("K7ABC. Welcome, great
   signal. K7NET.") is that station's (net control signing), and a check-in said twice still counts.
+  **Who? suggests a voice** for a transmission that names nobody: "Sounds like K7ABC, the voice that said it at
+  19:42 in this net", pre-filled, with ▶ buttons to compare the two recordings. Only voices of stations that stated
+  their call (or that you set with Who?) earlier in the **same net** count, and only when the closest voice clearly
+  beats the next one; otherwise it says so and suggests nothing. It is never written to the log or the ICS-309
+  until you save it. Measured on FM nets: right 15 of 17 times (88 %) for about half of the transmissions whose
+  voice was known in the net; across different days a voice is no better than chance, so it never looks there.
+  Voiceprints (WeSpeaker ResNet34, 26 MB, CPU, 2 threads, transmissions of 2 s or more) are made in the background
+  and kept in `data\voice\`; the installer downloads the model (`-SkipVoice` leaves it out; no model = no
+  suggestions). `voice_hints: false` in `config\station.yaml` turns it off.
 - **Correcting a line** (**✎ Fix** on any finished transmission, in the log and in a net's Minutes → Transcript):
   the words open in place, ready to edit, with ▶ to listen while you type. **Enter** (or Save) keeps it, **Esc**
   (or Cancel) leaves it. Your text then wins everywhere: the log, search, the minutes and attendance, the ICS-309 /
@@ -457,6 +466,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Over-the-air transcription test with word-error score and history | working |
 | Tap-to-correct (✎ Fix, log + minutes transcript; Enter/Esc; ▶ while editing; Undo correction): corrected > accurate > live in search, minutes, attendance, ICS-309/213, Winlink; Learned fixes proposed from repeats, applied only on Accept (`data/fixups_learned.yaml`); accuracy against the corrections per radio/mode/net (`/api/accuracy`, `python -m tools.accuracy`) | working (`station/corrections.py`); not yet used on a live net |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
+| Who? suggests the closest voice earlier in the same net (only a clear match; you confirm) | working (`station/voicehint.py`) |
 | Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). FM nets, 2026-11-07 (1,880 transmissions over five days, two receivers, 89 clear self-identifications): within one net the closest voice names the speaker right 72–82 % of the time for 31–62 % of transmissions; across days no better than chance (a station's radio and place change). Below the 90 % needed to show it. Code + `python -m tools.voice_eval` kept |
 
 ## Segmenting

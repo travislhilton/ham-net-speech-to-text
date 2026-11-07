@@ -80,6 +80,12 @@ def make_handler(station):
                     return self._json(station.level(lv.group(1), (parse_qs(u.query).get("step") or ["noise"])[0]))
                 except KeyError:
                     return self._json({"error": "no such radio"}, 404)
+            vs = re.fullmatch(r"/api/tx/(\w+)/voice", u.path)
+            if vs:                                              # Who?'s "sounds like …" (station/voicehint.py)
+                try:
+                    return self._json(station.voice_suggest(vs.group(1)))
+                except LookupError:
+                    return self._json({"error": "no such transmission"}, 404)
             if u.path == "/api/lookup":
                 call = (parse_qs(u.query).get("call") or [""])[0].upper()
                 if not re.fullmatch(r"[A-Z0-9/]{3,12}", call) or not station.callbook:
@@ -185,7 +191,8 @@ def make_handler(station):
                     return self._json(station.history.set_minutes(str(body.get("key") or ""), body))
                 if who:                                         # the operator's "Who?" ({"call": ""} = automatic)
                     try:
-                        return self._json(with_who("tx", station.set_speaker(who.group(1), body.get("call"))))
+                        return self._json(with_who("tx", station.set_speaker(who.group(1), body.get("call"),
+                                                                                  body.get("suggested"))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
                 if fix:                                         # {"text": ...} or {"undo": true}
