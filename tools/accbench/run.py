@@ -32,7 +32,14 @@ highpass = cx.highpass
 
 
 def _real(net):
-    return ":" in net and not os.path.isdir(net)        # STATION_DATA:FREQ (a Windows path has a colon too)
+    """STATION_DATA:FREQ. A Windows path has a colon too, and Windows calls "C:\\x\\real:146.72" a directory (an
+    alternate data stream of it), so decide by the part after the last colon."""
+    head, _, tail = net.rpartition(":")
+    try:
+        float(tail)
+    except ValueError:
+        return False
+    return bool(head) and os.path.isdir(os.path.expanduser(head))
 
 
 def hyp_dir(net):
