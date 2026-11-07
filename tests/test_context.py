@@ -180,3 +180,15 @@ def test_a_looped_segment_is_dropped_and_flagged():
     tiling = [{"words": [W(" good", 0.2, 0.5), W(" evening", 0.5, 0.8), W(" la", 1, 1.2, ok=False), W(" la", 1.2, 1.4, ok=False)]}]
     r = cx.assemble(lay, [tiling])["x"]
     assert r["text"] == "good evening" and r["flags"] == ["loop"]
+
+
+def test_a_window_first_word_timed_early_does_not_jump_ahead_in_the_merge():
+    """Real net on a laptop station (2026-11-07): OpenVINO timed a window's first word "Weather's" from 0.05 s, the
+    other decode's "The" from 0.12 s; ordered by start the merge gave "Weather's The been real nice"."""
+    lay = cx.stitch([cx.Clip("x", 0.0, tone(3.0))])
+    # decode one's words sit near a window cut, so where the two agree ("weather's") decode two's copy is kept
+    one = [{"words": [W(" The", 0.12, 0.56, edge=1.0), W(" weather's", 0.56, 1.06, edge=1.0),
+                      W(" been", 1.06, 1.20, edge=1.0)]}]
+    two = [{"words": [W(" Weather's", 0.05, 1.05), W(" been", 1.05, 1.19), W(" real", 1.19, 1.43), W(" nice.", 1.43, 1.83)]}]
+    text = cx.assemble(lay, [one, two])["x"]["text"]
+    assert text.lower().startswith("the weather's been") and "Weather's The" not in text

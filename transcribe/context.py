@@ -277,6 +277,17 @@ def _word_time(w) -> float:
     return w["t1"] if WORD_AT == "end" else (w["t0"] + w["t1"]) / 2
 
 
+ORDER_BY = "end"
+
+
+def _order_key(w):
+    """The order of the merged words. By END time, the reliable one (see _word_time): by start, the first word of a
+    window whose start Whisper stretched back into the pause before it went ahead of the word before it, when the
+    two decodes were merged ("Weather's The been real nice": OpenVINO on a laptop station timed the window's first
+    word 128.05 s, the other decode's "The" 128.12 s; it ends 129.05 vs 128.56)."""
+    return w["t1"] if ORDER_BY == "end" else w["t0"]
+
+
 def _clip_words(words, a, b):
     return [w for w in words if a <= _word_time(w) < b]
 
@@ -362,7 +373,7 @@ def assemble(lay: Layout, decoded: list[list[dict]], targets=None) -> dict:
             hyps.append([w for w in ws if w["ok"]])
         hyps.sort(key=_score, reverse=True)
         words = merge(hyps) if len(hyps) > 1 else (hyps[0] if hyps else [])
-        words = sorted(words, key=lambda w: w["t0"])
+        words = sorted(words, key=_order_key)
         text = "".join(w["w"] for w in words).strip()
         text = re.sub(r"\s+", " ", text)
         # conf None = the recogniser gives no word probabilities (OpenVINO): a lone noise phrase is then always set
