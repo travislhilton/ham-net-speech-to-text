@@ -99,3 +99,15 @@ def test_a_driver_update_that_renamed_the_input_is_explained():
     assert "Rename that input to 'Digirig Lite NET-REC'" in msg and "'Microphone'" in msg
     assert why_missing("Digirig Lite", eps) == "the input 'Digirig Lite' is not plugged in"
     assert why_missing("Nothing", eps) == ""
+
+
+def test_an_input_that_is_back_is_not_reported_missing():
+    from station.radios import why_missing
+    eps = [{"name": "Digirig Lite NET-REC", "port": "USB\\A", "present": False},
+           {"name": "Digirig Lite NET-REC", "port": "USB\\A", "present": True}]
+    assert why_missing("Digirig Lite NET-REC", eps) == ""
+
+
+def test_fresh_inputs_reads_a_new_list_in_a_child_process():
+    from station.radios import fresh_inputs
+    assert isinstance(fresh_inputs(), list)                 # [] on a machine with no audio inputs, never None

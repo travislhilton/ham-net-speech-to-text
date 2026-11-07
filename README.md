@@ -83,7 +83,10 @@ for the net, one for Winlink) can then be told apart.
 plugged in), where its audio comes from (*speaker / earphone jack or SSB* = voice gate, squelch closed; *FM data
 jack* = carrier gate, hiss always on), mode and frequency. Saving restarts the station (about 15 s, the page
 reconnects). Once saved there, the list lives in `data\radios.json` and `station.yaml`'s `radios:` is no longer read
-(delete the file to go back); meter and segmenting settings from `station.yaml` are kept per radio id. A radio with
+(delete the file to go back); meter and segmenting settings from `station.yaml` are kept per radio id. Inputs can change
+under a running station (renamed in Windows Sound settings, re-plugged, a driver update that makes new ones): the
+list in Radios… is always read fresh, a radio whose input comes back reconnects by itself within about a minute, and
+a radio whose input is gone says what Windows did with it and offers **Choose its input…**. A radio with
 nets cannot be removed until its nets move to another radio. Inputs are matched exact name first, so a radio on
 "Digirig Lite" never opens "Digirig Lite NET-REC". Then use **Set level…** on its card.
 
@@ -408,6 +411,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | A silent radio is flagged on its card and in station.log: a handheld switched off / asleep / flat (input dead flat ≥ 3 dB under its own learned squelch-closed floor for 2 min), a data jack with no hiss (2 min), or a net on the air with nothing heard for 10 min (`station/silence.py`, per radio `silence:`) | working: replayed on the hour a handheld died (flagged 2 min after, cleared when switched on; no false alarm on the squelch-closed gaps) |
 | **Morse code (CW)** on any radio, any frequency: a keyed tone in the continuous audio (not only gated transmissions) is decoded and shown in the transcript as **CW · Morse code** with its speed and tone, the dots and dashes as heard, then the text (→ CQ DE W9XYZ K); prosigns as <AR>, <SK>, <BT>, <KN>; ▶ plays it. Heard during a voice transmission it is added to that transmission; alone it is a row of its own (logged, searchable, callsigns picked out; never sent to the accurate pass). Counted as Morse only when the timing sits on Morse's 1:3:7 grid, the tone is steady and at least 3 characters decode (`station/morse.py`; `morse: false` per radio turns it off) | working on synthetic CW (5–50 wpm, 0 dB SNR, 15 % hand-keyed timing jitter, prosigns); no false detections in 76 min of real and synthetic voice (460 recordings), a steady carrier, courtesy beeps, DTMF or sub-audible tones; first on-air CW to be confirmed |
 | Radios… on the dashboard: add / replace / remove a radio, sound input chosen from those plugged in (exact name first), station restarts itself | built 2026-11-05 |
+| Inputs that change under a running station: fresh input list, self-reconnect when an input comes back, "Choose its input…" on a radio's error, and what Windows did with a missing input (a driver update's new input on the same USB port) | built 2026-11-07 |
 | Set level… per radio: noise and voice against a target, Windows recording level read/set, Adjust automatically | working (handheld's speaker jack into a Digirig: -13 dBFS clipping → -24 dBFS in one step) |
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |

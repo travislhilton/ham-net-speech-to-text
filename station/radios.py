@@ -77,6 +77,23 @@ def inputs(devices: list[dict] | None = None, hostapis: list[dict] | None = None
     return [n for n in names if not any(o != n and o.startswith(n) and len(n) >= 31 for o in names)]
 
 
+def fresh_inputs(timeout: float = 30) -> list[str] | None:
+    """inputs() as Windows has them NOW. PortAudio (sounddevice) reads the device list once per process, so in the
+    station an input renamed, re-plugged or added after it started stays invisible (a laptop station, 2026-11-07:
+    the operator renamed a Digirig's input and the radio kept saying "not found"). A child process gets a fresh
+    list. None when it could not be read."""
+    import subprocess
+    import sys
+    code = "import json,sys; sys.path.insert(0, sys.argv[1]); from station.radios import inputs; print(json.dumps(inputs()))"
+    try:
+        p = subprocess.run([sys.executable, "-c", code, str(Path(__file__).resolve().parent.parent)],
+                           capture_output=True, text=True, timeout=timeout,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return json.loads(p.stdout.strip().splitlines()[-1]) if p.returncode == 0 else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def load(path: Path, base: list[dict]) -> list[dict]:
     """data/radios.json when present (kept settings from `base` by id), else station.yaml's list."""
     try:
@@ -145,13 +162,15 @@ def why_missing(name: str, endpoints: list[dict] | None = None) -> str:
     endpoints: [{"name", "port", "present"}] (read from the registry when None)."""
     if endpoints is None:
         endpoints = _capture_endpoints()
+    if any(e["present"] and base_name(e["name"]) == base_name(name) for e in endpoints):
+        return ""                                              # it is there now (the station looks again by itself)
     old = [e for e in endpoints if not e["present"] and e["port"] and base_name(e["name"]) == base_name(name)]
     for e in old:
         now = [x for x in endpoints if x["present"] and x["port"] == e["port"]]
         if now:
             return (f"Windows replaced the input '{name}' (a driver update?) with one named '{now[0]['name']}' on the "
-                    f"same USB port. Rename that input to '{name}' in Settings > System > Sound > Input, then restart "
-                    "the station.")
+                    f"same USB port. Rename that input to '{name}' in Settings > System > Sound > Input (the radio "
+                    "comes back by itself), or choose its new input in Radios….")
     if old:
         return f"the input '{name}' is not plugged in"
     return ""

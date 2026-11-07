@@ -492,7 +492,7 @@ class Station:
         for n in self.cfg.get("schedule", []):
             if n.get("radio"):
                 nets.setdefault(n["radio"], []).append(n.get("name"))
-        return {"radios": cur, "inputs": rmod.inputs(), "nets": nets,
+        return {"radios": cur, "inputs": rmod.fresh_inputs() or rmod.inputs(), "nets": nets,
                 "from": "dashboard" if (self.data / "radios.json").exists() else "station.yaml",
                 "restart": os.name == "nt"}
 
@@ -1317,6 +1317,8 @@ class Station:
             import sounddevice as sd
             from .radios import pick_index
             idx = pick_index(name, list(sd.query_devices()))    # exact name first: "Digirig Lite" ≠ "… NET-REC"
+            if idx is None and self._audio_rescan(name):
+                idx = pick_index(name, list(sd.query_devices()))
             if idx is None:
                 from .radios import why_missing
                 raise RuntimeError(why_missing(name) or f"audio input containing '{name}' not found")
@@ -1370,6 +1372,27 @@ class Station:
             except Exception as e:  # noqa: BLE001 — keep trying; a radio unplugged is not a crash
                 self._set_radio(rid, state="error", error=f"{type(e).__name__}: {e}", carrier=False)
                 self.stop.wait(10)
+
+    _rescan_lock = threading.Lock()
+    _rescan_at = 0.0
+
+    def _audio_rescan(self, name: str) -> bool:
+        """A radio's input is not in this process's device list: if Windows has it now (renamed, re-plugged, a new
+        driver), re-read the audio devices here (at most once a minute). PortAudio closes every open stream when it
+        re-reads, so the other radios reconnect within ~10 s (their loops reopen their inputs)."""
+        from . import radios as rmod
+        with self._rescan_lock:
+            if time.time() - Station._rescan_at < 60:
+                return False
+            now = rmod.fresh_inputs()
+            if not now or rmod.base_name(name) not in now:
+                Station._rescan_at = time.time() - 30           # look again in ~30 s, not every 10
+                return False
+            import sounddevice as sd
+            sd._terminate(); sd._initialize()
+            Station._rescan_at = time.time()
+            print(f"{datetime.now():%H:%M:%S} audio: '{name}' is back in Windows; sound devices re-read", flush=True)
+            return True
 
     def _morse_feed(self, rid, frame):
         w = self.morse.get(rid)

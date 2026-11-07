@@ -520,3 +520,18 @@ def test_the_operators_own_call_is_kept_when_the_second_decode_hears_it_too(tmp_
 def test_no_second_decode_without_the_operators_call(tmp_path):
     tx, eng = _final_text(tmp_path, ["Roger, Springfield."])
     assert eng.calls == 1
+
+
+def test_a_missing_input_that_windows_has_now_is_rescanned_once_a_minute(tmp_path, monkeypatch):
+    import sys, types
+    from station import core, radios as rmod
+    calls = []
+    fake = types.SimpleNamespace(_terminate=lambda: calls.append("t"), _initialize=lambda: calls.append("i"))
+    monkeypatch.setitem(sys.modules, "sounddevice", fake)
+    monkeypatch.setattr(rmod, "fresh_inputs", lambda: ["Digirig Lite NET-REC"])
+    st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path)
+    monkeypatch.setattr(core.Station, "_rescan_at", 0.0)
+    assert st._audio_rescan("Digirig Lite NET-REC") and calls == ["t", "i"]
+    assert not st._audio_rescan("Digirig Lite NET-REC")                # not again within a minute
+    monkeypatch.setattr(core.Station, "_rescan_at", 0.0)
+    assert not st._audio_rescan("Something else") and calls == ["t", "i"]
