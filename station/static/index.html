@@ -19,8 +19,11 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 #radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:12px;align-items:start}
 .rcol{display:flex;flex-direction:column;gap:10px;min-width:0}.rcol>section{margin-bottom:0}
 .feed{max-height:calc(100dvh - 120px);overflow-y:auto;overscroll-behavior:contain}
-/* wide screens: the page itself never scrolls; radios stay put, each transcript and the side panel scroll on their own */
-@media (min-width:901px){
+/* wide screens: the page itself never scrolls; radios stay put, each transcript and the side panel scroll on their own.
+   Only when the window is tall enough: below ~820 px (a laptop at 125-150 % scaling with the tab strip and bookmarks
+   bar) the header and a radio card filled it and the transcript got NO height, with no way to scroll to it
+   (2026-11-06). A short window scrolls as a page instead (the header stays on top). */
+@media (min-width:901px) and (min-height:820px){
   body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   main{flex:1;min-height:0;grid-template-rows:minmax(0,1fr)}
   #radios{min-height:0;overflow-y:auto;align-items:stretch;grid-auto-rows:minmax(100%,auto)}
@@ -29,7 +32,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 }
 #rtabs{display:none}
 /* phones / narrow windows: one radio at a time, picked with the tabs under the header */
-@media (max-width:900px){
+@media (max-width:900px) and (min-height:560px){
   body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   header{flex-wrap:wrap;gap:4px 10px}#engine,#nettype,#net{display:none}
   #rtabs{display:flex;gap:6px;padding:6px 12px 0;overflow-x:auto;flex:none}
@@ -408,6 +411,16 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
 let editing=null;
 const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[],alerts:[],urgent:[],netclose:{closes:[],soon:{},learned:{}}};
 const $=id=>document.getElementById(id);
+// The page itself never scrolls (body is the window's height; the panels scroll on their own). A browser refresh
+// restores the old scroll position and scrollIntoView can move the page too: with overflow hidden the top of the
+// view was then out of reach (a laptop station, 2026-11-06). Keep the page at the top.
+try{history.scrollRestoration="manual"}catch(e){}
+const pageTop=()=>{if(getComputedStyle(document.body).overflowY!=="hidden")return;
+  for(const el of [document.scrollingElement,document.documentElement,document.body,document.querySelector("main")])
+    if(el&&el.scrollTop)el.scrollTop=0;
+  if(window.scrollY)window.scrollTo(0,0)};
+document.addEventListener("scroll",e=>{const t=e.target;if(t===document||t===document.body||t===document.documentElement||(t&&t.tagName==="MAIN"))pageTop()},{passive:true,capture:true});
+addEventListener("resize",pageTop);addEventListener("load",pageTop);addEventListener("pageshow",pageTop);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hhmm=iso=>iso?iso.slice(11,16):"";
 function freq(b){return b?esc(b.label):""}
