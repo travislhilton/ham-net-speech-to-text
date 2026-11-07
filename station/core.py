@@ -269,7 +269,7 @@ class Station:
                                quiet_s=None if self.last_traffic is None else time.time() - self.last_traffic,
                                net_on=net, quiet_min=self.awake_quiet_min)
             if self.awake.set(want):
-                print(f"keep awake: {'on' if want else 'off'} ({why})", flush=True)
+                print(f"{datetime.now():%H:%M:%S} keep awake: {'on' if want else 'off'} ({why})", flush=True)
         except Exception as e:  # noqa: BLE001 — power management never stops the station
             print(f"keep awake: {type(e).__name__}: {e}", flush=True)
 
