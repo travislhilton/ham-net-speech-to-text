@@ -26,6 +26,24 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("HAMNET_DATA", ROOT / "data"))
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 SR = 16000
+
+
+def own_call_in(text: str, me: str) -> bool:
+    return bool(me) and me in re.sub(r"[^A-Z0-9 ]", " ", (text or "").upper()).split()
+
+
+def own_call_shown(text: str, me: str) -> bool:
+    """Signs of the operator's call in a decode made without it in the prompt: the call within one character
+    ("W9XYH"), or its prefix spoken phonetically ("Whiskey Niner")."""
+    t = (text or "").upper()
+    near = any(len(w) == len(me) and sum(a != b for a, b in zip(w, me)) <= 1
+               for w in re.sub(r"[^A-Z0-9 ]", " ", t).split())
+    from hamkit.callsigns import PHON
+    first = next((k for k, v in PHON.items() if v == me[0] and k.isalpha()), "")
+    digit = re.search(r"\d", me)
+    spoken = bool(first and digit and re.search(r"\b" + first.upper() + r"\W+(" + digit.group() + "|" +
+                                                "|".join(k.upper() for k, v in PHON.items() if v == digit.group()) + r")\b", t))
+    return near or spoken
 FRAME = 512                       # 32 ms @ 16 kHz
 
 
@@ -1497,6 +1515,26 @@ class Station:
     def _find(self, tid):
         return next((t for t in reversed(self.tx) if t["id"] == tid), None)
 
+    def _check_own_call(self, eng, tx, audio, res: dict) -> dict:
+        """The live prompt spells the operator's call (it fixes their own transmissions), and Whisper sometimes writes
+        it into someone else's: on one station 15 live texts had the call and the accurate pass agreed on 2
+        ("W9XYZ, Whiskey Nine…" over "Roger, <town>"). When the text has the operator's call, decode once more
+        without it in the prompt; keep the call only if that decode shows it too (the same call within one
+        character, or "Whiskey 9 / Niner" spoken), else use that decode. Measured on those 15: 3 kept, all right;
+        12 dropped, 11 right (one spoken call the second decode also missed). ~1 % of transmissions pay one more decode."""
+        me = (self.me or "").split("-")[0]
+        if not me or not own_call_in(res.get("text", ""), me):
+            return res
+        try:
+            alt = eng.transcribe(audio, prompt=self.prompt_for(tx and tx["radio"], own_call=False))
+        except Exception:  # noqa: BLE001 — keep what we have
+            return res
+        if own_call_shown(alt.get("text", ""), me):
+            return res
+        print(f"{datetime.now():%H:%M:%S} own call not confirmed without the prompt: {res.get('text', '')[:60]!r} -> "
+              f"{alt.get('text', '')[:60]!r}", flush=True)
+        return {**alt, "own_call_dropped": res.get("text", "")}
+
     def prompt_for(self, rid: str | None, own_call=True) -> str:
         """Short on purpose (see engine.make): frequency + the operator's call, spelled phonetically.
         Measured on the test PC: fixes 'This is a 79' -> 'This is W9XYZ' with no loops. The accurate pass gets no
@@ -1559,7 +1597,9 @@ class Station:
             try:
                 t = time.time()
                 tx = self._find(tid)
-                res = eng.transcribe(self.clean(tx and tx["radio"], audio), prompt=self.prompt_for(tx and tx["radio"]))
+                clean = self.clean(tx and tx["radio"], audio)
+                res = eng.transcribe(clean, prompt=self.prompt_for(tx and tx["radio"]))
+                res = self._check_own_call(eng, tx, clean, res)
                 self.finish(tid, res, round(time.time() - t, 2))
             finally:
                 self._final_busy = False

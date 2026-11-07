@@ -486,3 +486,37 @@ def test_station_yaml_with_byte_order_mark_loads(tmp_path):
     p.write_bytes(b"\xef\xbb\xbf# This station's settings\ncallsign: W9XYZ\nradios: []\n")
     c = load_config(p)
     assert c["callsign"] == "W9XYZ" and c["radios"] == []
+
+
+def _final_text(tmp_path, texts):
+    cfg = copy.deepcopy(CFG); cfg["callsign"] = "W9XYZ"
+    eng = engine.FakeEngine(texts, "fake-final")
+    st = Station(cfg, lambda: eng, data_dir=tmp_path)
+    st.start(listen=False)
+    try:
+        st.inject(cfg["radios"][0]["id"], np.zeros(16000, np.float32))
+        for _ in range(100):
+            if st.tx[-1]["status"] == "final":
+                break
+            time.sleep(0.05)
+        return st.tx[-1], eng
+    finally:
+        st.stop.set()
+
+
+def test_the_operators_call_planted_by_the_prompt_is_dropped(tmp_path):
+    """The live prompt spells the operator's call; Whisper wrote it into another station's turn (2026-11-06)."""
+    tx, eng = _final_text(tmp_path, ["W9XYZ, Whiskey Nine X-ray.", "Roger, Springfield. Roger."])
+    assert tx["text"] == "Roger, Springfield. Roger." and "W9XYZ" not in tx["callsigns"]
+    assert "W9XYZ" not in (eng.last_prompt or "")                  # the second decode had no call in its prompt
+
+
+def test_the_operators_own_call_is_kept_when_the_second_decode_hears_it_too(tmp_path):
+    for second in ("This is W9XYH testing.", "This is Whiskey Niner X-ray Yankee Zulu testing."):
+        tx, eng = _final_text(tmp_path, ["This is W9XYZ testing.", second])
+        assert tx["text"] == "This is W9XYZ testing." and eng.calls == 2
+
+
+def test_no_second_decode_without_the_operators_call(tmp_path):
+    tx, eng = _final_text(tmp_path, ["Roger, Springfield."])
+    assert eng.calls == 1
