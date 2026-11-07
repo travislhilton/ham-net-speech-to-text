@@ -91,6 +91,18 @@ def test_merge_takes_the_confident_side_where_hypotheses_differ():
     assert [w["w"] for w in cx.merge([a, b2])] == [" Kilo", " Seven", " Bravo"]
 
 
+def test_a_looping_stretch_never_wins_on_probability():
+    """Whisper rates its own repeats as very likely (2026-11-06, OpenVINO word probabilities): a repeated check-in or
+    a character loop scores nothing in the merge."""
+    say = "Delta Ray, Springfield, no traffic."
+    a = [W(" " + w, i * .3, i * .3 + .3, p=.6) for i, w in enumerate(("Checking in " + say).split())]
+    loop = [W(" " + w, i * .3, i * .3 + .3, p=.99) for i, w in enumerate(("Checking in " + say + " " + say + " " + say).split())]
+    assert [w["w"].strip() for w in cx.merge([loop, a])] == ("Checking in " + say).split()
+    junk = [W(" " + "-D-R-I-N-G-E" * 12, 0, 1, p=.99)]                       # as heard: ~130 characters
+    real = [W(" Good", 0, .5, p=.5), W(" signal", .5, 1, p=.5)]
+    assert [w["w"] for w in cx.merge([junk, real])] == [" Good", " signal"]
+
+
 def fake_decoder(script):
     """'Hears' each 1 kHz tone burst in a window as the next word of `script` at the burst's time."""
     def dec(x, prompt=""):

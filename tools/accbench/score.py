@@ -67,10 +67,9 @@ def texts(net, method, fallback):
     out, aside = {}, 0
     for k, v in h["results"].items():
         t = v["text"]
-        if "flags" in v:
-            off = bool(set(v["flags"]) & BAD) or not t.strip()
-        else:                                    # a per-clip method: the station's own guards
-            off = not t.strip() or collapse_repeats(t)[1] or template_loop(t)
+        # the station's own guards (station/core.py apply_accurate): a flagged clip, an empty text, or a loop
+        # (the station keeps the live text for those whatever the method; 2026-11-06 the bench left loops in)
+        off = bool(set(v.get("flags") or []) & BAD) or not t.strip() or collapse_repeats(t)[1] or template_loop(t)
         if off:
             aside += 1
             t = live.get(k, {}).get("text", "") if fallback else ""

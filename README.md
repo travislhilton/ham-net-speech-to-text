@@ -594,6 +594,23 @@ figures above):
 | home server without word probabilities | 42 % | 33 % | 39 % | 61 % |
 | **this PC** (OpenVINO large-v3 int8, Intel GPU) | 40 % | 38 % | 39 % | 65 % |
 
+**2026-11-06, word probabilities on this PC:** OpenVINO's Whisper gives none, and the merge of the final pass's two
+decodes is decided by them. The pass now reads them from the same model in a second, teacher-forced step
+(`transcribe/ovscore.py`), and a stretch that only repeats itself never wins the merge (Whisper rates its own loops as
+very likely). Six synthetic nets (4 FM + 2 SSB, the station's own loop guard applied, word errors / callsigns found):
+
+| | word errors | callsigns found | callsigns right |
+|---|---|---|---|
+| home server (mlx large-v3) | 54.3 % | 18.9 % | 48.6 % |
+| laptop, Core Ultra 7 (Arc GPU), large-v3 int8, before | 55.8 % | 20.5 % | 50.6 % |
+| **laptop, with word probabilities** | **53.9 %** | **23.2 %** | **52.4 %** |
+| i5-12600H (Iris Xe), before | 56.4 % | 18.4 % | 49.3 % |
+| **i5-12600H, with word probabilities** | **54.7 %** | **20.0 %** | **51.4 %** |
+
+The cost is memory, not time: the model is compiled twice (peak 6.7 GB vs 4.1 GB for large-v3 int8); on the laptop
+no slower, on the i5 ~13 % slower. A PC with room for the model but not for the second copy runs the pass without
+them (never waits). The home server's text is unchanged by the loop rule.
+
 On FM this PC is within a point of the home server; on SSB it is ~10 points behind (no word probabilities, and the
 int8 model hears weak SSB a little worse), still far better than the live text. The final pass took 1.4–1.7 s per second of audio (each 4-minute
 net 5–7 minutes).

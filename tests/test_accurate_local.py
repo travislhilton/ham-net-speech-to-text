@@ -324,3 +324,33 @@ def test_local_refuses_to_load_when_memory_is_short(tmp_path):
         assert loc.proc is None
     finally:
         loc.close()
+
+
+def test_word_probabilities_are_dropped_not_waited_for_when_memory_is_short(tmp_path, capsys):
+    """OpenVINO word probabilities need the model compiled twice (~1.65x): with room for the model only, the pass
+    runs without them."""
+    seen = {}
+    loc = al.Local({"mode": "final_only", "engine": "openvino", "model": "m", "device": "GPU", "ram_mb": 4000},
+                   free_mb=lambda: 6000, data_dir=tmp_path)
+    loc.command = ["python", "-c", "import sys,json; print(json.dumps({'ready': 'm'})); sys.stdout.flush(); sys.stdin.read()"]
+    import subprocess
+    real = subprocess.Popen
+    def spy(cmd, *a, **k):
+        seen["spec"] = json.loads(cmd[-1]); return real(cmd, *a, **k)
+    al.subprocess.Popen = spy
+    try:
+        try:
+            loc._ensure()
+        except Exception:  # noqa: BLE001 — only the spec it was started with matters here
+            pass
+        assert seen["spec"]["probs"] is False and "not enough for word probabilities" in capsys.readouterr().out
+        loc._kill(); seen.clear()
+        loc.free_mb = lambda: 20000
+        try:
+            loc._ensure()
+        except Exception:  # noqa: BLE001
+            pass
+        assert seen["spec"]["probs"] is True
+    finally:
+        al.subprocess.Popen = real
+        loc.close()

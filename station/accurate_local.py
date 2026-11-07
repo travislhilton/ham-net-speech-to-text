@@ -116,6 +116,11 @@ def free_commit_mb() -> int | None:
 
 
 MEMORY_MARGIN_MB = 1024     # left for the live station and Windows after the local model is loaded
+SCORER_FACTOR = 1.65      # OpenVINO word probabilities (transcribe/ovscore.py) compile the model a second time: peak
+                          # 6.7 GB vs 4.1 GB for large-v3 int8 on a Core Ultra laptop (2026-11-06), no slower. With them
+                          # the merge of the two decodes is decided as on the home server: synthetic nets 55.0 -> 53.4 %
+                          # word errors (home server 54.3 %), callsign recall 20.5 -> 23.2 %. Without room for them the
+                          # pass runs without, never waits for them.
 
 
 class Local:
@@ -215,8 +220,14 @@ class Local:
         if self.proc and self.proc.poll() is None:
             return
         self._kill()
-        need = int(self.spec.get("ram_mb") or 4000) + MEMORY_MARGIN_MB
+        base = int(self.spec.get("ram_mb") or 4000)
+        need = base + MEMORY_MARGIN_MB
         free = self.free_mb()
+        probs = self.spec.get("engine") == "openvino" and self.spec.get("probs", True) is not False
+        if probs and free is not None and free < int(base * SCORER_FACTOR) + MEMORY_MARGIN_MB:
+            probs = False                             # room for the model only: run without word probabilities
+            print(f"{datetime.now():%H:%M:%S} accurate pass: {free} MB free, not enough for word probabilities; "
+                  "running without them", flush=True)
         if free is not None and free < need:          # never squeeze the live station: wait (retried in 2 min)
             raise LocalError(f"not enough free memory for the local accurate model ({free} MB free, {need} MB needed)")
         env = dict(os.environ, PYTHONIOENCODING="utf-8")
@@ -225,7 +236,7 @@ class Local:
             kw["creationflags"] = 0x00004000 | 0x08000000      # BELOW_NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW
         else:
             kw["preexec_fn"] = lambda: os.nice(10)
-        spec = json.dumps({**self.spec, "models_dir": str(self.models_dir),
+        spec = json.dumps({**self.spec, "probs": probs, "models_dir": str(self.models_dir),
                            "cache_dir": str(self.data_dir / "ov-cache")})
         self.data_dir.mkdir(parents=True, exist_ok=True)
         err = open(self.data_dir / "accurate_local.log", "a", encoding="utf-8")   # the worker's own messages

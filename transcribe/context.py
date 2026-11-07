@@ -170,7 +170,7 @@ def compression_ratio(text: str) -> float:
 def looped(words: list[str]) -> bool:
     """Exact repeats (3+ of a 1-8 word unit in a row) or the 'same opening, new ending' template loop."""
     w = [_norm(x) for x in words if _norm(x)]
-    for n in range(1, 9):
+    for n in range(1, 13):                # a whole check-in repeated ("KT7 Pilo Romeo Hotel, <name>, <town>, no traffic.")
         for i in range(0, len(w) - 3 * n + 1):
             if w[i:i + n] == w[i + n:i + 2 * n] == w[i + 2 * n:i + 3 * n] and (n > 1 or len(w[i]) > 1):
                 if n == 1 and (w[i].isdigit() or w[i] in SPELLED) and w[i:i + 5] != [w[i]] * 5:
@@ -287,18 +287,47 @@ def _p(w) -> float:
     return 1.0 if w["p"] is None else w["p"]
 
 
+def mark_loops(ws: list[dict]) -> list[dict]:
+    """Mark (w["rep"] = True) the words of a decode that only repeat: the 2nd and later copies of a 1-12 word unit
+    said 3+ times in a row, and a character loop inside one 'word' ("-D-R-I-N-G-E-D-R-I-N-G-E…"). Whisper rates its
+    own repeats as very likely, so word probabilities alone would prefer them in the merge (2026-11-06: with OpenVINO
+    probabilities from a teacher-forced pass, two synthetic FM nets went from 72/90 % to 110/114 % word errors)."""
+    w = [_norm(x["w"]) for x in ws]
+    rep = [len(x["w"]) > 20 and compression_ratio(x["w"]) > 2.4 for x in ws]
+    for n in range(1, 13):
+        i = 0
+        while i + 3 * n <= len(w):
+            unit = w[i:i + n]
+            if not all(unit) or (n == 1 and (len(unit[0]) <= 1 or unit[0].isdigit() or unit[0] in SPELLED)):
+                i += 1
+                continue
+            k = 1
+            while w[i + k * n:i + (k + 1) * n] == unit:
+                k += 1
+            if k >= 3:
+                for j in range(i + n, i + k * n):
+                    rep[j] = True
+                i += k * n
+            else:
+                i += 1
+    return [dict(x, rep=r) for x, r in zip(ws, rep)]
+
+
 def _score(ws):
-    """Mean word probability with words near a window cut discounted."""
+    """Mean word probability with words near a window cut discounted; a repeat (mark_loops) counts as nothing, and a
+    stretch of nothing but repeats loses even to nothing at all."""
     if not ws:
         return 0.0
-    return float(np.mean([_p(w) * (0.5 if w["edge"] < EDGE_S else 1.0) for w in ws]))
+    if all(w.get("rep") for w in ws):
+        return -1.0
+    return float(np.mean([0.0 if w.get("rep") else _p(w) * (0.5 if w["edge"] < EDGE_S else 1.0) for w in ws]))
 
 
 def merge(hyps: list[list[dict]]) -> list[dict]:
     """ROVER-style merge of two (or more) word sequences for the same stretch of audio: align them word by word;
     where they agree take the better-timed copy, where they differ take the side with the higher (edge-discounted)
     probability over the differing stretch."""
-    hyps = [h for h in hyps if h is not None]
+    hyps = [mark_loops(h) for h in hyps if h is not None]
     if not hyps:
         return []
     base = hyps[0]
