@@ -1318,7 +1318,8 @@ class Station:
             from .radios import pick_index
             idx = pick_index(name, list(sd.query_devices()))    # exact name first: "Digirig Lite" ≠ "… NET-REC"
             if idx is None:
-                raise RuntimeError(f"audio input containing '{name}' not found")
+                from .radios import why_missing
+                raise RuntimeError(why_missing(name) or f"audio input containing '{name}' not found")
             frames = queue.Queue(maxsize=400)
 
             def cb(d, n, t, s):          # never raise in the audio callback: it would stop the stream

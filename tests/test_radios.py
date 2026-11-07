@@ -88,3 +88,14 @@ def test_keep_awake_is_a_dashboard_setting(station):  # noqa: F811
     assert station.awake_mode == "listening"
     with pytest.raises(ValueError, match="keep awake"):
         station.set_operator({"callsign": "W9XYZ", "keep_awake": "sometimes"})
+
+
+def test_a_driver_update_that_renamed_the_input_is_explained():
+    from station.radios import why_missing
+    eps = [{"name": "Digirig Lite NET-REC", "port": "USB\\A", "present": False},
+           {"name": "Microphone", "port": "USB\\A", "present": True},
+           {"name": "Digirig Lite", "port": "USB\\B", "present": False}]
+    msg = why_missing("Digirig Lite NET-REC", eps)
+    assert "Rename that input to 'Digirig Lite NET-REC'" in msg and "'Microphone'" in msg
+    assert why_missing("Digirig Lite", eps) == "the input 'Digirig Lite' is not plugged in"
+    assert why_missing("Nothing", eps) == ""

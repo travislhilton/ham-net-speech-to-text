@@ -130,3 +130,63 @@ def save(path: Path, radios: list[dict]):
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps({"radios": radios}, indent=1), encoding="utf-8")
     tmp.replace(p)
+
+
+CAPTURE_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
+NAME_PROP = "{a45c254e-df1c-4efd-8020-67d146a850e0},2"
+PORT_PROP = "{b3f8fa53-0004-438e-9003-51a46e139bfc},39"     # the physical (USB) device an input belongs to
+
+
+def why_missing(name: str, endpoints: list[dict] | None = None) -> str:
+    """When a named input is gone, say what Windows did with it. A driver update can retire a renamed input and make
+    a new one on the same USB port with the default name (a laptop station, 2026-11-07: an Intel audio driver moved
+    both Digirigs to its USB-audio offload path; both came back as "Microphone"). Windows lets only a person rename
+    an input (Sound settings; the registry refuses even SYSTEM), so the station names the step.
+    endpoints: [{"name", "port", "present"}] (read from the registry when None)."""
+    if endpoints is None:
+        endpoints = _capture_endpoints()
+    old = [e for e in endpoints if not e["present"] and e["port"] and base_name(e["name"]) == base_name(name)]
+    for e in old:
+        now = [x for x in endpoints if x["present"] and x["port"] == e["port"]]
+        if now:
+            return (f"Windows replaced the input '{name}' (a driver update?) with one named '{now[0]['name']}' on the "
+                    f"same USB port. Rename that input to '{name}' in Settings > System > Sound > Input, then restart "
+                    "the station.")
+    if old:
+        return f"the input '{name}' is not plugged in"
+    return ""
+
+
+def _capture_endpoints() -> list[dict]:
+    try:
+        import winreg
+    except ImportError:
+        return []
+    out = []
+    try:
+        root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, CAPTURE_KEY)
+    except OSError:
+        return []
+    i = 0
+    while True:
+        try:
+            guid = winreg.EnumKey(root, i)
+        except OSError:
+            break
+        i += 1
+        try:
+            k = winreg.OpenKey(root, guid)
+            state = winreg.QueryValueEx(k, "DeviceState")[0]
+            p = winreg.OpenKey(k, "Properties")
+            get = lambda v: (lambda r: r[0] if isinstance(r[0], str) else "")(winreg.QueryValueEx(p, v))
+            out.append({"name": get(NAME_PROP), "port": _try(get, PORT_PROP), "present": state == 1})
+        except OSError:
+            continue
+    return out
+
+
+def _try(f, v):
+    try:
+        return f(v)
+    except OSError:
+        return ""
