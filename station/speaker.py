@@ -89,7 +89,7 @@ def stated(text: str, calls: list[str]) -> str | None:
         if len(rest) <= 5:
             return first.group("c").upper()
     # Signed at the end: an answer to another station closed with the speaker's own call in a sentence of its own
-    # ("K7ABC. Bryce, welcome. Awesome signal. K7NET." / "K7ABC in Logan. Thank you, Valerie. K7NET.") — net control
+    # ("K7ABC. Bryce, welcome. Awesome signal. K7NET." / "K7ABC in Springfield. Thank you, Valerie. K7NET.") — net control
     # acknowledging a check-in, FM nets 2026-11-07.
     last = re.search(r"(?:^|[.!?]\s+)" + _C + r"\W*$", text)
     if last and first and len(named) == 2:
