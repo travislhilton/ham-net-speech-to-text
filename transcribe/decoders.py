@@ -65,7 +65,7 @@ def faster_whisper(model: str, device: str = "cpu", compute_type: str | None = N
     return decode
 
 
-def ov_segments(chunks, words, dur: float) -> list[dict]:
+def ov_segments(chunks, words, dur: float, probs=None) -> list[dict]:
     """openvino-genai's result (chunks = segments with start_ts/end_ts/text; words with word/start_ts/end_ts) ->
     segments with their words. A chunk with no end (end_ts < 0: the window ran out mid-segment) ends at `dur`."""
     segs = []
@@ -75,12 +75,13 @@ def ov_segments(chunks, words, dur: float) -> list[dict]:
         segs.append({"start": a, "end": max(a, b), "text": c.text, "words": []})
     if not segs:
         segs = [{"start": 0.0, "end": dur, "text": "", "words": []}]
-    for w in words or []:
+    for k, w in enumerate(words or []):
         t0, t1 = float(w.start_ts), float(w.end_ts)
         mid = (t0 + t1) / 2
         seg = next((s for s in segs if s["start"] <= mid < s["end"]), None) or \
             min(segs, key=lambda s: min(abs(s["start"] - mid), abs(s["end"] - mid)))
-        seg["words"].append({"word": w.word, "start": t0, "end": t1, "probability": None})
+        seg["words"].append({"word": w.word, "start": t0, "end": t1,
+                             "probability": probs[k] if probs is not None and k < len(probs) else None})
     for s in segs:
         if not s["text"].strip() and s["words"]:
             s["text"] = "".join(w["word"] for w in s["words"])
@@ -134,7 +135,8 @@ def sequential(x, decode_window, pause=None, window_s=WINDOW_S, min_advance_s=5.
     return out
 
 
-def openvino(model_dir, device: str, pause=None, cache_dir: str | None = None, threads: int = 0, fallback: bool = True):
+def openvino(model_dir, device: str, pause=None, cache_dir: str | None = None, threads: int = 0, fallback: bool = True,
+             probs: bool = False):
     """openvino-genai WhisperPipeline with word timestamps. Never create an openvino.Core in this process (a Core
     beside a GPU WhisperPipeline hangs the process at exit on Windows; CLAUDE.md). On the GPU the queue priority is
     LOW so the live engine's work goes first."""
@@ -148,6 +150,10 @@ def openvino(model_dir, device: str, pause=None, cache_dir: str | None = None, t
         props["INFERENCE_NUM_THREADS"] = int(threads)
     pipe = ov.WhisperPipeline(str(model_dir), device, word_timestamps=True, **props)
     english_only = ".en-" in Path(model_dir).name
+    scorer = None
+    if probs:                      # word probabilities by a teacher-forced pass (transcribe/ovscore.py)
+        from .ovscore import Scorer
+        scorer = Scorer(model_dir, device, {k: v for k, v in props.items() if k != "INFERENCE_NUM_THREADS"})
 
     def window(x, prompt="", temperature=0.0):
         cfg = pipe.get_generation_config()
@@ -160,7 +166,13 @@ def openvino(model_dir, device: str, pause=None, cache_dir: str | None = None, t
         if temperature > 0:
             cfg.do_sample = True; cfg.temperature = temperature
         r = pipe.generate(np.asarray(x, np.float32), cfg)
-        return ov_segments(r.chunks, r.words, len(x) / SR)
+        wp = None
+        if scorer is not None and r.words:
+            try:
+                wp = scorer.word_probs(x, r.words)
+            except Exception as e:  # noqa: BLE001 — no probabilities is the old behaviour, never a lost window
+                print(f"ovscore: {type(e).__name__}: {e}", flush=True)
+        return ov_segments(r.chunks, r.words, len(x) / SR, wp)
 
     win = with_fallback(window, TEMPERATURES if fallback else (0.0,))
 
@@ -196,7 +208,7 @@ def make(spec: dict, models_dir: Path | None = None, pause=None, cache_dir=None,
     local = Path(models_dir) / model if models_dir else None
     if eng == "openvino":
         return openvino(local or model, device, pause=pause, cache_dir=cache_dir, threads=spec.get("threads", 0),
-                        fallback=fallback)
+                        fallback=fallback, probs=bool(spec.get("probs", False)))
     if eng == "faster-whisper":
         return faster_whisper(str(local) if local and local.exists() else model, device.lower(), pause=pause,
                               threads=spec.get("threads", 0), fallback=fallback)

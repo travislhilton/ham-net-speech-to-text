@@ -16,10 +16,17 @@ PHON = {
  "zero":"0","one":"1","two":"2","three":"3","four":"4","five":"5","six":"6","seven":"7","eight":"8",
  "nine":"9","niner":"9",
 }
+# Whisper's mishearings of the phonetic words (a 2-m net, 2026-11-06: "Helo", "Hilo" and "Sheila" for Kilo, "Yanky"
+# for Yankee, in one station's call heard four times). A call spelled with one of these is taken only when the FCC
+# database / roster knows it, so a name ("Sheila") never makes up a callsign.
+FUZZY = {"helo": "K", "hilo": "K", "keelo": "K", "kiloh": "K", "sheila": "K", "kylo": "K", "yanky": "Y", "yankey": "Y",
+         "yanki": "Y", "whisky": "W", "charley": "C", "siera": "S", "juliette": "J", "foxtrott": "F", "xray": "X",
+         "romio": "R", "oskar": "O", "lema": "L", "leema": "L", "victer": "V", "tengo": "T", "hotell": "H"}
+FUZZY = {k: v for k, v in FUZZY.items() if k not in PHON}
 # A run of 4-7 tokens, each a phonetic word or a bare digit (Whisper often writes "Kilo 7"),
 # separated by spaces, hyphens or commas ("Kilo 7, Alpha Bravo Charlie").
-_TOK = r"(?:" + "|".join(PHON) + r"|\d)"
-_pat = re.compile(r"\b(" + _TOK + r"(?:[\s,-]+" + _TOK + r"){3,6})\b", re.I)
+_TOK = r"(?:" + "|".join(sorted(list(PHON) + list(FUZZY), key=len, reverse=True)) + r"|\d)"
+_pat = re.compile(r"\b(" + _TOK + r"(?:[\s,-]+" + _TOK + r"){3,9})\b", re.I)
 _cs = re.compile(r"^[AKNW][A-Z]?\d[A-Z]{1,3}$")
 # Any amateur callsign shape (US and international): 1-3 prefix chars ending before a digit,
 # the digit, then 1-4 letters. Validated by roster / FCC / country file, never trusted alone.
@@ -65,12 +72,25 @@ def normalize(text: str, roster=None, validate=None):
     found = []
     ok = lambda c: bool((roster and c in roster) or (validate and validate(c)))
     def rep(m):
-        toks = re.split(r"[\s,-]+", re.sub(r"x-ray", "xray", m.group(1).lower()))   # "X-ray" crashed this (KeyError 'x')
-        cs = "".join(t if t.isdigit() else PHON[t] for t in toks)
-        if _cs.match(cs):
-            found.append(cs)
-            return cs
-        return m.group(0)
+        """The run as one call; else the longest call inside it (a call spelled with "7-3" said right after it gave
+        no call at all, 2026-11-06), the rest of the words left as they were."""
+        s = re.sub(r"(?i)x-ray", "xray", m.group(1))
+        toks = [(w.group(0), w.start(), w.end()) for w in re.finditer(r"[^\s,-]+", s)]
+        sym = [w if w.isdigit() else PHON.get(w.lower()) or FUZZY.get(w.lower(), "?") for w, _, _ in toks]
+        fuzzy = [not w.isdigit() and w.lower() not in PHON for w, _, _ in toks]
+        best = None
+        for i in range(len(toks)):
+            for j in range(len(toks), i + 3, -1):            # at least 4 tokens; the longest first
+                cs = "".join(sym[i:j])
+                if _cs.match(cs) and (not any(fuzzy[i:j]) or ok(cs)):
+                    if best is None or j - i > best[1] - best[0]:
+                        best = (i, j, cs)
+                    break
+        if best is None:
+            return m.group(0)
+        i, j, cs = best
+        found.append(cs)
+        return s[:toks[i][1]] + cs + s[toks[j - 1][2]:]
     out = _pat.sub(rep, text)
 
     def mix(m):

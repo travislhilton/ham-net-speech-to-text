@@ -145,6 +145,9 @@ class Station:
         self.knob_points: dict = {r["id"]: {} for r in config["radios"]}
         from .silence import SilenceWatch                # a radio switched off / asleep / unplugged (station/silence.py)
         self.silence = {r["id"]: SilenceWatch(r.get("gate", "carrier"), r.get("silence")) for r in config["radios"]}
+        from .morse import MorseWatch                     # Morse code (CW) on any radio (station/morse.py)
+        self.morse = {r["id"]: MorseWatch() for r in config["radios"]
+                      if r.get("morse", config.get("morse", True)) is not False}
         self.radio_cfg = {r["id"]: r for r in config["radios"]}
         self.radios = {r["id"]: {"id": r["id"], "name": r.get("name", r["id"]), "device": r.get("device"),
                                  "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode", "FM"),
@@ -1330,6 +1333,7 @@ class Station:
                             break
                         frame = frames.get(timeout=5)
                         raw.add(frame)
+                        self._morse_feed(rid, frame)
                         tap = self.level_tap.get(rid)
                         if tap is not None:
                             tap.append(frame)
@@ -1347,6 +1351,67 @@ class Station:
             except Exception as e:  # noqa: BLE001 — keep trying; a radio unplugged is not a crash
                 self._set_radio(rid, state="error", error=f"{type(e).__name__}: {e}", carrier=False)
                 self.stop.wait(10)
+
+    def _morse_feed(self, rid, frame):
+        w = self.morse.get(rid)
+        if w is None:
+            return
+        try:
+            x = np.asarray(frame, np.float32)
+            x = x.mean(axis=1) if x.ndim > 1 else x
+            for run in w.feed(x, time.time() - len(x) / SR):
+                self.morse_found(rid, run)
+        except Exception as e:  # noqa: BLE001 — Morse never stops listening
+            print(f"morse: {type(e).__name__}: {e}", flush=True)
+
+    def morse_found(self, rid, run: dict):
+        """A decoded CW run: attached to the transmission it was heard in, else a transcript row of its own."""
+        info = {k: run[k] for k in ("tone_hz", "wpm", "symbols", "text", "chars", "score", "t0", "t1")}
+        print(f"{datetime.now():%H:%M:%S} {rid} MORSE {info['wpm']:.0f} wpm {info['tone_hz']} Hz: {info['text']}",
+              flush=True)
+        with self.lock:
+            hit = None
+            for t in reversed(self.tx[-30:]):
+                if t.get("radio") != rid or t.get("kind") == "cw":
+                    continue
+                a = datetime.fromisoformat(t["start"]).timestamp()
+                b = a + (t.get("duration_s") or (time.time() - a))
+                if a - 1.0 <= info["t1"] and info["t0"] <= b + 1.0:
+                    hit = t
+                    break
+            if hit is not None:
+                hit.setdefault("morse", []).append(info)
+                tx = hit
+            else:
+                self.next_id += 1
+                tid = str(self.next_id)
+                r = self.radios[rid]
+                start = datetime.fromtimestamp(info["t0"])
+                tx = {"id": tid, "radio": rid, "radio_name": r["name"], "freq_mhz": r["freq_mhz"],
+                      "start": start.isoformat(timespec="seconds"), "status": "final", "kind": "cw",
+                      "text": info["text"], "partial": "", "callsigns": [], "speaker": None, "terms": [],
+                      "duration_s": round(info["t1"] - info["t0"], 2), "morse": [info]}
+                try:
+                    calls = normalize(info["text"], roster=self.roster,
+                                      validate=self.callbook.validate if self.callbook else None)[1]
+                    tx["callsigns"] = calls
+                except Exception:  # noqa: BLE001
+                    pass
+                try:
+                    net = self.net_of(rid, start, r.get("freq_mhz"))
+                    if net:
+                        tx["net"] = net
+                except Exception:  # noqa: BLE001
+                    pass
+                if run.get("audio") is not None and len(run["audio"]):
+                    wav = self.data / "recordings" / start.strftime("%Y%m%d") / f"{tid}_{rid}_cw.wav"
+                    wav.parent.mkdir(parents=True, exist_ok=True)
+                    sf.write(wav, run["audio"], SR, subtype="PCM_16")
+                    tx["wav"] = str(wav.relative_to(self.data))
+                self.tx.append(tx)
+                del self.tx[:-self.KEEP_TX]
+        self._log(tx if hit is None else {"update": tx["id"], "morse": tx["morse"]})
+        self.bus.publish("tx", tx)
 
     def handle(self, rid, seg: Segmenter, frame: np.ndarray):
         self._events(rid, seg, seg.feed(frame))
@@ -1609,7 +1674,8 @@ class Station:
                 for t in self.tx:
                     if t.get("id") == tx["update"]:
                         t.update({k: v for k, v in tx.items() if k in ("accurate", "accurate_echo", "speaker_set",
-                                                                      "net", "after", "corrected", "consensus")})
+                                                                      "net", "after", "corrected", "consensus",
+                                                                      "morse")})
                         for k in ("net", "after", "corrected", "consensus"):   # a net close / a correction undone
                             if k in tx and tx[k] is None:
                                 t.pop(k, None)

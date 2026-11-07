@@ -6,6 +6,7 @@ qrz_online: true            # look up new callsigns on QRZ.com when online (need
 port: 8091
 callfix: true               # correct near-miss callsigns ('WB6BQW' -> WB6DQW heard in this net); what was heard is kept
 consensus: true             # one station, one call across a net: variants merged by FCC licence, name, town, history
+morse: true                 # find and decode Morse code (CW) on every radio; per radio `morse: false` turns one off
 # keep_awake: traffic        # laptops: full speed + screen on during nets and traffic (+10 min); listening / always / off
 #                             # (README "On a laptop"; also Settings on the dashboard, which wins)
 # VHF/UHF reach (300 km by default) is set in the dashboard: Settings → VHF/UHF reach.

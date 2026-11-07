@@ -200,7 +200,8 @@ class AccuratePass:
     # ----- what to do -----
     def _span(self, rid, start, end) -> list[dict]:
         from . import ics
-        return [t for t in ics.select(self.st.tx, rid, start, end, include_noise=True) if t.get("wav")]
+        return [t for t in ics.select(self.st.tx, rid, start, end, include_noise=True)
+                if t.get("wav") and t.get("kind") != "cw"]           # Morse rows are decoded, not transcribed
 
     def _pending(self, rid, start, end, force=False, stage="final") -> list[dict]:
         span = self._span(rid, start, end)

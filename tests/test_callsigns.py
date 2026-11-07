@@ -53,3 +53,21 @@ def test_prefix_and_suffix_written_apart_with_a_comma():
 def test_unvalidated_shapes_are_left_alone():
     text, found = normalize("I have 2 A4 sheets and the K9 unit", validate=lambda c: False)
     assert found == [] and text == "I have 2 A4 sheets and the K9 unit"
+
+
+def test_a_spelled_call_followed_by_73_is_still_taken():
+    """Heard 2026-11-06: a call spelled phonetically with '7-3' right after it gave no call (the run with '73' is not a
+    call). The longest call inside the run is taken; the rest of the words stay. KX9QZJ: unassigned in the FCC data."""
+    text, calls = normalize("I'll be monitoring. This is Kilo X-ray 9, Quebec Zulu Juliet, 7-3.")
+    assert calls == ["KX9QZJ"] and text == "I'll be monitoring. This is KX9QZJ, 7-3."
+    assert normalize("Whiskey 9 X-ray Yankee Zulu, two three four")[1] == ["W9XYZ"]
+
+
+def test_misheard_phonetics_count_only_when_the_call_is_known():
+    """'Helo', 'Hilo', 'Sheila' for Kilo and 'Yanky' for Yankee in one station's spelled call (2026-11-06)."""
+    known = {"KX9QZV"}.__contains__
+    for heard in ("Helo X-ray 9, Quebec Zulu Victor, responding", "Copy. Sheila X-ray 9, Quebec Zulu Victor. Clear.",
+                  "Uh, Hilo X-ray 9 Quebec Zulu Victor"):
+        assert normalize(heard, validate=known)[1] == ["KX9QZV"], heard
+    assert normalize("Helo X-ray 9, Quebec Zulu Victor", validate=lambda c: False)[1] == []   # unknown: not taken
+    assert normalize("Yanky 9 Alpha Bravo Charlie", validate=lambda c: False)[1] == []

@@ -113,7 +113,8 @@ def backend(spec):
     from transcribe import decoders
     eng, _, rest = spec.partition(":")
     model, _, dev = rest.rpartition("@") if "@" in rest else (rest, "", "")
-    return decoders.make({"engine": eng, "model": model, "device": dev or "CPU"})
+    dev, _, extra = dev.partition("+")              # ...@GPU+probs: OpenVINO word probabilities (transcribe/ovscore.py)
+    return decoders.make({"engine": eng, "model": model, "device": dev or "CPU", "probs": extra == "probs"})
 
 
 def run(method, rows, dec=None):
