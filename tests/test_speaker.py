@@ -172,3 +172,21 @@ def test_voiceprint_features():
     loud = np.concatenate([0.001 * np.ones(8000), 0.3 * np.sin(2 * np.pi * 800 * t[:8000])]).astype(np.float32)
     assert len(fbank(loud, keep=0.5)) < len(fbank(loud))
     assert fbank(np.zeros(100, np.float32)).shape == (0, 80)
+
+
+def test_a_list_of_calls_a_question_or_a_welcome_is_not_a_check_in():
+    """FM nets, 2026-11-07: net control reading back check-ins, a station checking a call it heard and net control's
+    welcome were each shown as the first station's own transmission."""
+    from station.speaker import from_text, stated
+    assert stated("K7ABC, W7XYZ, N0QZZ.", ["K7ABC", "W7XYZ", "N0QZZ"]) is None
+    assert stated("K7ABC, W7XYZ.", ["K7ABC", "W7XYZ"]) is None
+    assert stated("K7ABC, do I got it right? W9XYZ.", ["K7ABC", "W9XYZ"]) is None
+    assert stated("K7ABC, Ethan, are you there?", ["K7ABC"]) is None
+    assert from_text("K7ABC. Matthew, great signal, welcome. K7NET.", ["K7ABC", "K7NET"], "K7NET") == ("K7NET", "ncs")
+
+
+def test_two_stations_checking_in_together_are_the_first_ones():
+    from station.speaker import stated
+    assert stated("K7ABC and K7ABD.", ["K7ABC", "K7ABD"]) == "K7ABC"
+    assert stated("K7ABC and W7XYZ. K7ABC and W7XYZ.", ["K7ABC", "W7XYZ"]) == "K7ABC"
+    assert stated("K7ABC, Springfield.", ["K7ABC"]) == "K7ABC"          # the plain check-in is unchanged

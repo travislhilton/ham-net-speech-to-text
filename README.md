@@ -177,7 +177,9 @@ you chose is remembered. Each column shows:
   wins (marked ✎), is kept in the day's log (`data\logs\<date>.jsonl`, survives restarts and the accurate
   pass) and goes into the ICS-309; **Automatic** forgets it. Measured on a fast HF check-in net (3.915 MHz,
   189 transmissions): 22 state their own station, 37 more are net control's words (shown when `ncs:` is in
-  the schedule); the rest need a Who?.
+  the schedule); the rest need a Who?. A list of callsigns (net control reading back the check-ins), a question
+  ("K7ABC, do I have it right?") or net control's welcome is never taken as the first station's own; two stations
+  checking in together ("K7ABC and K7ABD") are the first one's.
 - **Correcting a line** (**✎ Fix** on any finished transmission, in the log and in a net's Minutes → Transcript):
   the words open in place, ready to edit, with ▶ to listen while you type. **Enter** (or Save) keeps it, **Esc**
   (or Cancel) leaves it. Your text then wins everywhere: the log, search, the minutes and attendance, the ICS-309 /
@@ -454,7 +456,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Over-the-air transcription test with word-error score and history | working |
 | Tap-to-correct (✎ Fix, log + minutes transcript; Enter/Esc; ▶ while editing; Undo correction): corrected > accurate > live in search, minutes, attendance, ICS-309/213, Winlink; Learned fixes proposed from repeats, applied only on Accept (`data/fixups_learned.yaml`); accuracy against the corrections per radio/mode/net (`/api/accuracy`, `python -m tools.accuracy`) | working (`station/corrections.py`); not yet used on a live net |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
-| Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). Code + `python -m tools.voice_eval` kept to re-measure on FM nets |
+| Who is talking by VOICE (speaker embeddings, to fill in transmissions that name nobody) | measured, **not on**: on the 3.915 MHz LSB net same-voice and different-voice clips overlap almost completely (5 WeSpeaker models; first vs second half of one transmission: EER ~31 %, best match right 8–20 %). FM nets, 2026-11-07 (1,880 transmissions over five days, two receivers, 89 clear self-identifications): within one net the closest voice names the speaker right 72–82 % of the time for 31–62 % of transmissions; across days no better than chance (a station's radio and place change). Below the 90 % needed to show it. Code + `python -m tools.voice_eval` kept |
 
 ## Segmenting
 
