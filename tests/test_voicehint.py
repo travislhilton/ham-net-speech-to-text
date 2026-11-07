@@ -63,3 +63,22 @@ def test_the_suggestion_offered_is_kept_with_the_operators_answer(tmp_path):
     st.set_speaker("t1", "W7XYZ", suggested="K7ABC")
     logs = list((tmp_path / "logs").glob("*.jsonl"))
     assert logs and '"voice_suggested": "K7ABC"' in logs[0].read_text()
+
+
+def test_a_suggestion_computes_only_its_own_voiceprint(tmp_path):
+    made = []
+
+    class VP:
+        def embed(self, x):
+            made.append(1)
+            return A
+    import soundfile as sf
+    (tmp_path / "rec").mkdir()
+    sf.write(tmp_path / "rec" / "a.wav", np.zeros(16000 * 3, np.float32), 16000)
+    h = vh.VoiceHints(tmp_path, maker=VP)
+    h.queue = lambda tx: None                                         # no background worker in this test
+    items = [{"id": str(i), "start": f"2026-11-07T19:0{i}:00", "radio": "r", "net": {"key": "n"}, "duration_s": 3,
+              "wav": "rec\\\\a.wav", "status": "final", "text": "K7ABC checking in", "callsigns": ["K7ABC"]}
+             for i in range(5)]
+    out = h.suggest(items[0], items)
+    assert len(made) == 1 and "still making 4 voiceprints" in out["none"]

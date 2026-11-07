@@ -134,7 +134,23 @@ class VoiceHints:
         self._mem[tid] = v
         return v
 
+    def ready(self, tx: dict):
+        """The voiceprint if it is already made (memory or data/voice), else None: never computes."""
+        tid = str(tx.get("id"))
+        if tid in self._mem:
+            return self._mem[tid]
+        f = self.dir / f"{tid}.npy"
+        if f.exists():
+            try:
+                self._mem[tid] = np.load(f)
+                return self._mem[tid]
+            except Exception:  # noqa: BLE001 — half-written: the worker makes it again
+                return None
+        return None
+
     def suggest(self, target: dict, items: list[dict]) -> dict:
+        """Computes only the target's voiceprint; the net's come from the background worker. Without this a Who?
+        opened just after a restart computed the whole day first (8.5 min on one station, 2026-11-07)."""
         if not self.on:
             return {"none": "voice suggestions are off (no voice model on this PC)"}
         from .speaker import best
@@ -142,4 +158,17 @@ class VoiceHints:
         def label(t):
             call, how = best(t)
             return call if how in ("stated", "operator") else None
-        return suggest(target, items, self.vec, label)
+        self.vec(target)
+        pending = [0]
+
+        def vec(t):
+            if t is target or t.get("id") == target.get("id"):
+                return self.vec(t)
+            v = self.ready(t)
+            if v is None and (t.get("duration_s") or 0) >= MIN_S and t.get("wav") and str(t.get("id")) not in self._mem:
+                pending[0] += 1
+            return v
+        out = suggest(target, items, vec, label)
+        if pending[0] and "none" in out:
+            out["none"] += f" (still making {pending[0]} voiceprints: try again in a minute)"
+        return out
