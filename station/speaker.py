@@ -74,12 +74,12 @@ def stated(text: str, calls: list[str]) -> str | None:
                 return c
     # A bare check-in: the transmission starts with a callsign and is little more than that
     # ("KE7XHT, Ogdenville." / "W7ETQ Capital City. W7ETQ.") and nothing in it acknowledges anyone.
-    # Not when it names several stations (net control reading back the check-ins: "KI7ABC, KI7ABD, KJ7ABE.";
-    # "KK7ABC. … great signal, welcome. KE7ABD." is KE7ABD's acknowledgement) or asks something ("K7ABC, do I got it right? W9XYZ." is W9XYZ checking the call it heard) — 2026-11-07, FM nets: such
+    # Not when it names several stations (net control reading back the check-ins: "K7ABC, W7XYZ, N0QZZ.";
+    # "K7ABC. … great signal, welcome. K7NET." is K7NET's acknowledgement) or asks something ("K7ABC, do I got it right? W9XYZ." is W9XYZ checking the call it heard) — 2026-11-07, FM nets: such
     # transmissions were shown as the first station's own.
     first = re.match(r"\W*" + _C, text)
     named = {c.upper() for c in calls if re.search(r"\b" + re.escape(c) + r"\b", text, re.I)}
-    # ... but two stations checking in together ("KF7ABC and KF7ABD.", a couple or family): the first is the speaker
+    # ... but two stations checking in together ("K7ABC and K7ABD.", a couple or family): the first is the speaker
     pair = re.fullmatch(r"\W*" + _C + r"\s*,?\s+and\s+[A-Z0-9]{3,8}\W*(?:\s*\1\s+and\s+[A-Z0-9]{3,8}\W*)?", text, re.I)
     several = len(named) > 1 and not pair
     if (first and first.group("c").upper() in calls and first.group("c").upper() not in to and not _ACK.search(text)
