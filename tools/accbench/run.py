@@ -108,13 +108,26 @@ def final(rows, dec, block=240.0, margin=30.0):
     return out
 
 
-def backend(spec):
+def backend(spec, pause=None):
     """'openvino:DIR@GPU' / 'faster-whisper:MODEL@cuda' / 'mlx:REPO' -> decode (transcribe/decoders.py)."""
     from transcribe import decoders
     eng, _, rest = spec.partition(":")
     model, _, dev = rest.rpartition("@") if "@" in rest else (rest, "", "")
     dev, _, extra = dev.partition("+")              # ...@GPU+probs: OpenVINO word probabilities (transcribe/ovscore.py)
-    return decoders.make({"engine": eng, "model": model, "device": dev or "CPU", "probs": extra == "probs"})
+    return decoders.make({"engine": eng, "model": model, "device": dev or "CPU", "probs": extra == "probs"}, pause=pause)
+
+
+def guarded(spec, opt=None):
+    """(decode, guard) for a benchmark on a station PC: tools/accbench/guard.py (one at a time, below-normal priority,
+    yields to the station, ends itself when memory runs short). On by default on Windows; --no-guard turns it off."""
+    opt = opt or {}
+    if os.name != "nt" or "--no-guard" in opt:
+        return backend(spec), None
+    from tools.accbench.guard import Guard
+    big = "large" in spec and "turbo" not in spec
+    need = (4200 if big else 2300) * (2 if "fp16" in spec else 1) * (1.65 if spec.endswith("+probs") else 1)
+    g = Guard(need_mb=int(need)).start()
+    return backend(spec, pause=g.pause), g
 
 
 def run(method, rows, dec=None):
@@ -140,16 +153,16 @@ def run(method, rows, dec=None):
 
 
 def main():
-    opt = {a.split("=", 1)[0]: a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--")}
+    opt = {a.split("=", 1)[0]: (a.split("=", 1) + [""])[1] for a in sys.argv[1:] if a.startswith("--")}
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     method = args[0]
-    dec = backend(opt["--backend"]) if "--backend" in opt else None
+    dec, guard = guarded(opt["--backend"], opt) if "--backend" in opt else (None, None)
     name = method + (f"-{opt['--tag']}" if "--tag" in opt else "")
     for net in args[1:]:
         rows = load_net(net)
-        t0 = time.time()
+        t0, w0 = time.time(), guard.waited_s if guard else 0.0
         res = run(method, rows, dec)
-        el = time.time() - t0
+        el = time.time() - t0 - ((guard.waited_s - w0) if guard else 0.0)     # waiting for the station is not decoding
         au = sum(len(r["audio"]) for r in rows) / 16000
         os.makedirs(hyp_dir(net), exist_ok=True)
         json.dump({"results": {k: {kk: v[kk] for kk in ("text", "conf", "flags") if kk in v} for k, v in res.items()},

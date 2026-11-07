@@ -116,6 +116,10 @@ def free_commit_mb() -> int | None:
 
 
 MEMORY_MARGIN_MB = 1024     # left for the live station and Windows after the local model is loaded
+LOW_MEMORY_MB = 1500        # while the pass runs: under this much free (commit) memory it holds between windows
+CRITICAL_MEMORY_MB = 700    # ... and under this it is ended at once (its RAM and GPU memory given back; retried in 2
+                            # min). The live text always comes first: a laptop station's graphics driver crashed the PC
+                            # (bugcheck 0x10E, video memory) with several large models on its GPU (2026-11-06).
 SCORER_FACTOR = 1.65      # OpenVINO word probabilities (transcribe/ovscore.py) compile the model a second time: peak
                           # 6.7 GB vs 4.1 GB for large-v3 int8 on a Core Ultra laptop (2026-11-06), no slower. With them
                           # the merge of the two decodes is decided as on the home server: synthetic nets 55.0 -> 53.4 %
@@ -142,6 +146,7 @@ class Local:
         self.models_dir = Path(models_dir or ROOT / "models")
         self.data_dir = Path(data_dir or ROOT / "data")
         self.command = command or [sys.executable, "-m", "station.accurate_local"]
+        self._free_now = None
         rtf = float(self.spec.get("rtf") or 0.5)
         # audio seconds sent per wall second before the first measurement: provisional ~1 decode, final ~2 + context
         self.first_rate = 1.0 / max(rtf * 2.2, 0.02)
@@ -193,11 +198,26 @@ class Local:
             return "on battery"
         if self.busy():
             return "live text"
+        free = self._free_now
+        if free is not None and free < LOW_MEMORY_MB:
+            return "memory short"
         return ""
 
     def _watch(self):
         quiet_since = None
+        n = 0
         while not self._stop.wait(0.2):
+            n += 1
+            if n % 5 == 0 or self._free_now is None and n == 1:   # memory, once a second
+                try:
+                    self._free_now = self.free_mb()
+                except Exception:  # noqa: BLE001
+                    self._free_now = None
+                if (self._free_now is not None and self._free_now < CRITICAL_MEMORY_MB and self.proc
+                        and self.proc.poll() is None):
+                    print(f"{datetime.now():%H:%M:%S} accurate pass: only {self._free_now} MB free; ending it to "
+                          "protect the live station (retried later)", flush=True)
+                    self._kill()
             why = self.should_hold()
             now = time.time()
             if why:

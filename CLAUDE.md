@@ -15,7 +15,7 @@
   `private/CLAUDE.md` and `private/continuation-prompt.md` first. Commit and push them in that repo.
 - **README + installer evolve with every change**: update README "Status" and the install steps in the same
   commit as the feature; `install/windows/install.ps1` must stay idempotent.
-- Tests: `.venv/bin/python -m pytest -q` from the repo root (377 green 2026-11-06).
+- Tests: `.venv/bin/python -m pytest -q` from the repo root (382 green 2026-11-07).
 - **The repo is PUBLIC** (MIT, https://github.com/travislhilton/ham-net-speech-to-text, since 2026-11-05): every push
   is published. The reference card's download link defaults to it (`station/phone.py` REPO_URL). Real callsigns
   heard on nets never go in tests: use calls checked unassigned in the FCC database.

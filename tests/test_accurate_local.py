@@ -354,3 +354,28 @@ def test_word_probabilities_are_dropped_not_waited_for_when_memory_is_short(tmp_
     finally:
         al.subprocess.Popen = real
         loc.close()
+
+
+def test_the_pass_holds_when_memory_runs_short_and_is_ended_when_critical(tmp_path):
+    """A laptop station's graphics driver crashed the PC with several large models on its GPU (2026-11-06)."""
+    import time as _t
+    mem = {"v": 8000}
+    loc = al.Local({"mode": "final_only", "engine": "fake", "model": "m", "device": "GPU", "ram_mb": 100},
+                   free_mb=lambda: mem["v"], data_dir=tmp_path)
+    try:
+        loc._free_now = 8000
+        assert loc.should_hold() == ""
+        loc._free_now = al.LOW_MEMORY_MB - 1
+        assert loc.should_hold() == "memory short"
+        killed = []
+        class P:
+            def poll(self): return None
+        loc.proc = P(); loc._kill = lambda: (killed.append(1), setattr(loc, "proc", None))
+        mem["v"] = al.CRITICAL_MEMORY_MB - 1
+        for _ in range(40):
+            if killed:
+                break
+            _t.sleep(0.1)
+        assert killed
+    finally:
+        loc._stop.set()
