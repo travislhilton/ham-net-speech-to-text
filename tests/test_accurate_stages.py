@@ -139,3 +139,20 @@ def test_requests_block_a_long_net_with_context_on_both_sides(tmp_path):
         assert acc.PROV_CONTEXT_S - 10 < 20
     finally:
         st.stop.set()
+
+
+def test_a_word_belongs_to_the_transmission_it_ends_in():
+    """OpenVINO Whisper stretched the first word after a pause back into the silence (QSO 2026-11-06): "I've" timed
+    108.24-110.56 s, its transmission starting at 110.16 s. By its midpoint it went to the previous transmission."""
+    from transcribe import context as cx
+    lay = cx.Layout(None, {"a": (100.0, 109.66), "b": (110.16, 120.18)}, [(109.91, 2)], ["a", "b"])
+    w = lambda s, t0, t1: {"w": " " + s, "t0": t0, "t1": t1, "p": None, "win": 0, "edge": 9.0, "ok": True, "why": ""}
+    words = [w("right", 107.5, 107.9), w("there.", 107.9, 108.2), w("I've", 108.24, 110.56), w("been", 110.56, 110.7)]
+    res = cx.assemble(lay, [[{"a": 100.0, "b": 120.18, "words": words}]])
+    assert res["a"]["text"] == "right there." and res["b"]["text"] == "I've been"
+
+
+def test_final_pass_waits_two_quiet_minutes_by_default():
+    from station.accurate import AccuratePass
+    import inspect
+    assert 'cfg.get("final_after_min", 2)' in inspect.getsource(AccuratePass)

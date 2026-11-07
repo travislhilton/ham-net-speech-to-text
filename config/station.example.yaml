@@ -87,7 +87,7 @@ accurate:                   # the accurate second pass: the home server when rea
   live: true                # re-transcribe each transmission as soon as its live text is done (provisional text,
                             # heard with the ~25 s of the net before it)
   context: true             # hear transmissions in their place in the net (an older Mac service: one at a time)
-  final_after_min: 5        # the final text for the whole net, this many quiet minutes after it
+  final_after_min: 2        # the final text for the whole net, this many quiet minutes after it
   auto_after_min: 15        # catch-up for anything missed, this many quiet minutes after a net; 0 = off
   # the key goes in config\secrets.env as EMCOMM_STT_KEY=... (never in this file; kept across updates)
 

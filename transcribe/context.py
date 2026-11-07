@@ -263,8 +263,20 @@ def owner_bounds(lay: Layout, shift=JOIN_SHIFT_S) -> dict:
     return {k: tuple(v) for k, v in out.items()}
 
 
+WORD_AT = "end"          # which instant of a word decides its transmission: "end" (since 2026-11-06) or "mid"
+
+
+def _word_time(w) -> float:
+    """Whisper stretches the START of the first word after a pause back into the silence before it ("I've" timed
+    108.24-110.56 s in a transmission that began at 110.16), so its midpoint lands in the previous transmission:
+    first words were moved back a turn and the two decodes then disagreed and kept both copies ("…But a friend" /
+    "A friend of mine…"). A word's END is reliable. Real QSO, a handheld through a voice gate, 46 transmissions:
+    midpoint 25.5 % disagreement with the live text and 53 wrong first/last words; end 20.2 % and 31."""
+    return w["t1"] if WORD_AT == "end" else (w["t0"] + w["t1"]) / 2
+
+
 def _clip_words(words, a, b):
-    return [w for w in words if a <= (w["t0"] + w["t1"]) / 2 < b]
+    return [w for w in words if a <= _word_time(w) < b]
 
 
 def _p(w) -> float:

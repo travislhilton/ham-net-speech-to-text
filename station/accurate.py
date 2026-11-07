@@ -23,7 +23,9 @@ Config (station.yaml):
     accurate:
       urls: [http://192.168.1.20:8090, http://my-server:8090]   # your server; tried in order
       live: true                # provisional text as each transmission ends
-      final_after_min: 5        # the final pass this many quiet minutes after a net's last transmission
+      final_after_min: 2        # the final pass this many quiet minutes after a net's last transmission (5 until
+                                # 2026-11-06: the operator waited 8 min after a QSO; a resumed conversation only
+                                # re-does the blocks with new transmissions)
       auto_after_min: 15        # catch-up for anything still without the final pass (e.g. the Mac was off); 0 = off
       context: true             # false = the old one-transmission-at-a-time pass
       local: auto               # this PC when the home server is not there: auto | final_only | off
@@ -145,7 +147,7 @@ class AccuratePass:
         cfg = cfg or {}
         self.st = station
         self.auto_after = timedelta(minutes=float(cfg.get("auto_after_min", 15)))
-        self.final_after = timedelta(minutes=float(cfg.get("final_after_min", 5)))
+        self.final_after = timedelta(minutes=float(cfg.get("final_after_min", 2)))
         self.live = bool(cfg.get("live", True))
         self.cfg_prompt = cfg.get("prompt", "")
         self.remote = remote or Remote(cfg.get("urls", DEFAULT_URLS), read_key(station.root))

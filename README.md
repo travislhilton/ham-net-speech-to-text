@@ -362,7 +362,7 @@ you chose is remembered. Each column shows:
 - **Accurate pass** (home network, optional), in two stages. As soon as each transmission's live text is done,
   the station sends its recording **with the ~25 s of the net before it** to the home server (Whisper large-v3) and
   puts a *provisional* accurate text beside the live text, a few seconds later. When the net has been quiet for
-  5 minutes (`final_after_min`) it sends the **whole net** in 4-minute blocks (30 s of context each side) for the
+  2 minutes (`final_after_min`) it sends the **whole net** in 4-minute blocks (30 s of context each side) for the
   *final* accurate text, which replaces the provisional one. Whisper hears whole turns instead of 1–3 s pieces, so
   the final text gets far more right (see "How the accurate pass works" below). Anything missed (home server
   unreachable) is caught up 15 quiet minutes after the net; **Run now** on a net's header starts that at once (**Try now** when the home server was unreachable). The header shows what it is doing: how many are done, a progress bar
@@ -504,14 +504,16 @@ their place in the net (`transcribe/context.py`, `POST /accurate/context`):
    no-speech skip OFF (FM hiss made it drop whole 30 s windows of check-ins).
 3. **Guards** per segment: loops, prompt echoes, and runs of "! ! !" are dropped.
 4. **Merge** the two decodes word by word by confidence (their window edges fall in different places) and give
-   each word back to the transmission it was spoken in (by time; at a pause split the boundary sits 0.4 s early
+   each word back to the transmission it was spoken in (by the time the word ENDS: Whisper on OpenVINO stretches the
+   start of the first word after a pause back into the silence, which moved first words a turn early — a real QSO
+   through a voice gate: 53 → 31 wrong first/last words; at a pause split the boundary sits 0.4 s early
    because Whisper's word times run early).
 5. Per transmission: text, word times, mean word confidence and flags. Empty, a lone "Thank you."-style phrase
    with low confidence, or confidence under 0.3 → the station keeps the live text (`accurate_echo`).
 
 Stages: **provisional** = each transmission with the ~25 s before it, sent as it ends (median 0.8 s on the Mac
 Studio, ~3 s for a silent clip); **final** = the whole net in 240 s blocks + 30 s of context each side, when the net
-has been quiet 5 minutes (~11x real time: a 1-hour net in ~6 minutes). A late provisional never overwrites a final.
+has been quiet 2 minutes (~11x real time: a 1-hour net in ~6 minutes). A late provisional never overwrites a final.
 
 Measured 2026-11-03 (`tools/accbench`: synthetic nets with known text — macOS voices reading real regional
 callsigns phonetically, through a simulated FM repeater/data jack or SSB channel matched to the 11-02 recordings,
