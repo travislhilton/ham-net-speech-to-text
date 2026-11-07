@@ -172,7 +172,7 @@ dialog h3{margin:0 0 8px}dialog h4{margin:12px 0 4px;font-size:14px;color:var(--
 details{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0}summary{cursor:pointer}
 table.log{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}table.log td,table.log th{border-top:1px solid var(--line);padding:3px 4px;text-align:left;vertical-align:top}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}input[type=datetime-local]{width:auto;text-transform:none}
-.err{color:var(--bad);font-size:13px}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.err{color:var(--bad);font-size:13px}.err .silent{display:block;font-weight:600}.err .silent.quiet{color:var(--warnc);font-weight:400}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding:10px 16px 24px}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}main{padding-left:12px;padding-right:12px}}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
@@ -1053,7 +1053,8 @@ function renderRadios(){
     el.querySelector(".cap").textContent=wfCaption(r);
     const run=(S.net||{}).running||[],nets=(S.schedule||[]).filter(n=>n.radio===r.id);
     el.querySelector(".sch").innerHTML=nets.length?"Nets: "+nets.map(n=>{const on=run.some(x=>x.id===n.id);return `<span class="${on?"now":""}" title="${esc(n.summary||"")}">${on?"now: ":""}${esc(n.name)}${!on&&n.next?" · next "+esc(fmtWhen(n.next.start)):""}${n.freq_mhz?" · "+esc(Number(n.freq_mhz).toFixed(3))+" MHz":""}</span>`}).join("; "):'<span class="muted">No nets scheduled on this radio.</span>';
-    el.querySelector(".err").textContent=r.paused?"":(r.error||"");
+    const sil=r.paused?null:r.silent;                     // a radio switched off / asleep / unplugged (station/silence.py)
+    el.querySelector(".err").innerHTML=r.paused?"":r.error?esc(r.error):sil?`<span class="silent ${esc(sil.kind)}">⚠ ${esc(sil.say)} <span class="muted">(since ${esc(new Date(sil.since*1000).toTimeString().slice(0,5))})</span></span>`:"";
     el.classList.toggle("paused",!!r.paused);
     const pz=el.querySelector(".pz");pz.textContent=r.paused?"▶ Resume":"⏸ Pause";
     pz.title=r.paused?"Start listening to this radio again":"Stop listening to this radio: nothing is recorded or transcribed until you resume. Its scheduled nets are still recorded (resumed 1 min before, paused again after).";

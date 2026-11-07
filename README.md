@@ -89,7 +89,7 @@ nets cannot be removed until its nets move to another radio. Inputs are matched 
 
 | Radio | Interface | Notes |
 |---|---|---|
-| A handheld (e.g. a Baofeng) | speaker/earphone jack → Digirig Lite or Mobile (USB) | Audio from: *speaker / earphone jack* (voice gate). The jack is very loud: Set level… step 1 finds the cleanest volume knob position. |
+| A handheld (Baofeng, Wouxun KG-UV9PX+, …) | speaker/earphone jack → Digirig Lite or Mobile (USB) | Audio from: *speaker / earphone jack* (voice gate). The jack is very loud: Set level… step 1 finds the cleanest volume knob position. On all day: run it from a charger or battery eliminator — a flat battery shows as **the radio seems to be OFF** on its card. |
 | Yaesu FTM-150R (VHF/UHF) | DATA jack (10-pin mini-DIN) → Masters DRA-50M (USB) | Set 45 DATA BAND = A-BAND FIX, tune band A to the net; leave 41 DUAL RECEIVE MODE (a priority scan) OFF. The DATA jack is unsquelched, so the recorder's **carrier gate** detects transmissions from the drop in hiss. Step by step: `docs/FTM-150R-SETUP.txt`. |
 | Icom IC-705 (HF/VHF/UHF, Wi-Fi) | Icom **Remote Utility** (connected to the radio) → its virtual sound input `IC-705 (Icom Virtual Audio Driver)` | In `station.yaml`: `device: IC-705`, `gate: voice` (SSB has no carrier to detect). Remote Utility must be running and connected. Set the frequency and mode with **Change** on the radio's card; reading them from the radio (CAT) is planned. |
 
@@ -405,6 +405,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Piece | State |
 |---|---|
 | Live signal + SNR meters and waterfall per radio; several radios at once | working |
+| A silent radio is flagged on its card and in station.log: a handheld switched off / asleep / flat (input dead flat ≥ 3 dB under its own learned squelch-closed floor for 2 min), a data jack with no hiss (2 min), or a net on the air with nothing heard for 10 min (`station/silence.py`, per radio `silence:`) | working: replayed on the hour a handheld died (flagged 2 min after, cleared when switched on; no false alarm on the squelch-closed gaps) |
 | Radios… on the dashboard: add / replace / remove a radio, sound input chosen from those plugged in (exact name first), station restarts itself | built 2026-11-05 |
 | Set level… per radio: noise and voice against a target, Windows recording level read/set, Adjust automatically | working (handheld's speaker jack into a Digirig: -13 dBFS clipping → -24 dBFS in one step) |
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |

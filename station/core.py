@@ -143,6 +143,8 @@ class Station:
         self.level_recent = {r["id"]: collections.deque(maxlen=150) for r in config["radios"]}   # Set level… (15 s)
         self.level_tap: dict = {}                       # rid -> list of raw frames while a knob position is measured
         self.knob_points: dict = {r["id"]: {} for r in config["radios"]}
+        from .silence import SilenceWatch                # a radio switched off / asleep / unplugged (station/silence.py)
+        self.silence = {r["id"]: SilenceWatch(r.get("gate", "carrier"), r.get("silence")) for r in config["radios"]}
         self.radio_cfg = {r["id"]: r for r in config["radios"]}
         self.radios = {r["id"]: {"id": r["id"], "name": r.get("name", r["id"]), "device": r.get("device"),
                                  "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode", "FM"),
@@ -236,6 +238,8 @@ class Station:
                 print(f"schedule tick: {type(e).__name__}: {e}", flush=True)
             if n % 5 == 1:                     # hold the screen on (full speed) only while transcribing
                 self._keep_awake_tick()
+            if n % 10 == 3:                    # a radio switched off / asleep / unplugged
+                self._silence_tick()
             with self.lock:
                 radios = list(self.radios.values())
             self.bus.publish("radios", {"radios": radios, "net": self.schedule_now()})
@@ -246,6 +250,25 @@ class Station:
                     self.hints[rid]["reminders"] = rem; changed = True
             if changed:
                 self.bus.publish("hints", self.hints)
+
+    def _silence_tick(self):
+        """Warn on the radio card (and in station.log) when a radio went silent; clear it when sound comes back."""
+        try:
+            by = self.schedule_now().get("by_radio") or {}
+        except Exception:  # noqa: BLE001
+            by = {}
+        changed = False
+        for rid, w in self.silence.items():
+            r = self.radios[rid]
+            s = None if r.get("paused") or r.get("state") != "listening" else w.state(time.time(), bool(by.get(rid)))
+            old = r.get("silent")
+            if (old or {}).get("kind") != (s or {}).get("kind"):
+                self._set_radio(rid, silent=s)
+                changed = True
+                print(f"{datetime.now():%H:%M:%S} {rid} " + (f"SILENT ({s['kind']}): {s['say']}" if s else "sound is back"),
+                      flush=True)
+        if changed:
+            self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
 
     def _keep_awake_tick(self):
         from .awake import wanted
@@ -1313,6 +1336,7 @@ class Station:
                             m["id"] = rid
                             self.bus.publish("m", m)
                             self.level_recent[rid].append((time.time(), m["rms"], m["peak"], m["rx"]))
+                            self.silence[rid].feed(time.time(), m["rms"], m["rx"])
                         if time.time() - last > 0.25:
                             last = time.time()
                             self._set_radio(rid, level_db=round(seg.level_db, 1), carrier=seg.active,
