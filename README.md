@@ -164,6 +164,7 @@ you chose is remembered. Each column shows:
 
   Each transmission: grey words appear while the station is still
   talking; the final text replaces them about 2–3 seconds after they unkey. Callsigns are buttons, Q-codes
+  (rest the mouse on one for its callbook card; click for the full lookup and the nets it takes part in)
   and prowords are underlined with their meaning below (untick **Explain radio terms** at the top to hide the
   meanings; on by default, remembered per browser), and ▶ plays the recording.
 - **Who is talking** (first on each transmission): the speaker's callsign when it is known, in bold when the
