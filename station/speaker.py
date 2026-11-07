@@ -84,10 +84,33 @@ def stated(text: str, calls: list[str]) -> str | None:
     several = len(named) > 1 and not pair
     if (first and first.group("c").upper() in calls and first.group("c").upper() not in to and not _ACK.search(text)
             and not several and "?" not in text):
-        rest = [w for w in _WORD.findall(text[first.end():]) if w.upper() not in calls]
+        once = _once(text)
+        rest = [w for w in _WORD.findall(once[re.match(r"\W*" + _C, once).end():]) if w.upper() not in calls]
         if len(rest) <= 5:
             return first.group("c").upper()
+    # Signed at the end: an answer to another station closed with the speaker's own call in a sentence of its own
+    # ("K7ABC. Bryce, welcome. Awesome signal. K7NET." / "K7ABC in Logan. Thank you, Valerie. K7NET.") — net control
+    # acknowledging a check-in, FM nets 2026-11-07.
+    last = re.search(r"(?:^|[.!?]\s+)" + _C + r"\W*$", text)
+    if last and first and len(named) == 2:
+        b, a = last.group("c").upper(), first.group("c").upper()
+        head = text[:last.start("c")]                      # the sign-off is its own sentence: not "welcome, <b>"
+        if b in calls and b != a and b not in addressed(head, calls) and (
+                a in to or _ACK.search(head) or _THANKS.search(head)):
+            return b
     return None
+
+
+_THANKS = re.compile(r"\b(?:thank(?:s| you)|welcome|appreciate)\b", re.I)
+
+
+def _once(s: str) -> str:
+    """The text with a sentence said again right after itself dropped ("K7ABC, Springfield. K7ABC, Springfield.")."""
+    out = []
+    for part in re.split(r"(?<=[.!?])\s+", s.strip()):
+        if not out or re.sub(r"\W", "", part).lower() != re.sub(r"\W", "", out[-1]).lower():
+            out.append(part)
+    return " ".join(out)
 
 
 def from_text(text: str, calls: list[str], ncs: str | None = None) -> tuple[str | None, str | None]:

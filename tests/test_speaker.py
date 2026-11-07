@@ -182,7 +182,8 @@ def test_a_list_of_calls_a_question_or_a_welcome_is_not_a_check_in():
     assert stated("K7ABC, W7XYZ.", ["K7ABC", "W7XYZ"]) is None
     assert stated("K7ABC, do I got it right? W9XYZ.", ["K7ABC", "W9XYZ"]) is None
     assert stated("K7ABC, Ethan, are you there?", ["K7ABC"]) is None
-    assert from_text("K7ABC. Matthew, great signal, welcome. K7NET.", ["K7ABC", "K7NET"], "K7NET") == ("K7NET", "ncs")
+    assert from_text("K7ABC. Matthew, great signal, welcome. K7NET.", ["K7ABC", "K7NET"], "K7NET") == ("K7NET", "stated")
+    assert from_text("K7ABC. Matthew, great signal, welcome.", ["K7ABC"], "K7NET") == ("K7NET", "ncs")
 
 
 def test_two_stations_checking_in_together_are_the_first_ones():
@@ -190,3 +191,17 @@ def test_two_stations_checking_in_together_are_the_first_ones():
     assert stated("K7ABC and K7ABD.", ["K7ABC", "K7ABD"]) == "K7ABC"
     assert stated("K7ABC and W7XYZ. K7ABC and W7XYZ.", ["K7ABC", "W7XYZ"]) == "K7ABC"
     assert stated("K7ABC, Springfield.", ["K7ABC"]) == "K7ABC"          # the plain check-in is unchanged
+
+
+def test_net_control_signing_its_answer_with_its_own_call_at_the_end():
+    from station.speaker import stated
+    c = ["K7ABC", "K7NET"]
+    assert stated("K7ABC. Bryce, welcome. Awesome signal as well. K7NET.", c) == "K7NET"
+    assert stated("K7ABC in Springfield on a handheld. Thank you, Valerie. K7NET.", c) == "K7NET"
+    assert stated("K7ABC. Jack, good signal, welcome. K7NET.", c) == "K7NET"
+    assert stated("K7ABC, Springfield. K7NET.", c) is None             # no answer in it: not a sign-off
+
+
+def test_a_check_in_said_twice_is_still_a_check_in():
+    from station.speaker import stated
+    assert stated("K7ABC, Spencer in Springfield. K7ABC, Spencer in Springfield.", ["K7ABC"]) == "K7ABC"

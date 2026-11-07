@@ -179,7 +179,8 @@ you chose is remembered. Each column shows:
   189 transmissions): 22 state their own station, 37 more are net control's words (shown when `ncs:` is in
   the schedule); the rest need a Who?. A list of callsigns (net control reading back the check-ins), a question
   ("K7ABC, do I have it right?") or net control's welcome is never taken as the first station's own; two stations
-  checking in together ("K7ABC and K7ABD") are the first one's.
+  checking in together ("K7ABC and K7ABD") are the first one's. An answer closed with a call in a sentence of its own ("K7ABC. Welcome, great
+  signal. K7NET.") is that station's (net control signing), and a check-in said twice still counts.
 - **Correcting a line** (**✎ Fix** on any finished transmission, in the log and in a net's Minutes → Transcript):
   the words open in place, ready to edit, with ▶ to listen while you type. **Enter** (or Save) keeps it, **Esc**
   (or Cancel) leaves it. Your text then wins everywhere: the log, search, the minutes and attendance, the ICS-309 /
