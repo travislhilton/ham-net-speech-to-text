@@ -19,6 +19,9 @@ minutes after the last transmission; between those the PC keeps the operator's o
 radio still listens: a transmission that starts on a dark screen is held from its first moment), "listening" (the
 whole time a radio listens: with no net schedule that is around the clock), "always" (whenever the station runs),
 "off". The owner's laptop stayed lit all evening on "listening" with one radio always on (2026-11-05).
+On "traffic", a dashboard open in a browser (and for 2 minutes after the last one closes) holds too while a radio
+listens (owner, 2026-11-07): an operator watching the log wants every transmission at full speed, and a laptop that
+dropped into Modern Standby between transmissions broke its live GPU engine (every transmission read "The.").
 """
 import json
 import sys
@@ -35,7 +38,8 @@ QUIET_MIN = 10
 
 
 def wanted(mode: str, radios: list[dict], accurate_jobs: list[dict], busy: bool = False,
-           quiet_s: float | None = None, net_on: str | None = None, quiet_min: float = QUIET_MIN) -> tuple[bool, str]:
+           quiet_s: float | None = None, net_on: str | None = None, quiet_min: float = QUIET_MIN,
+           viewer: bool = False) -> tuple[bool, str]:
     """(hold the power request?, why). Pure: the station's ticker and the tests call it.
     busy = a transmission is being received or a live final is queued/transcribing; quiet_s = seconds since the
     last transmission ended (None: none yet); net_on = the name of a scheduled net on the air now."""
@@ -54,6 +58,8 @@ def wanted(mode: str, radios: list[dict], accurate_jobs: list[dict], busy: bool 
         return False, "no radio listening"
     if busy:
         return True, "receiving / transcribing"
+    if viewer:
+        return True, "dashboard open"
     if net_on:
         return True, f"net on the air: {net_on}"
     if quiet_s is not None and quiet_s < quiet_min * 60:

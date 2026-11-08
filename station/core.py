@@ -188,6 +188,11 @@ class Station:
         self.awake_mode = config.get("keep_awake", AWAKE_DEFAULT)
         self.awake_quiet_min = float(config.get("keep_awake_quiet_min", 10))
         self.last_traffic = None                       # time.time() of the last transmission's end (keep awake)
+        self.viewers, self.viewer_seen = 0, None       # dashboards open in a browser (server.py /api/events)
+        self._canary = None                            # (audio, words): a recent final that read well (engine check)
+        self._engine_check = False                     # a dashboard just opened: check the live engine when idle
+        self._engine_reload_at = 0.0
+        self._partial_reload = False
         if self.awake_mode not in AWAKE_MODES:
             self.awake_mode = AWAKE_DEFAULT
         self.awake_mode = (self._saved().get("operator") or {}).get("keep_awake") or self.awake_mode
@@ -315,7 +320,7 @@ class Station:
                 net = None
             want, why = wanted(self.awake_mode, radios, acc.status() if acc else [], busy=busy,
                                quiet_s=None if self.last_traffic is None else time.time() - self.last_traffic,
-                               net_on=net, quiet_min=self.awake_quiet_min)
+                               net_on=net, quiet_min=self.awake_quiet_min, viewer=self.dashboard_open())
             if self.awake.set(want):
                 print(f"{datetime.now():%H:%M:%S} keep awake: {'on' if want else 'off'} ({why})", flush=True)
         except Exception as e:  # noqa: BLE001 — power management never stops the station
@@ -1596,6 +1601,74 @@ class Station:
         except Exception:  # noqa: BLE001
             pass
 
+    # ---------- dashboards open + live engine check (owner 2026-11-07) ----------
+    VIEWER_GRACE_S = 120        # a reload or a dropped connection is not "closed"
+    SUSPECT_S = 3.0             # a transmission this long that reads as one word or nothing is suspect
+    RELOAD_EVERY_S = 300        # at most one engine reload per 5 minutes
+
+    def viewer(self, opened: bool):
+        """server.py: a browser opened (True) or closed (False) the dashboard's event stream."""
+        with self.lock:
+            first = opened and not self.dashboard_open()
+            self.viewers = max(0, self.viewers + (1 if opened else -1))
+            self.viewer_seen = time.time()
+        if first:
+            self._engine_check = True
+            if getattr(self, "awake", None) is not None:
+                threading.Thread(target=self._keep_awake_tick, daemon=True).start()   # hold now, not at the next tick
+
+    def dashboard_open(self) -> bool:
+        return self.viewers > 0 or (self.viewer_seen is not None and time.time() - self.viewer_seen < self.VIEWER_GRACE_S)
+
+    @staticmethod
+    def _words(text: str) -> int:
+        return len(re.findall(r"[A-Za-z0-9]+", text or ""))
+
+    def _engine_broken(self, eng) -> bool:
+        """Re-read the reference transmission: a live engine that read it well and now cannot is broken."""
+        if self._canary is None:
+            return False
+        audio, words = self._canary
+        try:
+            return self._words(eng.transcribe(audio, prompt=None).get("text")) <= 1 < words
+        except Exception:  # noqa: BLE001
+            return True
+
+    def _reload_final(self, eng, why: str):
+        """A fresh live engine (and the partial one at its next run). Measured 2026-11-07: after Modern Standby the
+        long-lived GPU pipeline wrote "The." for clear speech while a fresh one read it right."""
+        self._engine_reload_at = time.time()
+        print(f"{datetime.now():%H:%M:%S} live engine: {why}; reloading it", flush=True)
+        try:
+            new = self._final_factory()
+            self._warm(new)
+        except Exception as e:  # noqa: BLE001
+            print(f"live engine: reload failed: {type(e).__name__}: {e}", flush=True)
+            return eng
+        del eng
+        self._partial_reload = True
+        self.engines.update(final=new.name, status="ready", reloaded=datetime.now().isoformat(timespec="seconds"))
+        self.bus.publish("engines", self.engines)
+        return new
+
+    def _maybe_recover(self, eng, audio, res: dict, prompt: str):
+        """-> (engine, result). Only while a dashboard is open (owner): a suspect final -> check the engine on the
+        reference; broken -> reload and read the transmission again. A good final becomes the new reference."""
+        n = self._words(res.get("text"))
+        if n >= 4 and len(audio) <= 15 * SR:
+            self._canary = (audio, n)
+            return eng, res
+        if (n > 1 or len(audio) < self.SUSPECT_S * SR or not self.dashboard_open()
+                or time.time() - self._engine_reload_at < self.RELOAD_EVERY_S or not self._engine_broken(eng)):
+            return eng, res
+        eng = self._reload_final(eng, f"read {len(audio) / SR:.1f} s as {res.get('text')!r} and failed the reference")
+        try:
+            again = eng.transcribe(audio, prompt=prompt)
+            print(f"live engine: read again: {again.get('text', '')[:80]!r}", flush=True)
+            return eng, again
+        except Exception:  # noqa: BLE001
+            return eng, res
+
     def _partial_worker(self):
         try:
             eng = self._partial_factory()
@@ -1604,6 +1677,12 @@ class Station:
             self.engines["partial_error"] = str(e); return
         self.engines["partial"] = eng.name
         while not self.stop.is_set():
+            if self._partial_reload:
+                self._partial_reload = False
+                try:
+                    new = self._partial_factory(); self._warm(new); del eng; eng = new
+                except Exception as e:  # noqa: BLE001
+                    print(f"partial engine: reload failed: {type(e).__name__}: {e}", flush=True)
             if not self.partial_ev.wait(0.5):
                 continue
             self.partial_ev.clear()
@@ -1633,13 +1712,19 @@ class Station:
             try:
                 tid, audio = self.final_q.get(timeout=0.5)
             except queue.Empty:
+                if self._engine_check:                  # a dashboard just opened: is the live engine still good?
+                    self._engine_check = False
+                    if time.time() - self._engine_reload_at >= self.RELOAD_EVERY_S and self._engine_broken(eng):
+                        eng = self._reload_final(eng, "failed the reference when the dashboard opened")
                 continue
             self._final_busy = True
             try:
                 t = time.time()
                 tx = self._find(tid)
                 clean = self.clean(tx and tx["radio"], audio)
-                res = eng.transcribe(clean, prompt=self.prompt_for(tx and tx["radio"]))
+                prompt = self.prompt_for(tx and tx["radio"])
+                res = eng.transcribe(clean, prompt=prompt)
+                eng, res = self._maybe_recover(eng, clean, res, prompt)
                 res = self._check_own_call(eng, tx, clean, res)
                 self.finish(tid, res, round(time.time() - t, 2))
             finally:

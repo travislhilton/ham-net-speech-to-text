@@ -55,6 +55,12 @@ nets costs nothing. **Settings → Full speed and screen on**: *during nets and 
 whole time a radio listens* (`listening`: with a radio always on and no schedule, that is around the clock — the
 owner's laptop stayed lit all evening that way), *always*, *never* (`off`); `keep_awake:` in `station.yaml` is the
 starting value, `keep_awake_quiet_min:` (10) the minutes after traffic.
+**While the dashboard is open in a browser** (any tab, and for 2 minutes after the last one closes) the default
+also holds the whole time a radio listens, and the station checks its live engine: when a transmission of 3 s or more
+comes back as one word or nothing, it re-reads a recent transmission that read well; if the engine cannot read that
+any more, it loads a fresh one and reads the transmission again (logged as "live engine: … reloading it"; at most
+once per 5 minutes). The same check runs when a dashboard is opened. Measured on the test laptop: after Modern
+Standby between transmissions, its live engine wrote "The." for every transmission until it was reloaded.
 With "Listen only during nets" on a radio, the HamNet plan is on only during nets. Between nets the station keeps
 running in Modern Standby (it answered every 30 s with the screen off). The NPU is not used: with OpenVINO 2026.4 its Whisper pipeline refused the
 station's callsign prompt and the large models did not finish compiling for it; at full speed the graphics did the
@@ -461,6 +467,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
 | Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | working (home server; synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
 | Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | working on both station PCs (i5-12600H desktop: final text only; Core Ultra laptop: large-v3 on the GPU at 0.34× real time), see "The accurate pass on this PC" |
+| Live engine checked while a dashboard is open: a clear transmission read as one word re-checks the engine on a recent good read and reloads it if broken (`station/core.py`) | working (a fake engine in the tests; the failure seen once after Modern Standby) |
 | Full speed while transcribing on laptops: your power plan + mode saved, the installer's HamNet Station plan + Best performance + the screen held on during nets and traffic (+10 min; Settings: or the whole time a radio listens / always / never) or while the accurate pass has work, all put back after (and at the next start after a crash; left on the HamNet plan with nothing saved, it goes back to Windows' Balanced plan and your power mode) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
 | Compiled-model cache for the live engine (`data/ov-cache`, shared with the accurate pass) | working; test laptop: turbo on the GPU 36 s → 16 s to load, small.en on the NPU 555 s → 11 s |
 | Over-the-air transcription test with word-error score and history | working |

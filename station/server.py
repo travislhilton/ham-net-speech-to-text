@@ -241,6 +241,7 @@ def make_handler(station):
 
         def _events(self):
             q = station.bus.subscribe()
+            station.viewer(True)                               # a dashboard is open (keep awake + engine check)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-store")
@@ -258,6 +259,7 @@ def make_handler(station):
                 pass
             finally:
                 station.bus.unsubscribe(q)
+                station.viewer(False)
                 self.close_connection = True
 
         def _emit(self, kind, data):
