@@ -448,7 +448,9 @@ you chose is remembered. Each column shows:
   with the live text a click away. The Winlink window says the same thing: send now with the live text, or
   wait; when the pass finishes it offers **Load the accurate text** (the forms then use it). If the home server is
   unreachable the header says so and the station tries again every 2 minutes. The upload key goes in
-  `config\secrets.env` as `EMCOMM_STT_KEY=…` (kept across updates, never in git).
+  `config\secrets.env` as `EMCOMM_STT_KEY=…` (kept across updates, never in git). Transmissions from before
+  yesterday (no longer in memory) can be run by id: `POST /api/accurate {"ids": ["…"]}` (up to 50; loaded from
+  the history index, kept off the live feed).
   **Without the home server** (any other operator's station, another network, no internet at all) the same pass
   runs **on the station PC itself**, on its spare compute, when the installer's benchmark says the PC can do it
   (see "The accurate pass on this PC" below). The header and the transcript's tooltip say where each text was

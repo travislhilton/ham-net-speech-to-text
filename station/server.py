@@ -244,6 +244,8 @@ def make_handler(station):
                     return self._json(station.winlink_send(body))
                 if u.path == "/api/test":
                     return self._json(station.score_test(body.get("radio"), body.get("tx")))
+                if u.path == "/api/accurate" and body.get("ids"):          # older transmissions, by id
+                    return self._json({"jobs": station.accurate_past(body["ids"])})
                 if u.path == "/api/accurate":
                     return self._json(station.accurate_now(body.get("radio"), body.get("start"), body.get("end"),
                                                            bool(body.get("force"))))

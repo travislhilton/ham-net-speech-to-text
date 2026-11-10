@@ -676,7 +676,7 @@ class Station:
         from .consensus import calls_of
         old, self.heard = self.heard, {}
         for tx in self.tx:
-            if tx.get("status") != "final":
+            if tx.get("status") != "final" or tx.get("past"):
                 continue
             for c in calls_of(tx):                       # corrected > agreed (accurate) > live
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"],
@@ -918,6 +918,8 @@ class Station:
         accurate pass status and the Winlink time span all need the net's first transmission."""
         out, n = [], {}
         for t in reversed(self.tx):
+            if t.get("past"):                                    # an older day's, here only for the accurate pass
+                continue
             r = t.get("radio")
             if n.get(r, 0) < per_radio:
                 n[r] = n.get(r, 0) + 1
@@ -963,7 +965,7 @@ class Station:
                 self._rebuild_heard()
                 tx = dict(tx)
             self._log({"update": tid, "accurate_echo": echo})
-            self.bus.publish("tx", tx)
+            (tx.get("past") or self.bus.publish("tx", tx))
             return
         validate = self.callbook.validate if self.callbook else None
         text, calls = normalize(res.get("text", ""), roster=self.roster, validate=validate)
@@ -986,7 +988,7 @@ class Station:
                     self.heard[c]["card"] = self.callbook.card(c) if self.callbook else {"call": c, "sources": []}
             tx = dict(tx)
         self._log({"update": tid, "accurate": acc})
-        self.bus.publish("tx", tx)
+        (tx.get("past") or self.bus.publish("tx", tx))
         self.bus.publish("heard", {"heard": self.heard_list()})
         if tx.get("status") == "final":
             self._hear_close(tx)                                 # a close the live text garbled
@@ -1272,6 +1274,26 @@ class Station:
                 print(f"consensus: {type(e).__name__}: {e}", flush=True)
         self._agree_thread = threading.Thread(target=run, daemon=True, name="consensus")
         self._agree_thread.start()
+
+    def accurate_past(self, ids) -> list[dict]:
+        """Run the final accurate pass on transmissions older than the ones kept in memory (yesterday + today), by id:
+        each is loaded from the history index for the run, then handled exactly like a recent one (echo / loop / noise
+        checks, callsign fixes, an update line in today's log that the history picks up)."""
+        h = getattr(self, "history", None)
+        if not h:
+            raise ValueError("the history index is not ready yet")
+        ids = [str(i) for i in ids or []][:50]
+        jobs = []
+        for tid in ids:
+            raw = h.tx_raw(tid)
+            if not raw or not raw.get("wav") or raw.get("radio") not in self.radios:
+                raise ValueError(f"transmission {tid}: not found, no recording, or its radio is gone")
+            with self.lock:
+                if not self._find(tid):
+                    raw["past"] = True                         # not one of today's: the live feed leaves it out
+                    self.tx.append(raw)
+            jobs.append(self.accurate.submit(raw["radio"], raw["start"], raw["start"], force=True))
+        return jobs
 
     def accurate_now(self, rid: str, start: str | None = None, end: str | None = None, force=False) -> dict:
         from . import ics

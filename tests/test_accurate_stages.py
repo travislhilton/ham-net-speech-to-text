@@ -156,3 +156,29 @@ def test_final_pass_waits_two_quiet_minutes_by_default():
     from station.accurate import AccuratePass
     import inspect
     assert 'cfg.get("final_after_min", 2)' in inspect.getsource(AccuratePass)
+
+
+def test_an_older_transmission_by_id(tmp_path):
+    """POST /api/accurate {ids}: a transmission no longer in memory (an older day) is loaded from the history index,
+    given the final pass like a recent one, and kept off the live feed and the stations-heard list."""
+    r = ContextRemote()
+    st = _station(tmp_path, r, ["W9XYZ. This is W9XYZ."])
+    try:
+        st.inject("ftm", np.zeros(16000 * 2, np.float32))
+        assert wait_for(lambda: st.tx and st.tx[-1]["status"] == "final" and st.tx[-1].get("accurate"))
+        tid = st.tx[-1]["id"]
+        assert wait_for(lambda: not _busy(st))
+        assert wait_for(lambda: st.history.tx_raw(tid) is not None)
+        with st.lock:
+            st.tx.clear()                                         # a day ago: no longer in memory
+        jobs = st.accurate_past([tid])
+        assert len(jobs) == 1 and jobs[0]["total"] == 1
+        assert wait_for(lambda: (st._find(tid) or {}).get("accurate", {}).get("stage") == "final"
+                        and not _busy(st))
+        assert st._find(tid)["past"] and tid not in [t["id"] for t in st._recent_tx()]
+        assert "K7ABC" not in st.heard                            # an older day's calls are not "heard now"
+        import pytest
+        with pytest.raises(ValueError):
+            st.accurate_past(["no-such-id"])
+    finally:
+        st.stop.set()
