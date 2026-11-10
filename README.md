@@ -301,7 +301,7 @@ you chose is remembered. Each column shows:
 - **HF scan** (a radio the station tunes by CAT, with its HF antenna on): **Scan Off / On / Auto** on the radio's
   card. **On** scans in the gaps between nets; **Auto** also scans while a scheduled net has been quiet for 10
   minutes. A net always comes first (scanning stops 5 minutes before one starts). Each pass picks a band open at this
-  hour (night 80/40/160 m, morning 40/80/20, midday 20/17/15/40/12/10, late afternoon 20/40/17/15, evening 40/80/20)
+  hour (night 80/40/160 m, morning 40/80/20, midday 20/17/15/40/12/10, late afternoon 20/40/17/15, evening 40/80/160/20)
   among the bands the antenna works on (**Inverted V…** on the card: its name and bands), tries frequencies
   remembered for this hour first, then sweeps the band's phone segment — cut to your license class's phone
   privileges (Settings → Station agent → license class; a General scans 3.800–4.000, 7.175–7.300, 14.225–14.350,

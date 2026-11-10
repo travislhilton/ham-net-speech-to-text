@@ -28,6 +28,7 @@ def test_bands_follow_the_hour_and_the_antenna():
     assert bands_now(21, ["80", "40", "20"]) == ["40", "80", "20"]
     assert bands_now(12, ["40", "20"]) == ["20", "40"]
     assert bands_now(12, ["160"]) == []
+    assert bands_now(21, ["80", "40", "160"]) == ["40", "80", "160"]                  # 160 m opens in the evening too
 
 
 def test_candidates_are_peaks_above_the_floor_one_per_6_khz():

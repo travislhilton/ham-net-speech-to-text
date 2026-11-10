@@ -36,7 +36,7 @@ BANDS = {  # US phone segments (receive: anyone's conversations), sideband by co
 BY_HOUR = [  # local hour ranges -> bands most likely open from mid-latitude North America (best first)
     (range(0, 6), ["80", "40", "160"]), (range(6, 9), ["40", "80", "20"]),
     (range(9, 16), ["20", "17", "15", "40", "12", "10"]), (range(16, 19), ["20", "40", "17", "15"]),
-    (range(19, 24), ["40", "80", "20"]),
+    (range(19, 24), ["40", "80", "160", "20"]),
 ]
 DEFAULT_ANTENNA = {"name": "HF antenna", "bands": ["80", "40", "20", "17", "15", "12", "10"]}
 STEP_KHZ = 3.0
