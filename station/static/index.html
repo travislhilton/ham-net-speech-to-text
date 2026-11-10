@@ -2087,11 +2087,12 @@ function renderAgentSet(){
     <label for="agName">On-air name</label><input id="agName" value="${esc(s.name||"")}" maxlength="24" placeholder="Echo">
     <label for="agOp">Your first name</label><input id="agOp" value="${esc(s.operator||"")}" maxlength="24" placeholder="(said as control operator)">
     <label for="agCheck">Your check-in line</label><input id="agCheck" value="${esc(s.checkin||"")}" maxlength="120" placeholder="This is ${esc(AG.call||"N0CALL")}, …">
+    <label for="agSta">This station is</label><input id="agSta" value="${esc(s.station||"")}" maxlength="120" placeholder="a fixed home station on land (not mobile, not maritime), no traffic">
     <label for="agClass">License class</label><select id="agClass">${opt("","(not set: privileges not checked)",!s.license_class)}${(AG.classes||[]).map(c=>opt(c,c[0].toUpperCase()+c.slice(1),s.license_class===c)).join("")}</select>
     <label for="agModel">Model</label><select id="agModel">${(AG.models||[]).map(m=>opt(m.id,m.label+(m.ready?"":" (no key)"),s.model===m.id)).join("")}</select>
     <span>Compare with</span><span class="cmp">${(AG.models||[]).filter(m=>m.id!==s.model).map(m=>`<label><input type="checkbox" data-agcmp="${esc(m.id)}"${(s.compare||[]).includes(m.id)?" checked":""}${m.ready?"":" disabled"}> ${esc(m.label)}${m.ready?"":" (no key)"}</label>`).join("")}</span>
   </div><button type="button" id="agSave">Save agent settings</button> <span class="muted">Spoken ID: ${esc(AG.call||"")} (${esc(AG.phonetic||"")})</span>`;
-  $("agSave").onclick=()=>agPost("/api/agent/settings",{name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,license_class:$("agClass").value,model:$("agModel").value,
+  $("agSave").onclick=()=>agPost("/api/agent/settings",{name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,license_class:$("agClass").value,model:$("agModel").value,
     compare:[...box.querySelectorAll("[data-agcmp]:checked")].map(x=>x.dataset.agcmp)})}
 async function renderKeys(msg){
   const box=$("keySet");let d;try{d=await api("/api/secrets")}catch(e){box.textContent=e.message;return}

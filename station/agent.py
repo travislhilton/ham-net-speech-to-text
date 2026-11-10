@@ -100,13 +100,18 @@ Speak ONLY when:
   net: check in briefly, adapting the check-in line if one is given. Some nets are only for certain stations
   (maritime mobile and its relays, a club's members, a served agency, stations with traffic, a roll call by name):
   if the net's purpose does not include an ordinary home station like this one, stay silent. Operators talking to
-  each other, handing over net control or asking someone else to make calls are NOT a call for check-ins;
+  each other, handing over net control or asking someone else to make calls are NOT a call for check-ins. When net
+  control calls for a category of station ("maritime mobiles", "mobiles", "stations with traffic", "members",
+  "emergency stations", a region), check in only if THIS station (described below) is in that category;
 - someone calls {call} or {name} directly, or asks this station a question: answer it, briefly;
 - net control acknowledges or recognizes {call} and expects an answer;
 - the copy was too poor to answer: ask them to say again (kind say_again);
 - you need a moment to look something up: say "stand by one" (kind stand_by), then answer next time.
 Otherwise stay silent (speak false, kind none). Never break into another conversation, never call CQ, never talk \
 just to fill silence. During emergency or priority traffic stay silent unless net control asks this station directly.
+
+First transmission in a contact, shaped like: "{call}, {name}, an automated assistant, {op} is control operator, \
+<the rest>" (say the call once at the start; repeat it at the end only when identification is due).
 
 Voice protocol: use the other station's call when answering; "over" only on HF when turn-taking is unclear; standard \
 phonetics for calls and spelled words; plain language, no Q-codes except common ones (QSL, QRZ, QTH) used naturally; \
@@ -258,7 +263,7 @@ class Agent:
         self.path = station.data / "agent.json"
         self.log_path = station.data / "agent_drafts.jsonl"
         self.lock = threading.Lock()
-        self.cfg = {"name": "Echo", "checkin": "", "operator": "", "license_class": "", "model": DEFAULT_MODEL,
+        self.cfg = {"name": "Echo", "checkin": "", "operator": "", "station": "", "license_class": "", "model": DEFAULT_MODEL,
                     "compare": [], "radios": {}}
         try:
             self.cfg.update(json.loads(self.path.read_text(encoding="utf-8")))
@@ -277,9 +282,9 @@ class Agent:
 
     def settings(self, body: dict) -> dict:
         with self.lock:
-            for k in ("name", "checkin", "operator"):
+            for k in ("name", "checkin", "operator", "station"):
                 if k in body:
-                    v = re.sub(r"\s+", " ", str(body[k] or "")).strip()[:120 if k == "checkin" else 24]
+                    v = re.sub(r"\s+", " ", str(body[k] or "")).strip()[:120 if k in ("checkin", "station") else 24]
                     if k == "name" and not re.fullmatch(r"[A-Za-z][A-Za-z .'-]{0,23}", v):
                         raise ValueError("the name is letters only (it is spoken on the air)")
                     self.cfg[k] = v
@@ -380,6 +385,7 @@ class Agent:
             who = t.get("speaker") or (t.get("callsigns") or ["?"])[0]
             lines.append(f"[{str(t.get('start', ''))[11:19]}] {who}: {t.get('text', '').strip()}")
         user = "\n".join([
+            f"This station: {self.cfg.get('station') or 'a fixed home station on land (not mobile, not maritime), no traffic to pass'}.",
             f"Frequency: {r.get('freq_mhz') or '?'} MHz {r.get('mode') or ''}",
             f"Net: {net.get('name') or 'none scheduled now'}" + (f", net control {net['ncs']}" if net.get("ncs") else ""),
             f"Check-in line (the operator's own words, adapt them for yourself): {self.cfg.get('checkin') or '(none)'}",
