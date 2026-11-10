@@ -172,7 +172,7 @@ def check(doc) -> dict:
 def script(doc: dict, call: str, phonetic_call: str) -> list[dict]:
     """The voice script: sections of 30-45 s, each ending with the call (a break for questions)."""
     src, ev = doc["source"], doc["source"]["event"]
-    eoc = spoken_names(src["eoc"].get("name") or "the E-O-C")
+    eoc = spoken_names(src["eoc"].get("name") or "E-O-C")  # the template says "the {eoc}"
     ex = bool(ev.get("exercise"))
     rep, inc, pace = doc["reporting"], doc["incident"], doc.get("pace") or {}
     unit = rep.get("unit_word") or "ward"
@@ -197,7 +197,8 @@ def script(doc: dict, call: str, phonetic_call: str) -> list[dict]:
     out[-1]["words"] = len(out[-1]["text"].split())
     out[-1]["seconds"] = round(out[-1]["words"] / 2.3)
 
-    s = f"Situation report from the {eoc}, as of {clock_words(doc.get('as_of'))} local."
+    # as_of is null on an event with no reports yet: the report is then as of the time it was made
+    s = f"Situation report from the {eoc}, as of {clock_words(doc.get('as_of') or doc.get('generated_at'))} local."
     if inc.get("type") or inc.get("area"):
         s += f" Incident: {spoken_names(', '.join(x for x in (inc.get('type'), inc.get('area')) if x))}."
     if pace.get("level") in PACE:

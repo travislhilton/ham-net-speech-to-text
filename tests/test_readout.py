@@ -65,6 +65,16 @@ def test_missing_is_not_reported_never_zero():
     assert "Homes destroyed: not reported" in t and "Volunteers: not reported" in t
 
 
+def test_a_new_event_with_no_reports_reads_cleanly():
+    # first real EOC fetch: no EOC name, as_of null (nothing reported yet) -> "the the E-O-C ... as of not reported"
+    d = copy.deepcopy(fx("typical"))
+    d["source"]["eoc"]["name"] = None
+    d["as_of"], d["generated_at"] = None, "2026-11-10T14:19:57-07:00"
+    t = " ".join(s["text"] for s in script(d, "W9XYZ", "W9XYZ"))
+    assert "the the" not in t and "the E-O-C situation report" in t
+    assert "as of fourteen nineteen local" in t and "not reported local" not in t
+
+
 def test_injuries_missionaries_and_people_are_refused():
     for key, val in (("injured", 3), ("missionaries", {"ok": 5}), ("submitter_phone", "x")):
         d = fx("typical")
