@@ -71,3 +71,13 @@ def test_misheard_phonetics_count_only_when_the_call_is_known():
         assert normalize(heard, validate=known)[1] == ["KX9QZV"], heard
     assert normalize("Helo X-ray 9, Quebec Zulu Victor", validate=lambda c: False)[1] == []   # unknown: not taken
     assert normalize("Yanky 9 Alpha Bravo Charlie", validate=lambda c: False)[1] == []
+
+
+def test_fox_and_the_2026_11_09_mishearings():
+    """'Fox' is said for Foxtrot and always counts; 'Gila'/'Cilo' (Kilo) and 'Indy' (India) count only when the call
+    is known (2026-11-09 nets). KX7FQZ and KX7QZI: unassigned in the FCC data."""
+    assert normalize("I got Kilo X-ray 7 Fox, Quebec, Zulu, thanks for checking in.")[1] == ["KX7FQZ"]
+    known = {"KX7QZI"}.__contains__
+    for heard in ("So this is Gila X-ray 7 Quebec Zulu Indy calling the net.", "Cilo X-ray 7, Quebec, Zulu, Indy."):
+        assert normalize(heard, validate=known)[1] == ["KX7QZI"], heard
+        assert normalize(heard, validate=lambda c: False)[1] == [], heard   # unknown: not taken

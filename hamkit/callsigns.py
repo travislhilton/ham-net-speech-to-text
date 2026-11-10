@@ -12,6 +12,7 @@ PHON = {
  "alpha":"A","alfa":"A","bravo":"B","charlie":"C","delta":"D","echo":"E","foxtrot":"F","golf":"G",
  "hotel":"H","india":"I","juliet":"J","juliett":"J","kilo":"K","lima":"L","mike":"M","november":"N",
  "oscar":"O","papa":"P","quebec":"Q","romeo":"R","sierra":"S","tango":"T","uniform":"U","victor":"V",
+ "fox":"F",   # many operators say "Fox" for Foxtrot (an HF net, 2026-11-09)
  "whiskey":"W","x-ray":"X","xray":"X","yankee":"Y","zulu":"Z",
  "zero":"0","one":"1","two":"2","three":"3","four":"4","five":"5","six":"6","seven":"7","eight":"8",
  "nine":"9","niner":"9",
@@ -21,7 +22,9 @@ PHON = {
 # database / roster knows it, so a name ("Sheila") never makes up a callsign.
 FUZZY = {"helo": "K", "hilo": "K", "keelo": "K", "kiloh": "K", "sheila": "K", "kylo": "K", "yanky": "Y", "yankey": "Y",
          "yanki": "Y", "whisky": "W", "charley": "C", "siera": "S", "juliette": "J", "foxtrott": "F", "xray": "X",
-         "romio": "R", "oskar": "O", "lema": "L", "leema": "L", "victer": "V", "tengo": "T", "hotell": "H"}
+         "romio": "R", "oskar": "O", "lema": "L", "leema": "L", "victer": "V", "tengo": "T", "hotell": "H",
+         # 2026-11-09 (a 2-m net and an HF net): "Gila" and "Cilo" for Kilo, "Indy" for India
+         "gila": "K", "cilo": "K", "indy": "I"}
 FUZZY = {k: v for k, v in FUZZY.items() if k not in PHON}
 # A run of 4-7 tokens, each a phonetic word or a bare digit (Whisper often writes "Kilo 7"),
 # separated by spaces, hyphens or commas ("Kilo 7, Alpha Bravo Charlie").
