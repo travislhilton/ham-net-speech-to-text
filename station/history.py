@@ -135,6 +135,9 @@ class History:
             self.con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS item_fts USING fts5(text, who, place)")
         self.status = {"indexing": False, "days": 0, "fts": self.fts}
         self._urgent_sig = None
+        row = self.con.execute("SELECT v FROM meta WHERE k='tx_index'").fetchone()
+        if not row or row[0] != "2":
+            self._reindex()
 
     def close(self):
         with self.lock:
@@ -209,11 +212,40 @@ class History:
         old = self.con.execute("SELECT inst FROM tx WHERE id=?", (str(e["id"]),)).fetchone()
         self._put(e, old["inst"] if old else self._assign(e))
 
+    @staticmethod
+    def _searchable(raw: dict, v: dict) -> tuple[str, list]:
+        """What search reads besides the shown text: the live draft and its callsigns only until the accurate pass
+        has read the transmission. The live prompt spelled the operator's own call and wrote it into other people's
+        transmissions (fixed 2026-11-06, 3e2a9af); the accurate text did not have it, but search still found the call
+        in the live draft (owner 2026-11-10: "None of them say <my call>")."""
+        if raw.get("accurate"):
+            return "", list(dict.fromkeys(v.get("callsigns") or []))
+        return raw.get("text") or "", list(dict.fromkeys(list(v.get("callsigns") or []) + list(raw.get("callsigns") or [])))
+
+    def _reindex(self):
+        """Once: rebuild the callsigns and the search index of every transmission under _searchable."""
+        rows = self.con.execute("SELECT rowid, raw FROM tx").fetchall()
+        for r in rows:
+            try:
+                raw = json.loads(r["raw"])
+            except (TypeError, ValueError):
+                continue
+            v = ics.view(raw)
+            live, calls = self._searchable(raw, v)
+            self.con.execute("UPDATE tx SET calls=? WHERE rowid=?", (" " + " ".join(calls) + " ", r["rowid"]))
+            if self.fts:
+                self.con.execute("DELETE FROM tx_fts WHERE rowid=?", (r["rowid"],))
+                self.con.execute("INSERT INTO tx_fts(rowid, text, live, calls) VALUES(?,?,?,?)",
+                                 (r["rowid"], v.get("text") or "", live,
+                                  " ".join(calls + ([v["speaker"]] if v.get("speaker") else []))))
+        self.con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('tx_index', '2')")
+        self.con.commit()
+
     def _put(self, raw: dict, key: str):
         v = ics.view(raw)
         acc = raw.get("accurate") or raw.get("accurate_echo")
         stage = (acc.get("stage") or "final") if acc else None
-        calls = list(dict.fromkeys(list(v.get("callsigns") or []) + list(raw.get("callsigns") or [])))
+        live_idx, calls = self._searchable(raw, v)
         args = (str(raw["id"]), raw.get("radio"), raw["start"], raw.get("freq_mhz"), raw.get("duration_s"),
                 v.get("text") or "", raw.get("text") or "", " " + " ".join(calls) + " ", v.get("speaker"),
                 v.get("speaker_how"), 1 if v.get("noise") else 0, stage, raw.get("wav"), key, json.dumps(raw),
@@ -229,7 +261,7 @@ class History:
         if self.fts:
             self.con.execute("DELETE FROM tx_fts WHERE rowid=?", (rowid,))
             self.con.execute("INSERT INTO tx_fts(rowid, text, live, calls) VALUES(?,?,?,?)",
-                             (rowid, v.get("text") or "", raw.get("text") or "",
+                             (rowid, v.get("text") or "", live_idx,
                               " ".join(calls + ([v["speaker"]] if v.get("speaker") else []))))
         t = raw["start"]
         self.con.execute("UPDATE inst SET start=MIN(COALESCE(start, ?), ?), end=MAX(COALESCE(end, ?), ?), dirty=1"
@@ -654,7 +686,8 @@ class History:
             else:
                 ww, aa = list(w), list(a)
                 for t in _words(q):
-                    ww.append("(tx.text LIKE ? OR tx.live_text LIKE ? OR tx.calls LIKE ?)")
+                    ww.append("(tx.text LIKE ? OR (json_extract(tx.raw, '$.accurate') IS NULL AND tx.live_text LIKE ?)"
+                              " OR tx.calls LIKE ?)")
                     aa += [f"%{t}%"] * 3
                 where = " AND ".join(ww) or "1"
                 base = f"FROM tx LEFT JOIN inst ON inst.key=tx.inst WHERE {where}"

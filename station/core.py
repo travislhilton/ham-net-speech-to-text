@@ -30,7 +30,8 @@ SR = 16000
 
 
 def own_call_in(text: str, me: str) -> bool:
-    return bool(me) and me in re.sub(r"[^A-Z0-9 ]", " ", (text or "").upper()).split()
+    """The operator's call, or the call with something stuck on it ("W9XYZ6", "W9XYZLHLH": a prompt echo)."""
+    return bool(me) and any(w.startswith(me) for w in re.sub(r"[^A-Z0-9 ]", " ", (text or "").upper()).split())
 
 
 def own_call_shown(text: str, me: str) -> bool:

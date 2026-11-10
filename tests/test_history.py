@@ -288,3 +288,36 @@ def test_station_api_and_winlink_minutes(tmp_path):
         assert pv["inst"] == "ares@2026-11-03" and msg.startswith("Springfield ARES Net") and "Action items:" in msg
     finally:
         srv.shutdown()
+
+
+def test_search_ignores_a_live_draft_the_accurate_pass_replaced(tmp_path):
+    """The live prompt once wrote the operator's own call into other people's transmissions; the accurate text did
+    not have it, but search still found it in the live draft (2026-11-10)."""
+    h = hist(tmp_path)
+    for e in lines([(0, "W9XYZ, roger, see you on the net.", ["W9XYZ"], []),
+                    (60, "W9XYZ, this is K7ABC.", ["W9XYZ", "K7ABC"], [])], TUESDAYS[-1], first_id=700):
+        h.ingest(e)
+    for fts in (True, False):
+        h.fts = fts
+        assert h.search("W9XYZ")["tx_total"] == 2 and h.search("", call="W9XYZ")["tx_total"] == 2
+    h.fts = True
+    h.ingest({"update": "700", "accurate": {"text": "Roger, see you on the net.", "callsigns": [], "stage": "final"}})
+    for fts in (True, False):
+        h.fts = fts
+        assert [t["id"] for t in h.search("W9XYZ")["tx"]] == ["701"]              # only the one that says it
+        assert h.search("", call="W9XYZ")["tx_total"] == 1
+        assert h.search("roger")["tx_total"] == 1
+    h.fts = True
+    # an index built before this rule is rebuilt once on open
+    h.con.execute("UPDATE tx SET calls=' W9XYZ ' WHERE id='700'")
+    h.con.execute("UPDATE meta SET v='1' WHERE k='tx_index'")
+    h.con.commit()
+    h.close()
+    again = hist(tmp_path)
+    assert again.search("", call="W9XYZ")["tx_total"] == 1
+
+
+def test_own_call_check_catches_a_call_with_something_stuck_on():
+    from station.core import own_call_in
+    assert own_call_in("W9XYZ6 Romeo Papa Johnson.", "W9XYZ") and own_call_in("this is w9xyz-7", "W9XYZ")
+    assert not own_call_in("K7ABC, roger.", "W9XYZ") and not own_call_in("W9XY roger", "W9XYZ")
