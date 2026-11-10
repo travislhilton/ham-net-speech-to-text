@@ -72,6 +72,8 @@ def proposals(rows: list[dict]) -> list[dict]:
     seen: dict[tuple, dict] = {}
     for raw in rows:
         c = raw.get("corrected") or {}
+        if c.get("noise"):                         # marked Not speech: no words were corrected
+            continue
         mine = set()
         for s in substitutions(original_of(raw), c.get("text") or ""):
             k = (s["heard"], s["say"])
@@ -178,6 +180,7 @@ def accuracy(rows: list[dict], me: str | None = None, radios: dict | None = None
     """WER of each text against the correction, overall and per radio / mode / net: errors / reference words
     (a pooled rate, so a long transmission counts for its length)."""
     radios = radios or {}
+    rows = [r for r in rows if not (r.get("corrected") or {}).get("noise")]   # Not speech: nothing to score
     groups: dict[tuple, dict] = {}
 
     def add(kind, name, src, r):

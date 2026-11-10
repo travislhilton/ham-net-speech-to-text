@@ -531,7 +531,7 @@ function txHtml(t0){
   const a=t0.accurate,c=t0.status==="final"?t0.corrected:null;   // corrected > agreed accurate > live (station/ics.py view)
   const t1=a&&t0.status==="final"?{...t0,text:a.text,callsigns:a.callsigns,speaker:a.speaker,noise:a.noise,corrections:a.corrections,maybe:a.maybe}:t0;
   const k=!c&&t0.status==="final"&&t0.consensus;   // net-wide agreement (station/consensus.py), never over a correction
-  const t=c?{...t0,text:c.text,callsigns:c.callsigns,speaker:c.speaker,noise:false,corrections:[],maybe:[]}
+  const t=c?{...t0,text:c.text,callsigns:c.callsigns,speaker:c.speaker,noise:!!c.noise,corrections:[],maybe:[]}
     :k?{...t1,callsigns:k.callsigns,text:k.text||t1.text,corrections:[...(t1.corrections||[]),...(k.moved||[])]}:t1;
   const editing=t0.status==="final"&&FIX&&FIX.where==="log"&&FIX.id===t0.id;
   const fx=Object.fromEntries((t.corrections||[]).map(f=>[f.call,f]));  // near-miss corrections: keep what was heard
@@ -548,6 +548,7 @@ function txHtml(t0){
   if(editing) body=fixEdHtml({id:t0.id,text:bestText(t0),corrected:c,wav:t0.wav,duration_s:t0.duration_s,was:c?c.from:""});
   else if(t.status==="live") body=`<div class="text partial">${esc(t.partial)||"…"} <span class="live">● receiving</span></div>`;
   else if(t.status==="transcribing") body=`<div class="text partial">${esc(t.partial)} <span class="muted">transcribing…</span></div>`;
+  else if(c&&c.noise) body=`<div class="text noise" title="You marked this Not speech: it is left out of search, the minutes and stations heard">${esc(t.text||"")} <span class="small">· not speech (marked by you)</span> ${noiseUndo(t0.id)}</div>`;
   else if(t.noise) body=`<div class="text noise" title="Whisper's usual words for noise; press ▶ to listen">${esc(t.text||"")} <span class="small">· probably noise</span></div>`;
   else body=`<div class="text">${markTerms(t.text,t.terms)||'<span class="muted">(no words recognized)</span>'}${c?" "+cmark(t0.id,c):""}</div>`+
     (t.terms&&t.terms.length?`<div class="terms gloss">${t.terms.map(x=>`<b>${esc(x.term)}</b> ${esc(x.means)}`).join(" · ")}</div>`:"")+
@@ -556,7 +557,7 @@ function txHtml(t0){
   if(t0.morse&&t0.morse.length&&!editing){         // Morse code (CW): station/morse.py
     const cw=morseHtml(t0.morse);
     body=t0.kind==="cw"&&!c?cw:body+cw}
-  if(c&&!editing)body+=`<details class="livetext"><summary>✎ corrected by you<span class="lt"> at ${hhmm(c.at)}</span> · the station's text</summary>${a?`<div>Accurate: ${esc(a.text||"")}</div>`:""}<div>Live: ${esc(t0.text||"")}</div></details>`;
+  if(c&&!c.noise&&!editing)body+=`<details class="livetext"><summary>✎ corrected by you<span class="lt"> at ${hhmm(c.at)}</span> · the station's text</summary>${a?`<div>Accurate: ${esc(a.text||"")}</div>`:""}<div>Live: ${esc(t0.text||"")}</div></details>`;
   else if(a&&t0.status==="final"&&!editing)body+=`<details class="livetext"><summary title="${esc(a.model||"home server")}">${a.stage==="provisional"?"≈ accurate<span class=\"lt\"> (provisional: the final pass runs when the net ends)</span>":`✓ accurate<span class="lt"> pass (${esc(a.model||"home server")})</span>`} · live text</summary>${esc(t0.text||"")}</details>`;
   const play=t.wav&&t.status==="final"?`<button data-play="${esc(t.id)}" title="Play the recording">▶ ${t.duration_s?Math.round(t.duration_s)+" s":""}</button>`:"";
   const pend=S.accurate_available&&t0.status==="final"&&t0.wav&&accStage(t0)!=="final";   // waiting may improve it (a provisional text too)
@@ -574,13 +575,21 @@ function morseHtml(runs){
 // live); the station learns fix-ups from repeated corrections (Settings → Learned fixes) and measures its accuracy
 // against them (Test transcription…). One editor at a time; its draft survives every re-render.
 let FIX=null;   // {id, where: "log" | "min", draft, err, focus}
+const noiseUndo=id=>`<button class="linkish small" data-noise="${esc(id)}" data-v="0" title="It was speech after all: use the station's text again">Undo</button>`;
+async function noiseMark(id,on){
+  try{const d=await post(`/api/tx/${enc(id)}/correct`,on?{noise:true}:{undo:true});
+    const where=FIX&&FIX.id===id?FIX.where:null;if(where)FIX=null;
+    if(S.tx.some(x=>x.id===d.id)){upsertTx(d);fixShow("log",d.id)}
+    if(where==="min"||$("netsDlg").open&&NV.tab==="minutes")renderMinutes();
+    learnBadge()}
+  catch(err){alert(err.message)}}
 const bestText=t=>(t.corrected&&t.corrected.text)||(t.accurate&&t.accurate.text)||t.text||"";
 const cmark=(id,c)=>`<button class="cmark" data-fix="${esc(id)}" title="Corrected by you${c.at?" at "+hhmm(c.at):""}. The station heard: ${esc(c.from||"")}. Tap to change or undo.">✎ corrected</button>`;
 function fixEdHtml(t){
   const v=FIX.draft??t.text,rows=Math.min(7,Math.max(2,Math.ceil(v.length/44)));
   return `<div class="fixer" data-fixer="${esc(t.id)}"><textarea class="fixta" rows="${rows}" aria-label="The words as they were said" spellcheck="true" autocapitalize="sentences">${esc(v)}</textarea>
    ${t.was?`<div class="fixwas">The station heard: ${esc(t.was)}</div>`:""}
-   <div class="fixrow"><button class="primary" data-fixsave="${esc(t.id)}">Save</button><button data-fixcancel>Cancel</button>${t.wav?`<button data-play="${esc(t.id)}" title="Listen while you correct it">▶ ${t.duration_s?Math.round(t.duration_s)+" s":"Play"}</button>`:""}${t.corrected?`<button data-fixundo="${esc(t.id)}" title="Forget my correction; use the station's text again">Undo correction</button>`:""}<span class="small muted fixhint">Enter saves · Esc cancels</span><span class="err" role="alert">${esc(FIX.err||"")}</span></div></div>`}
+   <div class="fixrow"><button class="primary" data-fixsave="${esc(t.id)}">Save</button><button data-fixcancel>Cancel</button>${t.wav?`<button data-play="${esc(t.id)}" title="Listen while you correct it">▶ ${t.duration_s?Math.round(t.duration_s)+" s":"Play"}</button>`:""}<button data-noise="${esc(t.id)}" data-v="1" title="Noise, an open squelch or a station's tail: no words, no callsigns; left out of search, the minutes and stations heard (Undo brings it back)">Not speech</button>${t.corrected?`<button data-fixundo="${esc(t.id)}" title="Forget my correction; use the station's text again">Undo correction</button>`:""}<span class="small muted fixhint">Enter saves · Esc cancels</span><span class="err" role="alert">${esc(FIX.err||"")}</span></div></div>`}
 function fixFocus(){const ta=document.querySelector(".fixer textarea");if(!ta||!FIX||!FIX.focus)return;FIX.focus=false;
   ta.focus({preventScroll:true});const n=ta.value.length;ta.setSelectionRange(n,n);ta.closest(".fixer").scrollIntoView({block:"nearest"})}
 function fixShow(where,id){ // redraw just the row (the log) or the minutes, with or without the editor
@@ -609,6 +618,7 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("click",e=>{
   const f=e.target.closest("[data-fix]");if(f){e.preventDefault();fixOpen(f.dataset.fix,f.closest("#netsBody")?"min":"log");return}
   const sv=e.target.closest("[data-fixsave]");if(sv){e.preventDefault();fixSave(sv.dataset.fixsave);return}
+  const nz=e.target.closest("[data-noise]");if(nz){e.preventDefault();noiseMark(nz.dataset.noise,nz.dataset.v==="1");return}
   const un=e.target.closest("[data-fixundo]");if(un){e.preventDefault();fixSave(un.dataset.fixundo,true);return}
   if(e.target.closest("[data-fixcancel]")){e.preventDefault();fixClose()}});
 // ---------- Learned fixes (Settings) ----------
@@ -1747,9 +1757,9 @@ async function renderMinutes(){
     return `<section class="msec k-${k}"><h4>${KIND[k]} <span class="muted">(${its.length})</span></h4><ul class="items">${its.map(i=>itemHtml(i,{from:i.inst!==d.key})).join("")}</ul></section>`};
   const carried=(d.carried||[]).map(i=>({...i}));
   const txrows=d.tx.map(t=>{const ed=FIX&&FIX.where==="min"&&FIX.id===t.id,c=t.corrected;
-    return `<li id="mtx-${esc(t.id)}" class="${t.noise&&!c?"noise":""}"><span class="t">${hhmm(t.start)}</span> <b>${esc(t.speaker||"")}</b> ${ed
+    return `<li id="mtx-${esc(t.id)}" class="${t.noise?"noise":""}"><span class="t">${hhmm(t.start)}</span> <b>${esc(t.speaker||"")}</b> ${ed
       ?fixEdHtml({id:t.id,text:t.text||"",corrected:c,wav:t.wav,duration_s:t.duration_s,was:c?c.from:""})
-      :`${esc(t.text||"")}${c?" "+cmark(t.id,c):""} ${t.wav?`<button data-play="${esc(t.id)}" title="Play">▶</button>`:""}${c?"":` <button class="fixb" data-fix="${esc(t.id)}" title="Correct the words">✎ Fix</button>`}`}</li>`}).join("");
+      :`${esc(t.text||"")}${c?" "+(c.noise?`<span class="small">· not speech</span> ${noiseUndo(t.id)}`:cmark(t.id,c)):""} ${t.wav?`<button data-play="${esc(t.id)}" title="Play">▶</button>`:""}${c?"":` <button class="fixb" data-fix="${esc(t.id)}" title="Correct the words">✎ Fix</button>`}`}</li>`}).join("");
   const keep=$("netsBody").dataset.mkey===d.key?{top:$("netsBody").scrollTop,open:[...$("netsBody").querySelectorAll("details[id]")].filter(x=>x.open).map(x=>x.id)}:null;
   $("netsBody").dataset.mkey=d.key;
   $("netsBody").innerHTML=`<div class="mhead">
@@ -2053,6 +2063,7 @@ async function openScan(rid,v){
    <p class="small muted">Between nets the station sweeps the HF phone bands open at this hour (on the bands your antenna works on), parks on signals above the noise, and keeps listening while there's a conversation. A net always comes first; turning the dial yourself pauses the scan for 30 minutes. Receive only.</p>
    <label>Antenna <input id="scAnt" value="${esc(ant.name||"")}" maxlength="40" placeholder="Inverted V"></label>
    <div class="bands small">Works on: ${Object.keys(v.bands).map(b=>`<label><input type="checkbox" data-scb="${b}"${(ant.bands||[]).includes(b)?" checked":""}>${b} m</label>`).join("")}</div>
+   <p class="small">${v.license_class?`Scans ${esc(v.license_class[0].toUpperCase()+v.license_class.slice(1))} phone only: ${Object.entries(v.bands).map(([b,x])=>`${b} m ${Number(x.from).toFixed(3)}–${Number(x.to).toFixed(3)}`).join(" · ")}`:"License class not set (Settings → Station agent): scans the whole phone segment of each band."}</p>
    <p class="small">Open now (by the hour): <b>${esc((v.now||[]).map(b=>b+" m").join(", "))}</b></p>
    <h4>Remembered frequencies</h4>${(v.spots||[]).length?`<table><tr><th>Frequency</th><th>Heard</th><th>Best hours</th><th>Calls</th><th></th></tr>${v.spots.map(s=>`<tr><td><b>${Number(s.freq_mhz).toFixed(3)}</b> ${esc(s.mode)}${s.pinned?" 📌":""}</td><td>${s.hits}× · ${esc((s.last||"").slice(5,16).replace("T"," "))}</td><td>${esc(Object.entries(s.hours||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]+":00").join(", "))}</td><td>${esc((s.calls||[]).slice(0,4).join(" "))}</td><td><button data-spot="${esc(s.key)}" data-do="${s.pinned?"unpin":"pin"}">${s.pinned?"Unpin":"Pin"}</button><button data-spot="${esc(s.key)}" data-do="hide">Hide</button></td></tr>`).join("")}</table>`:'<p class="small muted">None yet: frequencies with conversations are remembered here, by hour and day, and tried first next time.</p>'}
    <div class="row"><button id="scSave">Save</button> <button id="scClose">Close</button></div>`;

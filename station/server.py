@@ -223,10 +223,11 @@ def make_handler(station):
                                                                                   body.get("suggested"))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
-                if fix:                                         # {"text": ...} or {"undo": true}
+                if fix:                                         # {"text": ...}, {"undo": true} or {"noise": true}
                     try:
                         return self._json(with_who("tx", station.correct(fix.group(1), body.get("text"),
-                                                                         undo=bool(body.get("undo")))))
+                                                                         undo=bool(body.get("undo")),
+                                                                         noise=bool(body.get("noise")))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
                 if u.path == "/api/learned":                    # {"action": accept|ignore|unignore|remove, heard, say}

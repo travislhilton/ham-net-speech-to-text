@@ -679,6 +679,7 @@ class History:
             w.append("tx.start<?"); a.append((date.fromisoformat(to[:10]) + timedelta(days=1)).isoformat())
         if call:
             w.append("(tx.calls LIKE ? OR tx.speaker=?)"); a += [f"% {call} %", call]
+        w.append("COALESCE(json_extract(tx.raw, '$.corrected.noise'), 0)=0")   # the operator marked it Not speech
         cols = ("tx.id, tx.radio, tx.start, tx.speaker, tx.speaker_how, tx.wav, tx.duration_s, tx.inst, inst.name"
                 " net_name, inst.kind inst_kind, inst.net_id, tx.text, tx.live_text, tx.noise")
         with self.lock:

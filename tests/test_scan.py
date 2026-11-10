@@ -97,3 +97,28 @@ def test_scan_refuses_a_radio_that_cannot(tmp_path):
     with pytest.raises(ValueError):
         st.scan.set_mode("ic", "on")
     assert "VHF/UHF" in st.scan.can("ic")
+
+
+def test_the_scan_keeps_to_the_operators_phone_privileges(tmp_path, monkeypatch):
+    """A General scans only General phone: 3.800-4.000, 7.175-7.300, 14.225-14.350, 21.275-21.450 (owner 11-10)."""
+    from station.scan import segment
+    assert segment("80", "general")[:2] == (3.8, 4.0) and segment("40", "general")[:2] == (7.175, 7.3)
+    assert segment("20", "general")[:2] == (14.225, 14.35) and segment("15", "general")[:2] == (21.275, 21.45)
+    assert segment("17", "general")[:2] == (18.11, 18.168) and segment("10", "general")[:2] == (28.3, 28.85)
+    assert segment("40", "extra")[:2] == (7.125, 7.3) and segment("40", None)[:2] == (7.125, 7.3)
+    assert segment("80", "technician") is None and segment("10", "technician")[:2] == (28.3, 28.5)
+    monkeypatch.setattr(scan, "SETTLE_S", 0)
+    monkeypatch.setattr(scan, "STAY_QUIET_S", -1)
+    monkeypatch.setattr(scan, "BANDS", {"40": (7.140, 7.190, "LSB")})
+    radio, clock = Rig(freq=7_150_000, mode=0x00), Clock(TUE.replace(hour=21, minute=30))
+    radio.signal_at = 7.150                                                    # a conversation in Extra-only phone
+    st = station(tmp_path, radio, clock, antenna="hf")
+    st.agent.cfg["license_class"] = "general"
+    st.scan.spots.hit(7.150, "LSB", clock(), ["K7ABC"])                        # remembered from before: not tried
+    st.scan.spots.hit(7.150, "LSB", clock(), ["K7ABC"])
+    st.scan.set_antenna("ic", {"name": "Inverted V", "bands": ["40"]})
+    st.scan.set_mode("ic", "on")
+    st.scan.cycle("ic")
+    assert st.scan.view()["bands"]["40"]["from"] == 7.175 and st.scan.view()["license_class"] == "general"
+    assert radio.freq / 1e6 >= 7.175 - 1e-9                                   # never parked below General phone
+    assert st.radios["ic"]["scan"]["state"] != "conversation"

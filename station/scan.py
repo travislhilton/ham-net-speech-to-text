@@ -58,6 +58,21 @@ def band_of(f: float) -> str | None:
     return None
 
 
+def segment(b: str, license_class: str | None) -> tuple[float, float, str] | None:
+    """The band's phone segment cut to the operator's privileges (97.301/97.305): a General scans 3.800-4.000,
+    7.175-7.300, 14.225-14.350, 21.275-21.450 (owner 2026-11-10). No class set: the whole phone segment.
+    None = the class has no phone privileges on that band."""
+    a, z, m = BANDS[b]
+    if not license_class:
+        return a, z, m
+    from .agent import PHONE
+    for lo, hi in PHONE.get(license_class, []):
+        x, y = max(a, lo), min(z, hi)
+        if x < y:
+            return round(x, 3), round(y, 3), m
+    return None
+
+
 def bands_now(hour: int, antenna_bands) -> list[str]:
     for hrs, bs in BY_HOUR:
         if hour in hrs:
@@ -202,12 +217,22 @@ class Scanner:
         self._show(rid)
         return self.view()
 
+    def license_class(self) -> str | None:
+        ag = getattr(self.st, "agent", None)
+        return ((getattr(ag, "cfg", None) or {}).get("license_class") or None) if ag else None
+
+    def segments(self) -> dict:
+        lc = self.license_class()
+        return {b: sg for b in BANDS if (sg := segment(b, lc))}
+
     def view(self) -> dict:
         h = self.st.clock().hour
+        seg = self.segments()
         return {"radios": {rid: self.rc(rid) | {"can": self.can(rid), "state": self.state.get(rid, {}).get("show")}
                            for rid in self.st.radios},
-                "bands": {b: {"from": a, "to": z, "mode": m} for b, (a, z, m) in BANDS.items()},
-                "now": bands_now(h, list(BANDS)), "spots": self.spots.ranked(h)[:40]}
+                "bands": {b: {"from": a, "to": z, "mode": m} for b, (a, z, m) in seg.items()},
+                "license_class": self.license_class(),
+                "now": bands_now(h, list(seg)), "spots": self.spots.ranked(h)[:40]}
 
     def post(self, path, body) -> dict:
         """POST /api/scan/<rid> {"mode"}, /api/scan/<rid>/antenna {"name", "bands"}, /api/scan/spot {"key", "do"}."""
@@ -339,16 +364,18 @@ class Scanner:
         self._begin(rid, rig)
         s = self.state[rid]
         at = self.st.clock()
-        ant = self.rc(rid)["antenna"]["bands"]
-        bands = bands_now(at.hour, ant) or [b for b in ant if b in BANDS]
+        seg = self.segments()                                  # cut to the operator's license class
+        ant = [b for b in self.rc(rid)["antenna"]["bands"] if b in seg]
+        bands = bands_now(at.hour, ant) or ant
         if not bands:
             self._show(rid, state="idle", say="No band from the antenna's list is open now")
             return
         i = s.get("next_band", 0) % len(bands)
         s["next_band"] = i + 1
         b = bands[i]
-        lo, hi, mode = BANDS[b]
-        tries = [(sp["freq_mhz"], None, "remembered") for sp in self.spots.ranked(at.hour, b)[:3] if sp["score"] >= 1]
+        lo, hi, mode = seg[b]
+        tries = [(sp["freq_mhz"], None, "remembered") for sp in self.spots.ranked(at.hour, b)[:3]
+                 if sp["score"] >= 1 and lo <= sp["freq_mhz"] <= hi]
         self.st.cat.hold.add(rid)
         try:
             rig.tune(lo, mode)

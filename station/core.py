@@ -1034,7 +1034,7 @@ class Station:
     # ---------- tap-to-correct (station/corrections.py learns from these) ----------
     MAX_CORRECTION = 4000
 
-    def correct(self, tid: str, text: str | None = None, undo: bool = False) -> dict:
+    def correct(self, tid: str, text: str | None = None, undo: bool = False, noise: bool = False) -> dict:
         """The operator's own text for a transmission ("✎ Fix"): it wins over the accurate pass and the live text
         everywhere (log, search, minutes, attendance, ICS-309/213, Winlink). Callsigns are found again in it. Kept
         like "Who?": an update line in the day's log ({"update": id, "corrected": {...}}, or None = Undo), merged by
@@ -1051,6 +1051,12 @@ class Station:
             raise ValueError("the transmission is still being transcribed")
         if undo:
             cor = None
+        elif noise:          # "Not speech": the operator heard it — no words, no calls, out of search and the minutes
+            shown = ((raw.get("corrected") or {}).get("from")
+                     if raw.get("corrected") else ((raw.get("accurate") or {}).get("text") or raw.get("text") or ""))
+            cor = {"text": shown, "callsigns": [], "noise": True, "by": "operator",
+                   "at": datetime.now().isoformat(timespec="seconds"), "from": shown,
+                   "speaker": None, "speaker_how": None}
         else:
             text = " ".join(str(text or "").split())
             if not text:

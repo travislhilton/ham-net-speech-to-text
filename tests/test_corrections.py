@@ -103,6 +103,35 @@ def test_correct_wins_everywhere_survives_restart_and_undo(tmp_path):
         st.correct("nope", "x")
 
 
+def test_not_speech_leaves_search_minutes_and_heard_and_undo_brings_it_back(tmp_path):
+    """Open-squelch clips: the final pass heard only a loop, the invented live text stayed searchable (2026-11-10)."""
+    st = make(tmp_path)
+    tid = "101"                                           # "K7ABC, Springfield, no traffic."
+    assert "K7ABC" in st.heard and st.history.search("Springfield")["tx_total"] >= 1
+    before = {t["id"] for t in st.history.search("Springfield")["tx"]}
+    out = st.correct(tid, noise=True)
+    c = out["corrected"]
+    assert c["noise"] and c["by"] == "operator" and c["callsigns"] == [] and c["text"] == c["from"]
+    assert ics.view(st._find(tid))["noise"] and speaker.best(out) != ("K7ABC", "stated")
+    for fts in (True, False):
+        st.history.fts = fts
+        assert tid not in {t["id"] for t in st.history.search("Springfield")["tx"]}
+        assert tid not in {t["id"] for t in st.history.search("", call="K7ABC")["tx"]}
+    st.history.fts = True
+    assert not ics.select(st.tx, "ftm", DAY.isoformat(), DAY.replace(hour=23).isoformat()) or \
+        tid not in {t["id"] for t in ics.select(st.tx, "ftm", DAY.isoformat(), DAY.replace(hour=23).isoformat())}
+    rows = st.history.corrected_rows()
+    assert corrections.proposals(rows) == [] and corrections.accuracy(rows)["n"] == 0
+    assert restart(tmp_path)._find(tid)["corrected"]["noise"]                 # replayed on a restart
+    st.correct(tid, undo=True)
+    assert {t["id"] for t in st.history.search("Springfield")["tx"]} == before
+    # an older day goes through the history the same way
+    write_logs(tmp_path, lines(ARES, TUESDAYS[0], first_id=500))
+    st2 = make(tmp_path)
+    st2.correct("501", noise=True)
+    assert "501" not in {t["id"] for t in st2.history.search("Springfield")["tx"]}
+
+
 def test_history_rebuilt_from_logs_keeps_corrections(tmp_path):
     st = make(tmp_path)
     st.correct("104", "KD9AAA, mobile, with one item for the net. Over.")
@@ -200,6 +229,9 @@ def test_correct_learned_and_accuracy_endpoints(tmp_path):
         assert d["corrected"]["text"].startswith("KD9AAA") and d["who"]["call"] == "KD9AAA"
         d = _post(base, "/api/tx/101/correct", {"undo": True})
         assert "corrected" not in d
+        d = _post(base, "/api/tx/102/correct", {"noise": True})
+        assert d["corrected"]["noise"] and d["corrected"]["callsigns"] == []
+        assert "corrected" not in _post(base, "/api/tx/102/correct", {"undo": True})
         with pytest.raises(urllib.error.HTTPError) as e:
             _post(base, "/api/tx/999999/correct", {"text": "x"})
         assert e.value.code == 404

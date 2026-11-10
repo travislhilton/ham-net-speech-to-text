@@ -207,6 +207,9 @@ you chose is remembered. Each column shows:
   speaker are read again from it. A corrected line shows **✎ corrected**; tap it to change it again or
   **Undo correction**. It is kept as an update line in the day's log (survives restarts, the accurate pass and a
   rebuild of the history), other open dashboards update at once, and it works for a net from any day.
+  **Not speech** (in the same editor) marks noise, an open squelch or a station's tail: no words, no callsigns, no
+  speaker; it leaves search, the minutes, attendance and stations heard, is not scored or learned from, and the
+  line shows **· not speech** with **Undo**.
   - **Learned fixes** (Settings): when the same words are corrected the same way in two transmissions ("shelby
     ville" → Shelbyville), or once into a callsign, the station proposes it as a fix-up. Nothing changes until you
     press **Accept**: accepted ones go to `data\fixups_learned.yaml` (the `fixups:` format of `config/vocab.yaml`)
@@ -300,7 +303,9 @@ you chose is remembered. Each column shows:
   minutes. A net always comes first (scanning stops 5 minutes before one starts). Each pass picks a band open at this
   hour (night 80/40/160 m, morning 40/80/20, midday 20/17/15/40/12/10, late afternoon 20/40/17/15, evening 40/80/20)
   among the bands the antenna works on (**Inverted V…** on the card: its name and bands), tries frequencies
-  remembered for this hour first, then sweeps the band's phone segment in 3 kHz steps reading the S-meter, parks on
+  remembered for this hour first, then sweeps the band's phone segment — cut to your license class's phone
+  privileges (Settings → Station agent → license class; a General scans 3.800–4.000, 7.175–7.300, 14.225–14.350,
+  21.275–21.450, and all of 160/17/12 m and 28.300–28.850) — in 3 kHz steps reading the S-meter, parks on
   anything about 2 S-units over the noise for 30 s, and stays while speech is transcribed there (until 2 minutes
   quiet). Frequencies with conversations are **remembered** (hours, days, count, calls heard; Pin or Hide them) in
   `data\scan_spots.json`. Turning the dial yourself pauses the scan for 30 minutes; when it stops, the radio goes

@@ -135,6 +135,8 @@ def best(tx: dict) -> tuple[str | None, str | None]:
     text's, then the live text's) > net control > voice."""
     if tx.get("speaker_set"):
         return tx["speaker_set"], "operator"
+    if (tx.get("corrected") or {}).get("noise"):     # the operator marked it Not speech: nobody was talking
+        return None, None
     cands = []
     newer = tx.get("corrected") or tx.get("accurate") or {}
     for src in (tx.get("corrected") or {}, tx.get("accurate") or {}, tx):     # the operator's corrected text first
