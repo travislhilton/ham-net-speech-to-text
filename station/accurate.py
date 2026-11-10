@@ -27,6 +27,9 @@ Config (station.yaml):
                                 # 2026-11-06: the operator waited 8 min after a QSO; a resumed conversation only
                                 # re-does the blocks with new transmissions)
       auto_after_min: 15        # catch-up for anything still without the final pass (e.g. the Mac was off); 0 = off
+      rolling_min: 5            # only this PC, final stage only (no provisional text): during a long net, the final
+                                # pass runs on the finished part every few minutes instead of only after the net
+                                # (2026-11-09, owner: "run the accurate pass more often"); 0 = only after the net
       context: true             # false = the old one-transmission-at-a-time pass
       local: auto               # this PC when the home server is not there: auto | final_only | off
       local_on_battery: false   # a laptop on battery: no local pass
@@ -52,6 +55,7 @@ PROV_CONTEXT_S = 26.0           # provisional: the target + the net before it, u
 PROV_BATCH_S = 120.0            # provisional catch-up: up to this much target audio per request
 FINAL_BLOCK_S = 240.0           # final: target audio per request
 FINAL_MARGIN_S = 30.0           # final: context on each side of a block
+ROLL_LAG_S = 45.0               # rolling final: a transmission joins once it ended this long ago (after-context)
 
 
 def read_key(root: Path) -> str | None:
@@ -148,6 +152,7 @@ class AccuratePass:
         self.st = station
         self.auto_after = timedelta(minutes=float(cfg.get("auto_after_min", 15)))
         self.final_after = timedelta(minutes=float(cfg.get("final_after_min", 2)))
+        self.rolling = timedelta(minutes=float(cfg.get("rolling_min", 5)))
         self.live = bool(cfg.get("live", True))
         self.cfg_prompt = cfg.get("prompt", "")
         self.remote = remote or Remote(cfg.get("urls", DEFAULT_URLS), read_key(station.root))
@@ -203,8 +208,10 @@ class AccuratePass:
         return [t for t in ics.select(self.st.tx, rid, start, end, include_noise=True)
                 if t.get("wav") and t.get("kind") != "cw"]           # Morse rows are decoded, not transcribed
 
-    def _pending(self, rid, start, end, force=False, stage="final") -> list[dict]:
+    def _pending(self, rid, start, end, force=False, stage="final", until=None) -> list[dict]:
         span = self._span(rid, start, end)
+        if until:                                # a rolling final: only the part of the net that is finished
+            span = [t for t in span if t["start"] <= until]
         if force:
             return span
         if stage == "provisional":
@@ -213,21 +220,26 @@ class AccuratePass:
             return [t for t in span if stage_of(t) is None]
         return [t for t in span if stage_of(t) != "final"]
 
-    def submit(self, rid: str, start: str, end: str, auto=False, force=False, stage="final") -> dict:
+    def submit(self, rid: str, start: str, end: str, auto=False, force=False, stage="final", until=None) -> dict:
+        """`until`: a rolling final during the net: transmissions that started by then are the targets, the rest
+        of the net so far is context."""
         key = f"{rid}|{start}" + ("|final" if stage == "final" else "")
         with self.st.lock:
-            todo = self._pending(rid, start, end, force, stage)
+            todo = self._pending(rid, start, end, force, stage, until)
         with self.lock:
             j = self.jobs.get(key)
             if j and j["state"] in ("queued", "running"):
                 j["end"] = max(j["end"], end)          # a manual run of a net still going: extend it
+                if j.get("until"):
+                    j["until"] = max(j["until"], until) if until else None
                 return dict(j)
             prev = j if j and j["state"] == "done" and not force else {"done": 0, "audio_done_s": 0.0}
             j = {"key": key, "radio": rid, "start": start, "end": end, "state": "queued", "auto": auto, "stage": stage,
                  "total": prev["done"] + len(todo), "done": prev["done"], "failed": 0,
                  "audio_s": round(prev["audio_done_s"] + sum(t.get("duration_s") or 0 for t in todo), 1),
                  "audio_done_s": prev["audio_done_s"], "queued_at": datetime.now().isoformat(timespec="seconds"),
-                 "started_at": None, "finished_at": None, "eta_s": None, "error": None, "model": None, "force": force}
+                 "started_at": None, "finished_at": None, "eta_s": None, "error": None, "model": None, "force": force,
+                 "until": until}
             if not todo:
                 j.update(state="done", finished_at=j["queued_at"])
             j["eta_s"] = self._eta(j)
@@ -276,7 +288,8 @@ class AccuratePass:
                        and quiet >= self.final_after) or \
                       (self.auto_after > timedelta(0) and quiet >= self.auto_after)
                 if not due:
-                    continue                                       # still going (or only just over)
+                    self._roll(rid, s, now)                        # still going: the finished part, on this PC
+                    continue
                 key = f"{rid}|{s['start']}|final"
                 with self.lock:
                     j = self.jobs.get(key)
@@ -290,6 +303,35 @@ class AccuratePass:
                     missing = self._pending(rid, s["start"], s["end"])
                 if missing:
                     self.submit(rid, s["start"], s["end"], auto=True)
+
+    def _rolls(self) -> bool:
+        """Rolling final passes: only when this PC does the work and gives no provisional text (final_only). With
+        the home server answering, every transmission already gets its text within seconds."""
+        return (self.context and self.rolling > timedelta(0) and self.local is not None
+                and not self.local.provisional and self._kind() == "local")
+
+    def _roll(self, rid, s, now):
+        if not self._rolls():
+            return
+        key = f"{rid}|{s['start']}|final"
+        with self.lock:
+            j = self.jobs.get(key)
+            if any(x["radio"] == rid and x["start"] == s["start"] and x["state"] in ("queued", "running")
+                   for x in self.jobs.values()):
+                return
+            if j and j["state"] in ("unreachable", "error") and time.time() < self.retry_at.get(key, 0):
+                return
+        ended = lambda t: datetime.fromisoformat(t["start"]) + timedelta(seconds=float(t.get("duration_s") or 0))
+        cutoff = now - timedelta(seconds=ROLL_LAG_S)
+        with self.st.lock:
+            ready = [t for t in self._pending(rid, s["start"], s["end"]) if ended(t) <= cutoff]
+        if not ready:
+            return
+        oldest = min(ended(t) for t in ready)
+        if now - oldest < self.rolling and sum(float(t.get("duration_s") or 0) for t in ready) < FINAL_BLOCK_S:
+            return                                     # wait for a few minutes' worth, then do it in one go
+        until = max(t["start"] for t in ready)
+        self.submit(rid, s["start"], s["end"], auto=True, until=until)
 
     # ----- the worker -----
     def run(self, stop: threading.Event):
@@ -346,8 +388,8 @@ class AccuratePass:
         tried = set()
         while True:                                            # the net may grow while this runs
             with self.st.lock:
-                todo = [t for t in self._pending(j["radio"], j["start"], j["end"], j.get("force"), stage)
-                        if t["id"] not in tried]
+                todo = [t for t in self._pending(j["radio"], j["start"], j["end"], j.get("force"), stage,
+                                                 j.get("until")) if t["id"] not in tried]
             if not todo:
                 break
             with self.lock:

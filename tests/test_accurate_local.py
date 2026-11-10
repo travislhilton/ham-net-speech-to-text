@@ -219,6 +219,54 @@ def test_no_home_server_this_pc_final_only_runs_the_final_after_the_net(tmp_path
         st.stop.set()
 
 
+def test_this_pc_final_only_rolls_the_final_pass_over_the_finished_part_of_a_long_net(tmp_path, monkeypatch):
+    """Owner 2026-11-09: "run the accurate pass more often". A PC too slow to follow every transmission still gives
+    the finished part of a net that is still going its final text every `rolling_min` minutes; a transmission joins
+    once it ended ROLL_LAG_S ago; the net's own final pass afterwards does only what is left."""
+    monkeypatch.delenv("EMCOMM_STT_KEY", raising=False)
+    loc = FakeLocal(provisional=False)
+    st = _station(tmp_path, ["K7ABC checking in.", "K7ABC, you're in the log.", "W9XYZ checking in."],
+                  local=loc, final_after_min=30, rolling_min=5)
+    try:
+        for _ in range(2):
+            st.inject("ftm", np.zeros(SR * 2, np.float32))
+            assert wait_for(lambda: st.tx[-1]["status"] == "final")
+        t0 = datetime.now()
+        st.accurate.tick(t0 + timedelta(minutes=2))                      # finished, but not a few minutes' worth yet
+        time.sleep(0.3)
+        assert not loc.requests and not st.accurate.status()
+        st.accurate.tick(t0 + timedelta(minutes=6))                      # net still going (final after 30 min)
+        assert wait_for(lambda: all(stage_of(t) == "final" for t in st.tx[-2:]))
+        assert [r["stage"] for r in loc.requests] == ["final"]
+        j = next(j for j in st.accurate.status() if j["stage"] == "final")
+        assert wait_for(lambda: st.accurate.status()[0]["state"] == "done") and j["until"] == st.tx[-1]["start"]
+        st.inject("ftm", np.zeros(SR * 2, np.float32))                   # the net goes on
+        assert wait_for(lambda: st.tx[-1]["status"] == "final")
+        st.accurate.tick(datetime.now() + timedelta(seconds=10))         # just ended: waits for the next round
+        time.sleep(0.3)
+        assert len(loc.requests) == 1 and stage_of(st.tx[-1]) is None
+        st.accurate.tick(datetime.now() + timedelta(minutes=40))         # the net is over: only the new one is left
+        assert wait_for(lambda: stage_of(st.tx[-1]) == "final")
+        last = loc.requests[-1]["ids"]
+        assert [i for i, tgt in last if tgt] == [st.tx[-1]["id"]] and len(last) == 3   # the earlier two as context
+    finally:
+        st.stop.set()
+
+
+def test_no_rolling_when_this_pc_follows_every_transmission(tmp_path, monkeypatch):
+    monkeypatch.delenv("EMCOMM_STT_KEY", raising=False)
+    loc = FakeLocal(provisional=True)
+    st = _station(tmp_path, ["K7ABC checking in."], local=loc, final_after_min=30, rolling_min=5)
+    try:
+        st.inject("ftm", np.zeros(SR * 2, np.float32))
+        assert wait_for(lambda: stage_of(st.tx[-1]) == "provisional")
+        st.accurate.tick(datetime.now() + timedelta(minutes=6))
+        time.sleep(0.3)
+        assert [r["stage"] for r in loc.requests] == ["provisional"]
+    finally:
+        st.stop.set()
+
+
 def test_the_home_server_wins_when_it_answers_and_this_pc_covers_when_it_does_not(tmp_path):
     loc, mac = FakeLocal(provisional=True), ContextRemote()
     st = _station(tmp_path, ["K7ABC checking in.", "K7ABC again."], remote=mac, local=loc)

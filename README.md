@@ -583,7 +583,10 @@ a key is set and it answers, else this PC, else the job waits and is retried.
   runs at rtf ≤ 1.0 (the final text of a net then arrives within ~2.5× its speaking time), else turbo, else none; the
   fastest device — not the CPU just because the live text is on the GPU (measured below: the CPU slowed the live
   text more than sharing the GPU did); **both stages** only at rtf ≤ 0.12 (a provisional text for every transmission), otherwise **final text
-  only** (after each net). Written to `config\engine.yaml` (`accurate:`).
+  only**. Written to `config\engine.yaml` (`accurate:`). Final text only does not mean waiting for the end of a long
+  net: every 5 minutes (`rolling_min`; 0 = only after the net) the finished part of the net — transmissions that
+  ended at least 45 s ago — gets its final text, with the rest of the net so far as context; the pass after the
+  net then does only what is left.
 - **The live text always wins**: the pass runs in its own process (`python -m station.accurate_local`) at
   below-normal priority, with its own model (never the live engine's), on the GPU at low queue priority. It is held
   while any radio is receiving or a live final is queued or being transcribed, and for 2 s after (`quiet_s`); it
@@ -591,7 +594,7 @@ a key is set and it answers, else this PC, else the job waits and is retried.
   the first job and the process ended after 10 idle minutes (`unload_after_min`), giving the memory back. On a
   laptop on battery it does not run unless `local_on_battery: true`.
 - Settings (`config\station.yaml`, `accurate:`): `local: auto | final_only | off`, `local_on_battery`, `quiet_s`,
-  `unload_after_min`.
+  `unload_after_min`, `rolling_min`.
 
 Measured 2026-11-03 on an i5-12600H PC with Iris Xe graphics, 16 GB (live text: turbo on the GPU, base.en on the
 CPU), OpenVINO 2026.4:
