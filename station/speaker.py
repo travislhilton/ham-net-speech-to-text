@@ -124,12 +124,19 @@ def from_text(text: str, calls: list[str], ncs: str | None = None) -> tuple[str 
     return None, None
 
 
+def _names(src: dict, call: str) -> bool:
+    base = call.split("-")[0].upper()
+    return base in [c.split("-")[0].upper() for c in src.get("callsigns") or []] or \
+        base in re.sub(r"[^A-Z0-9 ]", " ", (src.get("text") or "").upper()).split()
+
+
 def best(tx: dict) -> tuple[str | None, str | None]:
     """The speaker the forms and the dashboard should use: operator > stated (the corrected text's, the accurate
     text's, then the live text's) > net control > voice."""
     if tx.get("speaker_set"):
         return tx["speaker_set"], "operator"
     cands = []
+    newer = tx.get("corrected") or tx.get("accurate") or {}
     for src in (tx.get("corrected") or {}, tx.get("accurate") or {}, tx):     # the operator's corrected text first
         if not src:
             continue
@@ -137,6 +144,9 @@ def best(tx: dict) -> tuple[str | None, str | None]:
             who, how = src.get("speaker"), src.get("speaker_how")
         else:                     # logged before speaker_how existed: its `speaker` was a last-callsign guess
             who, how = from_text(src.get("text") or "", src.get("callsigns") or [])
+        if src is tx and newer and how == "stated" and who and not _names(newer, who):
+            continue              # the live draft "stated" a call the newer text does not say (the live prompt once
+            #                       planted the operator's own call: owner 2026-11-10 "None of them say <my call>")
         if who and how in RANK:
             cands.append((RANK[how], who, how))
     if tx.get("speaker_voice"):

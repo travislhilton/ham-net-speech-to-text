@@ -310,7 +310,7 @@ def test_search_ignores_a_live_draft_the_accurate_pass_replaced(tmp_path):
     h.fts = True
     # an index built before this rule is rebuilt once on open
     h.con.execute("UPDATE tx SET calls=' W9XYZ ' WHERE id='700'")
-    h.con.execute("UPDATE meta SET v='1' WHERE k='tx_index'")
+    h.con.execute("UPDATE meta SET v='2' WHERE k='tx_index'")
     h.con.commit()
     h.close()
     again = hist(tmp_path)
@@ -321,3 +321,13 @@ def test_own_call_check_catches_a_call_with_something_stuck_on():
     from station.core import own_call_in
     assert own_call_in("W9XYZ6 Romeo Papa Johnson.", "W9XYZ") and own_call_in("this is w9xyz-7", "W9XYZ")
     assert not own_call_in("K7ABC, roger.", "W9XYZ") and not own_call_in("W9XY roger", "W9XYZ")
+
+
+def test_a_live_stated_speaker_needs_the_newer_text_to_say_it():
+    from station.speaker import best
+    tx = {"text": "This is W9XYZ.", "speaker": "W9XYZ", "speaker_how": "stated", "callsigns": ["W9XYZ"]}
+    assert best(tx) == ("W9XYZ", "stated")
+    assert best({**tx, "accurate": {"text": "Roger, Springfield.", "callsigns": []}}) == (None, None)
+    assert best({**tx, "accurate": {"text": "This is W9XYZ, over.", "callsigns": ["W9XYZ"]}})[0] == "W9XYZ"
+    assert best({**tx, "speaker_set": "K7ABC", "accurate": {"text": "Roger."}}) == ("K7ABC", "operator")
+

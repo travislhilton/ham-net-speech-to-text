@@ -136,7 +136,7 @@ class History:
         self.status = {"indexing": False, "days": 0, "fts": self.fts}
         self._urgent_sig = None
         row = self.con.execute("SELECT v FROM meta WHERE k='tx_index'").fetchone()
-        if not row or row[0] != "2":
+        if not row or row[0] != "3":
             self._reindex()
 
     def close(self):
@@ -224,7 +224,8 @@ class History:
 
     def _reindex(self):
         """Once: rebuild the callsigns and the search index of every transmission under _searchable."""
-        rows = self.con.execute("SELECT rowid, raw FROM tx").fetchall()
+        rows = self.con.execute("SELECT rowid, raw, speaker, inst FROM tx").fetchall()
+        moved = set()
         for r in rows:
             try:
                 raw = json.loads(r["raw"])
@@ -232,13 +233,18 @@ class History:
                 continue
             v = ics.view(raw)
             live, calls = self._searchable(raw, v)
-            self.con.execute("UPDATE tx SET calls=? WHERE rowid=?", (" " + " ".join(calls) + " ", r["rowid"]))
+            if v.get("speaker") != r["speaker"] and r["inst"]:
+                moved.add(r["inst"])
+            self.con.execute("UPDATE tx SET calls=?, speaker=?, speaker_how=? WHERE rowid=?",
+                             (" " + " ".join(calls) + " ", v.get("speaker"), v.get("speaker_how"), r["rowid"]))
             if self.fts:
                 self.con.execute("DELETE FROM tx_fts WHERE rowid=?", (r["rowid"],))
                 self.con.execute("INSERT INTO tx_fts(rowid, text, live, calls) VALUES(?,?,?,?)",
                                  (r["rowid"], v.get("text") or "", live,
                                   " ".join(calls + ([v["speaker"]] if v.get("speaker") else []))))
-        self.con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('tx_index', '2')")
+        for k in moved:                                          # participants follow the speakers again
+            self.con.execute("UPDATE inst SET dirty=1 WHERE key=?", (k,))
+        self.con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES('tx_index', '3')")
         self.con.commit()
 
     def _put(self, raw: dict, key: str):
