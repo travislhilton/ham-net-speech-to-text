@@ -95,8 +95,12 @@ each transmission decide whether {call} should transmit now, and if so exactly w
 courteous ham operator would on voice.
 
 Speak ONLY when:
-- net control calls for check-ins of a kind that fits this station (and {call} has not checked in yet this net):
-  check in briefly, using the check-in line if one is given;
+- net control, in the latest transmission, explicitly calls for check-ins ("any check-ins", "stations wishing to check
+  in, call now", "any further check-ins") of a kind that fits this station, and {call} has not checked in yet this
+  net: check in briefly, adapting the check-in line if one is given. Some nets are only for certain stations
+  (maritime mobile and its relays, a club's members, a served agency, stations with traffic, a roll call by name):
+  if the net's purpose does not include an ordinary home station like this one, stay silent. Operators talking to
+  each other, handing over net control or asking someone else to make calls are NOT a call for check-ins;
 - someone calls {call} or {name} directly, or asks this station a question: answer it, briefly;
 - net control acknowledges or recognizes {call} and expects an answer;
 - the copy was too poor to answer: ask them to say again (kind say_again);
@@ -111,7 +115,7 @@ no jargon the other side might not know. Sound human-natural and brief (one to t
 FCC Part 97 rules you must follow (the station's software also enforces them and will block a draft that breaks one):
 - Identify with {call} at the end of each exchange and at least every ten minutes; never use an SSID like -20 on voice.
 - Never pretend to be a person. On your first transmission in a contact or net, say you are {call}'s automated \
-assistant and that {op} is control operator.
+assistant and that {op} is control operator (both, in those words).
 - No music, no obscene or indecent language, no codes or ciphers that hide meaning.
 - No business: never buy, sell, advertise or arrange anything for pay; no messages for anyone's employer.
 - No broadcasting to the public; no relaying messages on someone else's behalf (third-party traffic) - tell them \
@@ -183,10 +187,14 @@ def fcc_check(d: dict, ctx: dict) -> list[dict]:
     rule("97.119(a)", _has_call(say, ctx["call"]) if (ctx["id_due"] or d.get("kind") in ("sign_off", "check_in", "reply"))
          else True, f"identifies as {ctx['call']}" if _has_call(say, ctx["call"]) else
          f"must say {ctx['call']} ({'10 minutes since the last ID' if ctx['id_due'] else 'end of an exchange'})")
-    disclosed = re.search(r"\bautomat\w*\b", say, re.I) is not None
+    auto = re.search(r"\bautomat\w*\b", say, re.I) is not None
+    named = re.search(r"\bcontrol operator\b", say, re.I) is not None
+    disclosed = auto and named
     rule("97.113(a)(4) disclosure", disclosed or not ctx["first"],
-         "says it is automated" if disclosed else
-         "first transmission must say it is an automated assistant" if ctx["first"] else "disclosed earlier")
+         "says it is automated and names the control operator" if disclosed else
+         ("first transmission must also name the control operator" if auto else
+          "first transmission must say it is an automated assistant and name the control operator")
+         if ctx["first"] else "disclosed earlier")
     me = ctx.get("op") if ctx.get("op") and ctx.get("op") != "the operator" else None
     poses = bool(_PERSON.search(say)) or bool(me and re.search(r"\b(i am|i'm|my name is|this is) " + re.escape(me) + r"\b",
                                                              say, re.I))
@@ -405,7 +413,7 @@ class Agent:
         if d.get("speak") and d.get("ok"):
             if _has_call(d.get("say", ""), call):
                 st["last_id"] = now                              # as if sent: Draft mode keeps the clock honest
-            if re.search(r"\bautomat\w*\b", d.get("say", ""), re.I):
+            if re.search(r"\bautomat\w*\b", d.get("say", ""), re.I) and re.search(r"control operator", d.get("say", ""), re.I):
                 st["disclosed"] = contact
             if d.get("kind") == "check_in":
                 st["checked_in"] = contact

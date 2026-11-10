@@ -24,6 +24,7 @@ def test_a_good_first_check_in_passes_every_rule():
 def test_identification_and_disclosure_are_enforced():
     assert "97.119(a)" in bad({"speak": True, "kind": "reply", "say": "Thanks for the report, automated here."})
     assert "97.113(a)(4) disclosure" in bad({"speak": True, "kind": "check_in", "say": "W9XYZ checking in."})
+    assert "97.113(a)(4) disclosure" in bad({"speak": True, "kind": "check_in", "say": "W9XYZ, automated assistant."})
     later = CTX | {"first": False, "id_due": False}
     assert bad({"speak": True, "kind": "acknowledge", "say": "Roger, thanks."}, later) == []
     assert "97.119(a)" in bad({"speak": True, "kind": "acknowledge", "say": "Roger, thanks."}, later | {"id_due": True})
