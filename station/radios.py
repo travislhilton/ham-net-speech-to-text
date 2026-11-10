@@ -159,12 +159,42 @@ def clean(radios: list[dict]) -> list[dict]:
 
 def serial_ports() -> list[dict]:
     """The PC's serial (COM) ports for a radio's CAT control, with what Windows calls them. Icom Remote Utility's
-    virtual CI-V port is listed like a real one."""
+    virtual CI-V port is not a Plug and Play device (pyserial's scan misses it); Windows' own list of serial ports
+    (HARDWARE\\DEVICEMAP\\SERIALCOMM, what .NET's GetPortNames reads) has it, so both are merged."""
+    out = {}
     try:
         from serial.tools import list_ports
-        return [{"port": p.device, "desc": p.description or ""} for p in sorted(list_ports.comports(), key=lambda p: p.device)]
+        for p in list_ports.comports():
+            out[p.device] = p.description or ""
     except Exception:  # noqa: BLE001 - no pyserial (a dev machine), or no ports
+        pass
+    for dev, name in _registry_ports():
+        out.setdefault(dev, f"Virtual serial port ({name})" if name else "Serial port")
+    num = lambda d: (int(re.sub(r"\D", "", d) or 0), d)
+    return [{"port": d, "desc": out[d]} for d in sorted(out, key=num)]
+
+
+def _registry_ports() -> list[tuple[str, str]]:
+    """(COM port, driver name) from HARDWARE\\DEVICEMAP\\SERIALCOMM; empty off Windows."""
+    try:
+        import winreg
+    except ImportError:
         return []
+    out = []
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DEVICEMAP\SERIALCOMM") as k:
+            i = 0
+            while True:
+                try:
+                    name, val, _ = winreg.EnumValue(k, i)
+                except OSError:
+                    break
+                if isinstance(val, str) and re.fullmatch(r"COM\d{1,3}", val):
+                    out.append((val, name.rsplit("\\", 1)[-1]))
+                i += 1
+    except OSError:
+        pass
+    return out
 
 
 def save(path: Path, radios: list[dict]):

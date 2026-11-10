@@ -112,3 +112,12 @@ def test_an_input_that_is_back_is_not_reported_missing():
 def test_fresh_inputs_reads_a_new_list_in_a_child_process():
     from station.radios import fresh_inputs
     assert isinstance(fresh_inputs(), list)                 # [] on a machine with no audio inputs, never None
+
+
+def test_a_virtual_com_port_only_in_the_registry_is_offered(monkeypatch):
+    """Icom Remote Utility's CI-V port is in Windows' SERIALCOMM list but not a Plug and Play device."""
+    from station import radios as rmod
+    monkeypatch.setattr(rmod, "_registry_ports", lambda: [("COM11", "RSBA1VCP0"), ("COM4", "USBSER000")])
+    ports = rmod.serial_ports()
+    assert [p["port"] for p in ports if p["port"] in ("COM4", "COM11")] == ["COM4", "COM11"]
+    assert any(p["port"] == "COM11" and "Virtual" in p["desc"] for p in ports)
