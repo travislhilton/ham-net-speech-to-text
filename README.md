@@ -293,6 +293,16 @@ you chose is remembered. Each column shows:
   note that follows; when the radio can't hear it, the note offers to switch its antenna. Without a mouse (a phone),
   click a net in the column: the same menu moves it every time or just that date, or opens it in Nets. Above the
   columns, a red line counts the nets that can't be recorded (no radio, or the radio can't hear them).
+- **HF scan** (a radio the station tunes by CAT, with its HF antenna on): **Scan Off / On / Auto** on the radio's
+  card. **On** scans in the gaps between nets; **Auto** also scans while a scheduled net has been quiet for 10
+  minutes. A net always comes first (scanning stops 5 minutes before one starts). Each pass picks a band open at this
+  hour (night 80/40/160 m, morning 40/80/20, midday 20/17/15/40/12/10, late afternoon 20/40/17/15, evening 40/80/20)
+  among the bands the antenna works on (**Inverted V…** on the card: its name and bands), tries frequencies
+  remembered for this hour first, then sweeps the band's phone segment in 3 kHz steps reading the S-meter, parks on
+  anything about 2 S-units over the noise for 30 s, and stays while speech is transcribed there (until 2 minutes
+  quiet). Frequencies with conversations are **remembered** (hours, days, count, calls heard; Pin or Hide them) in
+  `data\scan_spots.json`. Turning the dial yourself pauses the scan for 30 minutes; when it stops, the radio goes
+  back to where it was. Receive only: the only CAT commands are frequency, mode and the S-meter read.
 - **Station agent (Draft mode)**: an optional AI operator's assistant with an on-air name of your choosing (default
   "Echo"). Switch it to **Draft** on a radio's card: after each transmission (once the frequency has been quiet 1.2 s)
   it decides whether your station should speak and drafts exactly what it would say and how long it would wait,

@@ -184,6 +184,8 @@ class Station:
         self.nets = NetSchedule(self)
         from .agent import Agent
         self.agent = Agent(self)                                 # the station agent: Draft mode only, never transmits
+        from .scan import Scanner
+        self.scan = Scanner(self)                                # HF scan between nets (station/scan.py), receive only
         from .history import History            # net history, search, analysis, minutes (data/history.db)
         self.history = History(self.data, nets=lambda: self.cfg.get("schedule") or [], radios=lambda: self.radios,
                                callbook=callbook, clock=clock, me=self.me, bus=self.bus)
@@ -234,6 +236,8 @@ class Station:
         local = getattr(self, "_accurate_local", None) or accurate_local.make(self, self.cfg.get("accurate"),
                                                                                self.accurate_spec)
         self.accurate = AccuratePass(self, self.cfg.get("accurate"), getattr(self, "_accurate_remote", None), local)
+        if self.cat.cfg:
+            threading.Thread(target=self.scan.run, args=(self.stop,), daemon=True, name="scan").start()
         threading.Thread(target=self.accurate.run, args=(self.stop,), daemon=True, name="accurate").start()
 
     def _index_history(self):

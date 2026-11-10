@@ -39,7 +39,8 @@ QUIET_WAIT_S = 20.0             # a net start waits this long for a transmission
 # command (and sub-command) -> what it is; nothing else can be sent
 ALLOWED = {(0x03,): "read frequency", (0x04,): "read mode", (0x05,): "set frequency", (0x06,): "set mode",
            (0x0D,): "set duplex offset", (0x0F,): "set duplex", (0x16, 0x42): "repeater tone on/off",
-           (0x16, 0x43): "tone squelch on/off", (0x1B, 0x00): "set repeater tone", (0x1A, 0x06): "data mode"}
+           (0x16, 0x43): "tone squelch on/off", (0x1B, 0x00): "set repeater tone", (0x1A, 0x06): "data mode",
+           (0x15, 0x02): "read S-meter"}         # the HF scan (station/scan.py): receive only
 
 MODE_CODE = {"LSB": 0x00, "USB": 0x01, "AM": 0x02, "CW": 0x03, "FM": 0x05}
 CODE_MODE = {0x00: "LSB", 0x01: "USB", 0x02: "AM", 0x03: "CW", 0x04: "DIG", 0x05: "FM", 0x07: "CW", 0x08: "DIG",
@@ -169,7 +170,18 @@ class Icom:
                 pass
         return m
 
+    def smeter(self) -> int:
+        """0 (S0) .. 120 (S9) .. 241 (S9+60), as the radio reports it (four BCD digits)."""
+        r = self.ask(0x15, 0x02)
+        return int(r[:2].hex()) if len(r) >= 2 else 0
+
     # ----- tuning -----
+    def set_freq(self, mhz: float):
+        """Frequency only (the scan steps with it; the mode is set once per band with tune())."""
+        if not self.covers(mhz):
+            raise CatError(f"{mhz:.4f} MHz is outside what the {self.model} receives")
+        self.ask(0x05, data=bcd_freq(int(round(mhz * 1e6))))
+
     def covers(self, mhz: float) -> bool:
         return any(a <= mhz <= b for a, b in COVERAGE.get(self.model, ((0.03, 3000.0),)))
 
@@ -225,6 +237,7 @@ class CatControl:
         self.next_try: dict[str, float] = {}
         self.last: dict[str, tuple[float, str]] = {}
         self.lock = threading.Lock()
+        self.hold: set[str] = set()                 # radios the scan is sweeping: the poll leaves them alone
         for rid, c in self.cfg.items():
             if rid in station.radios:
                 station.radios[rid]["cat"] = {"port": c["port"], "ok": None, "error": None, "tuned_for": None}
@@ -269,6 +282,8 @@ class CatControl:
 
     # ----- reading the radio -----
     def poll(self, rid):
+        if rid in self.hold:
+            return None
         rig = self._rig(rid)
         if rig is None:
             return None
