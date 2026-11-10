@@ -1629,7 +1629,7 @@ class Station:
         if self._canary is None:
             return False
         audio, words, prompt = self._canary            # read it as it was read: without its prompt a noisy reference
-        try:                                           # fell to one word on a good engine (8 false reloads, one station)
+        try:                                           # fell to one word on a good engine (8 false reloads on one station)
             return self._words(eng.transcribe(audio, prompt=prompt).get("text")) <= 1 < words
         except Exception:  # noqa: BLE001
             return True
