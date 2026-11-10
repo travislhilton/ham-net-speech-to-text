@@ -127,3 +127,34 @@ def test_a_net_not_heard_three_times_is_flagged_until_kept(tmp_path):
     s.keep(nid)
     assert not s.heard_of(nid)["flag"]
     assert (tmp_path / "net_heard.json").exists()
+
+
+def test_a_net_silent_for_five_minutes_hands_the_radio_to_the_net_beside_it(tmp_path):
+    """Owner 11-10: "if quiet move to the next scheduled net. Look for 5 minute silence not 10" — counted from the
+    last transmission, so a net that ends early frees the radio too."""
+    import copy
+    from datetime import timedelta
+    from station import engine
+    from station.cat import CatControl, Icom
+    from station.core import Station
+    from tests.test_cat import CFG, Clock, FakeIC705, TUE, edge
+    cfg = copy.deepcopy(CFG)
+    cfg["schedule"] = [{"name": "Local net", "radio": "ic", "freq_mhz": 3.906, "mode": "LSB", "days": ["Wed"],
+                        "start": "19:00", "duration_min": 60},
+                       {"name": "160 m net", "radio": "ic", "freq_mhz": 1.96, "mode": "LSB", "days": ["Wed"],
+                        "start": "19:00", "duration_min": 60}]
+    wed = TUE + timedelta(days=1)
+    radio, clock = FakeIC705(freq=7_185_000, mode=0x00), Clock(wed.replace(hour=18, minute=59))
+    st = Station(cfg, lambda: engine.FakeEngine(), data_dir=tmp_path, clock=clock)
+    st.cat = CatControl(st, lambda c: Icom(radio, c["civ"], c["model"]))
+    st.set_radio_setup("ic", {"antenna": "hf"})
+    edge(st, clock, wed.replace(hour=19, minute=0))
+    first = st.radios["ic"]["listen"]["now"]
+    assert first in ("Local net", "160 m net")
+    st.tx.append({"id": "t1", "radio": "ic", "status": "final", "text": "net control here",
+                  "start": wed.replace(hour=19, minute=2).isoformat(timespec="seconds")})
+    edge(st, clock, wed.replace(hour=19, minute=6))                  # 4 min since the last transmission: stays
+    assert st.radios["ic"]["listen"]["now"] == first
+    edge(st, clock, wed.replace(hour=19, minute=8))                  # 6 min silent (heard earlier): moves on
+    L = st.radios["ic"]["listen"]
+    assert L["now"] != first and L["switched"]["from"] == first

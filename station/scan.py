@@ -46,7 +46,7 @@ DWELL_S = 30
 STAY_QUIET_S = 120
 CANDIDATES = 4
 PRE_NET_MIN = 5
-QUIET_MIN = 10
+QUIET_MIN = 5
 HOLD_MIN = 30
 TICK_S = 5
 
@@ -284,7 +284,8 @@ class Scanner:
                 return False, f"{L['now']} is on: the net first"
             q = (getattr(self.st.nets, "_quiet", {}) or {}).get(rid) or {}
             since = q.get("since")
-            if not since or at - since < timedelta(minutes=QUIET_MIN) or self.st.nets._heard_since(rid, since):
+            if not since or at - since < timedelta(minutes=QUIET_MIN) \
+                    or self.st.nets._heard_since(rid, max(since, at - timedelta(minutes=QUIET_MIN))):
                 return False, f"{L['now']} is on: the net first (Auto scans if it stays quiet {QUIET_MIN} min)"
         return True, ""
 

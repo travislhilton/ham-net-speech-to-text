@@ -139,7 +139,7 @@ def on_radio(n: dict, o: dict) -> str | None:
     return o.get("radio") or n.get("radio")
 
 
-QUIET_MIN = 10          # an HF net on a CAT radio with nothing heard this long: try another net scheduled then
+QUIET_MIN = 5           # an HF net on a CAT radio silent this long: try another net scheduled then (owner 11-10: 5, not 10)
 QUIET_MAX_MHZ = 54.0    # HF and 6 m (a repeater net is either up or it isn't)
 UNHEARD_RUN = 3         # a net not heard this many times in a row is flagged "Not heard" (Remove / Keep it)
 
@@ -271,8 +271,9 @@ class NetSchedule:
         return any(t.get("radio") == rid and str(t.get("start") or "") >= s for t in list(self.st.tx))
 
     def _quiet_check(self, rid, r, cur, nets, at, skip):
-        """An HF net on a CAT radio with nothing heard for QUIET_MIN while another net is scheduled now: mark it quiet
-        and return the other one (the radio retunes to it). With every candidate quiet it stays where it is."""
+        """An HF net on a CAT radio silent for QUIET_MIN (nothing heard in the last QUIET_MIN minutes, after listening
+        that long: also a net that ended early) while another net is scheduled now: mark it quiet and return the other
+        one (the radio retunes to it). With every candidate quiet it stays where it is."""
         q = self._quiet[rid]
         cat = getattr(self.st, "cat", None)
         if not cur or cat is None or not cat.has(rid) or r.get("paused"):
@@ -281,14 +282,14 @@ class NetSchedule:
             return None
         if q["key"] != cur["key"] or not q["since"] or at - q["since"] < timedelta(minutes=QUIET_MIN):
             return None
-        if self._heard_since(rid, q["since"]):
+        if self._heard_since(rid, max(q["since"], at - timedelta(minutes=QUIET_MIN))):
             return None
         alt, _ = listen_window(nets, rid, at, skip=skip, usable=self.usable(rid, at), loses=self.loses(at),
                                dead=q["dead"] | {cur["key"]})
         if not alt or alt["key"] == cur["key"] or alt["key"] in q["dead"]:
             return None
         q["dead"].add(cur["key"])
-        print(f"{at:%H:%M:%S} {rid}: nothing heard on {cur['name']} for {QUIET_MIN} min -> {alt['name']}", flush=True)
+        print(f"{at:%H:%M:%S} {rid}: {cur['name']} silent for {QUIET_MIN} min -> {alt['name']}", flush=True)
         r.setdefault("listen", {})["switched"] = {"from": cur["name"], "to": alt["name"], "at": at.isoformat(timespec="minutes")}
         return alt
 
