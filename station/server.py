@@ -96,6 +96,9 @@ def make_handler(station):
                 return self._json({"text": test_text(station.cfg.get("callsign")), "history": station.test_history()})
             if u.path == "/api/settings":
                 return self._json(station.operator())
+            if u.path == "/api/secrets":                         # Settings: which keys are set (never the keys)
+                from . import secrets
+                return self._json({"keys": [secrets.status(station.root, k) for k in secrets.KEYS]})
             if u.path == "/api/learned":                         # Learned fixes (station/corrections.py)
                 return self._json(station.learned())
             if u.path == "/api/accuracy":                        # accuracy from the operator's corrections
@@ -161,8 +164,9 @@ def make_handler(station):
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net
+            sec = re.fullmatch(r"/api/secrets/([A-Z_]+)(/test)?", u.path)                               # Settings: a key
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or sched or who or fix or alert or item or close or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or who or fix or alert or item or close or sec or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 self.close_connection = True                   # its body is unread: never reuse the connection
                 return self._json({"error": "not found"}, 404)
             try:
@@ -170,6 +174,13 @@ def make_handler(station):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if sched:
                     return self._json(station.nets.post(u.path, body))
+                if sec:                                          # {"value": key | null}; /test asks the provider
+                    from . import secrets
+                    if sec.group(1) not in secrets.KEYS:
+                        return self._json({"error": "unknown key"}, 404)
+                    if sec.group(2):
+                        return self._json(secrets.test(station.root, sec.group(1)))
+                    return self._json(secrets.write(station.root, sec.group(1), body.get("value")))
                 if close:                                       # End net / Not closed / Save net control
                     rid, act, key = close.group(1), close.group(2), str(body.get("key") or "") or None
                     if act == "end":

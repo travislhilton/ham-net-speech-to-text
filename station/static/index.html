@@ -409,6 +409,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <div class="small muted">Laptops run several times slower once the screen goes dark. “During nets and traffic” switches to full speed for a scheduled net, for every transmission (from its first moment) and for 10 minutes after the last one; the rest of the time your own power plan, screen and sleep settings apply, and the radio still listens.</div>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
+  <h4>Station agent (optional)</h4><div id="keySet" class="small"></div>
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
@@ -1241,7 +1242,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();renderKeys();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -1892,6 +1893,22 @@ function renderUrgent(){
 }
 document.addEventListener("click",e=>{const f=e.target.closest("[data-urgfold]");if(f){const id=f.dataset.urgfold;URG_FOLD.has(id)?URG_FOLD.delete(id):URG_FOLD.add(id);renderUrgent()}});
 // Settings: the alert chime and system notifications
+// ----- Settings: the operator's own API keys (station/secrets.py): the page never receives a key, only "set …abcd" -----
+async function renderKeys(msg){
+  const box=$("keySet");let d;try{d=await api("/api/secrets")}catch(e){box.textContent=e.message;return}
+  box.innerHTML=d.keys.map(k=>`<div class="keyrow" data-key="${esc(k.name)}">
+    <p style="margin:0 0 4px">The station agent (coming next: it drafts check-ins and replies during nets, and with your OK speaks them) uses <b>your own xAI key</b>. Create one at <b>console.x.ai</b> → API Keys → Create API Key (add a little credit under Billing first), copy it, and paste it here. It is kept only on this PC, in config\secrets.env.</p>
+    <div>${esc(k.label)}: ${k.set?`<b class="ok">set</b> <span class="mono">${esc(k.hint||"")}</span>${k.from==="environment"?" (from an environment variable)":""}`:'<span class="muted">not set</span>'}</div>
+    <div class="row" style="margin-top:4px"><input type="password" id="key-${esc(k.name)}" autocomplete="off" spellcheck="false" placeholder="${k.set?"paste a new key to replace it":"xai-…"}" style="text-transform:none;min-width:16em" aria-label="${esc(k.label)}">
+      <button type="button" data-keysave>Save key</button>${k.set?' <button type="button" data-keytest>Test</button> <button type="button" data-keydel class="quiet">Remove</button>':""}</div>
+    <div class="small" data-keymsg>${msg&&msg.name===k.name?`<span class="${msg.ok?"ok":"bad"}">${esc(msg.say)}</span>`:""}</div></div>`).join("");
+  for(const row of box.querySelectorAll(".keyrow")){const name=row.dataset.key,say=(ok,t)=>renderKeys({name,ok,say:t});
+    row.querySelector("[data-keysave]").onclick=async()=>{const v=row.querySelector("input").value.trim();if(!v)return;
+      try{await post(`/api/secrets/${enc(name)}`,{value:v});const t=await post(`/api/secrets/${enc(name)}/test`,{});say(t.ok,"Saved. "+t.say)}catch(e){say(false,e.message)}};
+    const t=row.querySelector("[data-keytest]");if(t)t.onclick=async()=>{row.querySelector("[data-keymsg]").textContent="Asking xAI…";try{const r=await post(`/api/secrets/${enc(name)}/test`,{});say(r.ok,r.say)}catch(e){say(false,e.message)}};
+    const x=row.querySelector("[data-keydel]");if(x)x.onclick=async()=>{if(!confirm("Remove the key from this PC?"))return;try{await post(`/api/secrets/${enc(name)}`,{value:null});say(true,"Removed.")}catch(e){say(false,e.message)}};
+    row.querySelector("input").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();row.querySelector("[data-keysave]").click()}}}
+}
 function renderAlertSettings(){
   const box=$("alertSet");if(!box)return;
   const why=!("Notification" in window)?"This browser cannot show notifications."

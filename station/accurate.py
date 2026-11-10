@@ -37,7 +37,6 @@ The key: EMCOMM_STT_KEY in the environment or in config/secrets.env (KEY=value l
 """
 import io
 import json
-import os
 import queue
 import threading
 import time
@@ -59,16 +58,8 @@ ROLL_LAG_S = 45.0               # rolling final: a transmission joins once it en
 
 
 def read_key(root: Path) -> str | None:
-    if os.environ.get("EMCOMM_STT_KEY"):
-        return os.environ["EMCOMM_STT_KEY"]
-    try:
-        for line in (root / "config" / "secrets.env").read_text(encoding="utf-8").splitlines():
-            k, _, v = line.partition("=")
-            if k.strip() == "EMCOMM_STT_KEY" and v.strip():
-                return v.strip()
-    except OSError:
-        pass
-    return None
+    from . import secrets
+    return secrets.read(root, "EMCOMM_STT_KEY")
 
 
 def _multipart(fields: dict, files: list[tuple[str, str, bytes]]) -> tuple[bytes, str]:

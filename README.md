@@ -75,7 +75,10 @@ final text at 0.07x real time anyway. Set once on the laptop itself:
 Everything personal is kept in files the repository never contains (they are git-ignored and the installer
 never overwrites them): your callsign, name and grid and the radios in `config\station.yaml`; your area, repeaters
 and roster in `config\local.yaml`; the accurate-pass server's address in `station.yaml` (`accurate: urls:`) and its
-key in `config\secrets.env`; the QRZ.com password in Windows Credential Manager; SSH public keys for remote
+key in `config\secrets.env`; your own **xAI API key** for the station agent (optional: **Settings → Station agent**,
+paste it and **Save key**; **Test** asks xAI whether it works; the page only ever shows "set …abcd"; it is kept in
+`config\secrets.env` as `XAI_API_KEY=…`, readable only by the station's user, SYSTEM and Administrators — create one at
+console.x.ai → API Keys after adding a little credit under Billing); the QRZ.com password in Windows Credential Manager; SSH public keys for remote
 management in `deploy\windows\ssh-keys.txt`. The server keeps its settings in `~/.config/emcomm-stt/env`.
 
 ## Connecting a radio
