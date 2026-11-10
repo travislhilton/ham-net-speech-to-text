@@ -23,6 +23,14 @@ def refp(d):
     return d
 
 
+def test_catalog_items_said_as_people_say_them():
+    from station.readout import item_name
+    assert item_name("Blanket—3-lb. poly fleece (10 per case)") == "Blanket, three-pound poly fleece"
+    assert item_name("Bottled water (24 bottles per case)") == "Bottled water"
+    assert item_name("Extension cord, 100'") == "Extension cord, one hundred foot"
+    assert item_name("Tarp, 12 by 16 feet") == "Tarp, twelve by sixteen feet"
+
+
 def test_numbers_and_times_in_words():
     assert words(41) == "forty-one" and words(0) == "zero" and words(74.5) == "seventy-four and a half"
     assert words(1250) == "one thousand two hundred fifty" and words(None) == "not reported"

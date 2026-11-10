@@ -109,6 +109,17 @@ def spoken_names(text: str) -> str:
     return text
 
 
+def item_name(desc: str) -> str:
+    """A Church catalog line as people say it: 'Blanket—3-lb. poly fleece (10 per case)' -> 'Blanket, three-pound
+    poly fleece'; 'Bottled water (24 bottles per case)' -> 'Bottled water'; "Extension cord, 100'" -> '... one hundred foot'."""
+    d = re.sub(r"\s*\([^)]*\)", "", desc or "")
+    d = re.sub(r"\s*[—–]\s*", ", ", d)
+    d = re.sub(r"(\d+)\s*-?\s*lbs?\.?", r"\1-pound", d)
+    d = re.sub(r"(\d+)\s*'", r"\1 foot", d)
+    d = re.sub(r'(\d+)\s*"', r"\1 inch", d)
+    return spoken_names(d.strip(" ,"))
+
+
 def joined(names) -> str:
     names = [spoken_names(n) for n in names or []]
     if not names:
@@ -211,7 +222,7 @@ def script(doc: dict, call: str, phonetic_call: str) -> list[dict]:
     s = f"Supplies. Supply orders: {count(su.get('orders'))}."
     top = [i for i in (su.get("top_items") or []) if i.get("desc")][:3]
     if top:
-        s += " Most requested: " + "; ".join(f"{spoken_names(i['desc'])}, {words(i.get('qty'))}" for i in top) + "."
+        s += " Most requested: " + "; ".join(f"{item_name(i['desc'])}, {words(i.get('qty'))}" for i in top) + "."
     s += f" Work crews: {count(cr.get('logs'))}"
     if cr.get("logs"):
         s += f", with {words(cr.get('members'))} members and {words(cr.get('hours'))} hours"
