@@ -134,7 +134,7 @@ def make_handler(station):
             try:
                 if u.path == "/api/search":
                     return self._json(h.search(q.get("q", ""), q.get("net"), q.get("radio"), q.get("from"), q.get("to"),
-                                               q.get("call"), int(q.get("limit") or 50)))
+                                               q.get("call"), min(int(q.get("limit") or 50), 500), q.get("kind")))
                 if u.path == "/api/history":
                     return self._json({"instances": h.instances(q.get("net"), q.get("radio"), q.get("kind"),
                                                                 int(q.get("limit") or 200), q.get("before")),

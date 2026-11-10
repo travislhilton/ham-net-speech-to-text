@@ -619,7 +619,7 @@ class History:
         return r["wav"] if r else None
 
     # ---------- search ----------
-    def search(self, q: str, net=None, radio=None, frm=None, to=None, call=None, limit=50) -> dict:
+    def search(self, q: str, net=None, radio=None, frm=None, to=None, call=None, limit=50, kind=None) -> dict:
         """Everything that matches, grouped: transmissions (live + accurate text, callsigns, speaker), stations
         (callsigns and callbook names), nets (scheduled names and past instances), minutes items."""
         q = (q or "").strip()
@@ -633,6 +633,8 @@ class History:
             w.append("inst.net_id=?"); a.append(net)
         if radio:
             w.append("tx.radio=?"); a.append(radio)
+        if kind in ("net", "conversation"):                     # a transmission outside any net is a conversation
+            w.append("COALESCE(inst.kind, 'conversation')=?"); a.append(kind)
         if frm:
             w.append("tx.start>=?"); a.append(frm[:10])
         if to:
@@ -689,7 +691,7 @@ class History:
                 f"SELECT * FROM station WHERE call IN ({','.join('?' * len(seen)) or 'NULL'})", list(seen))}
             out["stations"] = [s | {"name": (names.get(c) or {}).get("name"), "city": (names.get(c) or {}).get("city"),
                                     "state": (names.get(c) or {}).get("state")} for c, s in list(seen.items())[:20]]
-        if words:
+        if words and kind != "conversation":
             for n in self.nets() or []:
                 if all(w in n.get("name", "").lower() for w in words):
                     out["nets"].append({"net_id": n["id"], "name": n["name"], "summary": recur.summary(n),

@@ -121,6 +121,11 @@ def test_search_everything(tmp_path):
     assert h.search("net", net="ares", frm="2026-11-03", to="2026-11-03")["tx_total"] == \
         h.search("net", net="ares")["tx_total"] > 0
     assert h.search("net", to="2026-10-01")["tx_total"] == 0
+    # nets only / conversations only (a transmission outside any net is a conversation)
+    assert h.search("mile marker", kind="conversation")["tx"][0]["id"] == "401"
+    assert h.search("mile marker", kind="net")["tx_total"] == 0
+    assert h.search("hamfest", kind="net")["tx_total"] == 1 and h.search("hamfest", kind="conversation")["tx_total"] == 0
+    assert h.search("springfield ares", kind="conversation")["nets"] == []
     # the same answers without FTS5 (plain LIKE), for a Python whose SQLite lacks it
     h.fts = False
     assert h.search("hamfest")["tx_total"] == 1 and "\x02" in h.search("hamfest")["tx"][0]["snippet"]

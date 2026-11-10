@@ -229,7 +229,9 @@ you chose is remembered. Each column shows:
   callbook names, nets, and the minutes, in one list grouped as **Stations**, **Nets**, **Minutes** and
   **Transmissions**, with the words highlighted, ▶ to play and **Show in context ›** (today's log, or the net's
   minutes with the transmission lit up). Several words must all match; "quotes" for an exact phrase. Narrow it by net,
-  radio, dates or callsign. Searching 100,000 transmissions takes about a tenth of a second.
+  radio, dates or callsign, and **Look in** nets and conversations, nets only, or conversations only (anything heard
+  outside a net). **Search this log** on a radio's card opens it for that radio; **/** anywhere opens it; **Show more**
+  pages past the newest 50. Searching 100,000 transmissions takes about a tenth of a second.
 - **Nets** (on each radio card): the nets scheduled on that radio, the one running now in green, the next date of the
   others.
 - **Nets** (top of the page; **Nets…** on a radio card opens it for that radio). One window, full screen on a phone, with

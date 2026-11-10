@@ -1158,6 +1158,7 @@ function renderRadios(){
     renderRadioNets(r);
     const seg=(k,v,l,on)=>`<button data-${k}="${esc(r.id)}" data-v="${v}" class="${on?"on":""}" aria-pressed="${on}">${l}</button>`;
     el.querySelector(".rsetup").innerHTML=(r.antenna?`<span>Antenna <span class="rseg" role="group" aria-label="Antenna on ${esc(r.name)}">${seg("setant","hf","HF",r.antenna==="hf")}${seg("setant","vu","VHF/UHF",r.antenna==="vu")}</span></span>`:"")
+      +`<span><button class="linkish small" data-rsearch="${esc(r.id)}" title="Search everything heard on ${esc(r.name)}: words, callsigns, names (press / anywhere for all radios)">Search this log</button></span>`
       +`<span>Used for <span class="rseg" role="group" aria-label="${esc(r.name)} is used for">${seg("setrole","nets","Nets",r.role!=="winlink")}${seg("setrole","winlink","Winlink only",r.role==="winlink")}</span></span>`
       +(r.scan&&!r.scan.can?`<span title="Scan HF for conversations between nets. A net always comes first.">Scan <span class="rseg" role="group" aria-label="Scan on ${esc(r.name)}">${seg("scanmode","off","Off",r.scan.mode==="off")}${seg("scanmode","on","On",r.scan.mode==="on")}${seg("scanmode","auto","Auto",r.scan.mode==="auto")}</span> <button class="linkish small" data-scanset="${esc(r.id)}" title="Antenna, bands and remembered frequencies">${esc((r.scan.antenna||{}).name||"Antenna")}…</button></span>`:"")
       +(r.role!=="winlink"&&AG&&(AG.settings||{}).enabled?`<span title="${esc(agName())} drafts what it would say on this radio. It never transmits.">${esc(agName())} <span class="rseg" role="group" aria-label="${esc(agName())} on ${esc(r.name)}">${seg("agmode","off","Off",agMode(r.id)==="off")}${seg("agmode","draft","Draft",agMode(r.id)==="draft")}</span></span>`:"");
@@ -1905,6 +1906,7 @@ document.addEventListener("click",e=>{
   const st=e.target.closest("[data-settle]");if(st){netAct(()=>post(`/api/schedule/${enc(st.dataset.settle)}/settle`,{over:st.dataset.over,undo:!!st.dataset.undo}));return}
   const sm=e.target.closest("[data-scanmode]");if(sm){(async()=>{try{await post(`/api/scan/${enc(sm.dataset.scanmode)}`,{mode:sm.dataset.v})}catch(err){alert(err.message)}})();return}
   const ss=e.target.closest("[data-scanset]");if(ss){openScan(ss.dataset.scanset);return}
+  const rs=e.target.closest("[data-rsearch]");if(rs){openSearch("",rs.dataset.rsearch);return}
   const am=e.target.closest("[data-agmode]");if(am){agPost(`/api/agent/radio/${enc(am.dataset.agmode)}`,{mode:am.dataset.v});return}
   const an=e.target.closest("[data-setant]");if(an){netAct(()=>post(`/api/radios/${enc(an.dataset.setant)}/setup`,{antenna:an.dataset.v}));return}
   const ro=e.target.closest("[data-setrole]");if(ro){if(ro.dataset.v==="winlink"&&!confirm("Keep this radio for Winlink only? Its nets are not recorded on it until you move them or switch back."))return;
@@ -1953,24 +1955,26 @@ document.addEventListener("change",async e=>{
 $("openNets").onclick=()=>openNetsArea({tab:NV.tab||"schedule",radio:null});
 $("netsClose").onclick=()=>$("netsDlg").close();
 // ---------- search everything ----------
-const SR={q:"",net:"",radio:"",from:"",to:"",call:""};
-function openSearch(q){
-  SR.q=q;const nets=S.schedule||[];
+const SR={q:"",net:"",radio:"",from:"",to:"",call:"",kind:"",limit:50};
+function openSearch(q,radio){
+  SR.q=q;SR.limit=50;if(radio!==undefined)SR.radio=radio;const nets=S.schedule||[];
   $("searchBody").innerHTML=`<form id="srForm" class="srform" role="search"><input id="srQ" type="search" value="${esc(q)}" placeholder="Words, callsign, name, net…" aria-label="Search"><button class="primary">Search</button></form>
-   <div class="srfilters small"><label>Net <select id="srNet"><option value="">any</option>${nets.map(n=>`<option value="${esc(n.id)}"${n.id===SR.net?" selected":""}>${esc(n.name)}</option>`).join("")}</select></label>
+   <div class="srfilters small"><label>Look in <select id="srKind"><option value="">nets and conversations</option><option value="net"${SR.kind==="net"?" selected":""}>nets only</option><option value="conversation"${SR.kind==="conversation"?" selected":""}>conversations only</option></select></label>
+   <label>Net <select id="srNet"><option value="">any</option>${nets.map(n=>`<option value="${esc(n.id)}"${n.id===SR.net?" selected":""}>${esc(n.name)}</option>`).join("")}</select></label>
    <label>Radio <select id="srRadio"><option value="">any</option>${S.radios.map(r=>`<option value="${esc(r.id)}"${r.id===SR.radio?" selected":""}>${esc(r.name)}</option>`).join("")}</select></label>
    <label>From <input type="date" id="srFrom" value="${esc(SR.from)}"></label><label>To <input type="date" id="srTo" value="${esc(SR.to)}"></label>
    <label>Callsign <input id="srCall" class="up" maxlength="11" value="${esc(SR.call)}" placeholder="any"></label></div><div id="srRes" aria-live="polite"></div>`;
   const f=$("srForm");f.onsubmit=e=>{e.preventDefault();SR.q=$("srQ").value;runSearch()};
-  ["srNet","srRadio","srFrom","srTo","srCall"].forEach(id=>$(id).onchange=()=>{SR.net=$("srNet").value;SR.radio=$("srRadio").value;SR.from=$("srFrom").value;SR.to=$("srTo").value;SR.call=$("srCall").value.trim().toUpperCase();runSearch()});
+  ["srKind","srNet","srRadio","srFrom","srTo","srCall"].forEach(id=>$(id).onchange=()=>{SR.limit=50;SR.kind=$("srKind").value;SR.net=$("srNet").value;SR.radio=$("srRadio").value;SR.from=$("srFrom").value;SR.to=$("srTo").value;SR.call=$("srCall").value.trim().toUpperCase();runSearch()});
   if(!$("searchDlg").open)$("searchDlg").showModal();
+  $("srQ").focus();
   runSearch();
 }
 async function runSearch(){
   const box=$("srRes");if(!box)return;
   if(!SR.q.trim()&&!SR.call){box.innerHTML='<div class="empty">Search every transmission ever heard (live and accurate text), callsigns and callbook names, nets, and the minutes. Several words must all match; put words in "quotes" for an exact phrase. Narrow it with the filters.</div>';return}
   busy(box);
-  const qs=new URLSearchParams({q:SR.q});for(const k of ["net","radio","from","to","call"])if(SR[k])qs.set(k,SR[k]);
+  const qs=new URLSearchParams({q:SR.q,limit:SR.limit});for(const k of ["kind","net","radio","from","to","call"])if(SR[k])qs.set(k,SR[k]);
   let d;try{d=await api("/api/search?"+qs)}catch(err){box.innerHTML=`<p class="err">${esc(err.message)}</p>`;return}
   OPEN_ITEMS=d.items;
   const tx=d.tx.map(t=>`<li class="sr"><div class="srh small"><span>${esc(fmtWhen(t.start))}</span> · <span>${esc(t.inst_kind==="net"?t.net_name:"Conversation")}</span>${t.speaker?` · <b>${esc(t.speaker)}</b>`:""} · <span class="muted">${esc((S.radios.find(r=>r.id===t.radio)||{}).name||t.radio)}</span></div>
@@ -1983,10 +1987,13 @@ async function runSearch(){
   const none=!d.tx.length&&!d.stations.length&&!d.nets.length&&!d.items.length;
   box.innerHTML=none?`<div class="empty">Nothing found for <b>${esc(SR.q||SR.call)}</b>${SR.net||SR.radio||SR.from||SR.to||SR.call?" with these filters":""}. Try fewer words or the start of a callsign.</div>`
     :grp("Stations",d.stations.length,st)+grp("Nets",d.nets.length,nets)+grp("Minutes",d.items.length,its)+
-     grp("Transmissions",d.tx_total,tx,d.tx_total>d.tx.length?`<p class="small muted">Showing the newest ${d.tx.length} of ${d.tx_total}. Add words or filters to narrow it.</p>`:"")+
+     grp("Transmissions",d.tx_total,tx,d.tx_total>d.tx.length?`<p class="small muted">Showing the newest ${d.tx.length} of ${d.tx_total}. ${d.tx.length<500?'<button id="srMore">Show more</button> or a':"A"}dd words or filters to narrow it.</p>`:"")+
      (d.fts?"":'<p class="small muted">Simple search (this PC\'s SQLite has no full-text index).</p>');
+  if($("srMore"))$("srMore").onclick=()=>{SR.limit=Math.min(500,SR.limit+100);runSearch()};
 }
-$("searchForm").addEventListener("submit",e=>{e.preventDefault();openSearch($("q").value.trim())});
+$("searchForm").addEventListener("submit",e=>{e.preventDefault();openSearch($("q").value.trim(),"")});
+// "/" anywhere (outside a text box) opens Search
+document.addEventListener("keydown",e=>{if(e.key!=="/"||e.ctrlKey||e.metaKey||e.altKey)return;const t=e.target;if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;if(document.querySelector("dialog[open]"))return;e.preventDefault();openSearch("",undefined)});
 $("searchClose").onclick=()=>$("searchDlg").close();
 // ---------- the pre-net alert (station/alerts.py): banner on the radio's column + the header, chime, title, notification ----------
 let CHIME=true;try{CHIME=localStorage.getItem("hamnet.chime")!=="0"}catch(e){}
