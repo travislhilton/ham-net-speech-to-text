@@ -68,3 +68,20 @@ def test_no_reload_without_a_dashboard_for_real_noise_or_too_often(tmp_path):
     assert st._maybe_recover(eng, audio, {"text": "......"}, "p")[0] is eng          # noise: the engine passes the check
     eng.broken = True; st._engine_reload_at = time.time()
     assert st._maybe_recover(eng, audio, {"text": "The."}, "p")[0] is eng            # reloaded under 5 minutes ago
+
+
+class PromptEng(Eng):
+    """Reads the reference well only with its prompt (a noisy channel, like the FM data jack)."""
+    def transcribe(self, audio, prompt=None):
+        return {"text": GOOD if (prompt and not self.broken) else "Over."}
+
+
+def test_the_reference_is_read_with_its_prompt_and_a_bad_one_is_dropped(tmp_path, capsys):
+    st = station(tmp_path); st.viewer(True)
+    eng, audio = PromptEng(), np.zeros(5 * SR, np.float32)
+    st._maybe_recover(eng, audio, eng.transcribe(audio, "p"), "p")
+    assert st._maybe_recover(eng, audio, {"text": "Over."}, "p")[0] is eng            # healthy engine: no reload
+    st._canary = (audio, 8, None)                                                     # a reference no engine can read
+    st._final_factory = PromptEng
+    st._maybe_recover(eng, audio, {"text": "Over."}, "p")
+    assert st._canary is None and "reference is dropped" in capsys.readouterr().out

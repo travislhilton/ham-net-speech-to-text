@@ -189,7 +189,7 @@ class Station:
         self.awake_quiet_min = float(config.get("keep_awake_quiet_min", 10))
         self.last_traffic = None                       # time.time() of the last transmission's end (keep awake)
         self.viewers, self.viewer_seen = 0, None       # dashboards open in a browser (server.py /api/events)
-        self._canary = None                            # (audio, words): a recent final that read well (engine check)
+        self._canary = None                            # (audio, words, prompt): a recent final that read well
         self._engine_check = False                     # a dashboard just opened: check the live engine when idle
         self._engine_reload_at = 0.0
         self._partial_reload = False
@@ -1628,9 +1628,9 @@ class Station:
         """Re-read the reference transmission: a live engine that read it well and now cannot is broken."""
         if self._canary is None:
             return False
-        audio, words = self._canary
-        try:
-            return self._words(eng.transcribe(audio, prompt=None).get("text")) <= 1 < words
+        audio, words, prompt = self._canary            # read it as it was read: without its prompt a noisy reference
+        try:                                           # fell to one word on a good engine (8 false reloads, one station)
+            return self._words(eng.transcribe(audio, prompt=prompt).get("text")) <= 1 < words
         except Exception:  # noqa: BLE001
             return True
 
@@ -1645,6 +1645,10 @@ class Station:
         except Exception as e:  # noqa: BLE001
             print(f"live engine: reload failed: {type(e).__name__}: {e}", flush=True)
             return eng
+        if self._engine_broken(new):                   # the fresh engine cannot read it either: the reference is bad
+            print("live engine: a fresh engine fails the reference too; the reference is dropped, the engine was fine",
+                  flush=True)
+            self._canary = None
         del eng
         self._partial_reload = True
         self.engines.update(final=new.name, status="ready", reloaded=datetime.now().isoformat(timespec="seconds"))
@@ -1656,7 +1660,7 @@ class Station:
         reference; broken -> reload and read the transmission again. A good final becomes the new reference."""
         n = self._words(res.get("text"))
         if n >= 4 and len(audio) <= 15 * SR:
-            self._canary = (audio, n)
+            self._canary = (audio, n, prompt)
             return eng, res
         if (n > 1 or len(audio) < self.SUSPECT_S * SR or not self.dashboard_open()
                 or time.time() - self._engine_reload_at < self.RELOAD_EVERY_S or not self._engine_broken(eng)):
