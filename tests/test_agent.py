@@ -33,6 +33,7 @@ def test_identification_and_disclosure_are_enforced():
 def test_content_rules():
     base = "W9XYZ automated assistant: "
     assert "97.113(a)(4) not a person" in bad({"speak": True, "kind": "reply", "say": base + "I'm a real person."})
+    assert "97.113(a)(4) not a person" in bad({"speak": True, "kind": "reply", "say": base + "this is Pat speaking."})
     assert "97.113(a)(2),(3) business" in bad({"speak": True, "kind": "reply", "say": base + "I have one for sale."})
     assert "97.115 third party" in bad({"speak": True, "kind": "reply", "say": base + "I'm relaying a message for him."})
     assert "97.113(a)(4) codes" in bad({"speak": True, "kind": "reply", "say": base + "QXRTB ZZKLM PLMKO"})

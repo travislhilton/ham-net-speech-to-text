@@ -144,7 +144,7 @@ _BUSINESS = re.compile(r"\b(for sale|sell(ing)?|buy(ing)?|price|discount|order (
                        r"advertis\w*|sponsor\w*|my (employer|company|business))\b", re.I)
 _THIRD = re.compile(r"\b(relay(ing)? (a|this|the) (message|traffic)|pass(ing)? (a|this) message|on behalf of|"
                     r"tell \w+ that|message for (him|her|them|\w+ \w+))\b", re.I)
-_PERSON = re.compile(r"\b(i am|i'm) (a )?(human|person|real person|the operator|the licensee)\b", re.I)
+_PERSON = re.compile(r"\b(i am|i'm|this is) (a )?(human|person|real person|the operator|the licensee)\b", re.I)
 _CODE = re.compile(r"\b[A-Z0-9]{5}(\s+[A-Z0-9]{5}){2,}\b")      # five-letter groups: a cipher
 
 
@@ -187,8 +187,11 @@ def fcc_check(d: dict, ctx: dict) -> list[dict]:
     rule("97.113(a)(4) disclosure", disclosed or not ctx["first"],
          "says it is automated" if disclosed else
          "first transmission must say it is an automated assistant" if ctx["first"] else "disclosed earlier")
-    rule("97.113(a)(4) not a person", not _PERSON.search(say), "never claims to be a person"
-         if not _PERSON.search(say) else "claims to be a person")
+    me = ctx.get("op") if ctx.get("op") and ctx.get("op") != "the operator" else None
+    poses = bool(_PERSON.search(say)) or bool(me and re.search(r"\b(i am|i'm|my name is|this is) " + re.escape(me) + r"\b",
+                                                             say, re.I))
+    rule("97.113(a)(4) not a person", not poses, "never claims to be a person" if not poses else
+         "claims to be a person (or to be the operator)")
     rule("97.113(a)(4) language", not _OBSCENE.search(say), "clean" if not _OBSCENE.search(say) else "indecent word")
     rule("97.113(a)(4) music", not _MUSIC.search(say), "no music" if not _MUSIC.search(say) else "music")
     rule("97.113(a)(4) codes", not _CODE.search(say), "plain language" if not _CODE.search(say) else
