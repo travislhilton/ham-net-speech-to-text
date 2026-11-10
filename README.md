@@ -304,7 +304,8 @@ you chose is remembered. Each column shows:
   `data\scan_spots.json`. Turning the dial yourself pauses the scan for 30 minutes; when it stops, the radio goes
   back to where it was. Receive only: the only CAT commands are frequency, mode and the S-meter read.
 - **Station agent (Draft mode)**: an optional AI operator's assistant with an on-air name of your choosing (default
-  "Echo"). Switch it to **Draft** on a radio's card: after each transmission (once the frequency has been quiet 1.2 s)
+  "Echo"). **Off by default**: the operator turns it on in **Settings → Station agent → Enable the station agent**;
+  then each radio's card has an Off / Draft switch, also Off until chosen. Switch it to **Draft** on a radio's card: after each transmission (once the frequency has been quiet 1.2 s)
   it decides whether your station should speak and drafts exactly what it would say and how long it would wait,
   shown at the top of that radio's column; **What would you say now?** asks on demand, 👍/👎 rates a draft. **It
   never transmits**: there is no transmit mode, and the CAT code still refuses PTT. Every draft is checked in code

@@ -263,7 +263,8 @@ class Agent:
         self.path = station.data / "agent.json"
         self.log_path = station.data / "agent_drafts.jsonl"
         self.lock = threading.Lock()
-        self.cfg = {"name": "Echo", "checkin": "", "operator": "", "station": "", "license_class": "", "model": DEFAULT_MODEL,
+        self.cfg = {"enabled": False,                    # owner 11-10: off by default; the operator turns it on
+                    "name": "Echo", "checkin": "", "operator": "", "station": "", "license_class": "", "model": DEFAULT_MODEL,
                     "compare": [], "radios": {}}
         try:
             self.cfg.update(json.loads(self.path.read_text(encoding="utf-8")))
@@ -288,6 +289,8 @@ class Agent:
                     if k == "name" and not re.fullmatch(r"[A-Za-z][A-Za-z .'-]{0,23}", v):
                         raise ValueError("the name is letters only (it is spoken on the air)")
                     self.cfg[k] = v
+            if "enabled" in body:
+                self.cfg["enabled"] = bool(body["enabled"])
             if "license_class" in body:
                 v = str(body["license_class"] or "").lower()
                 if v and v not in PHONE:
@@ -308,12 +311,16 @@ class Agent:
             raise ValueError(f"no radio called {rid!r}")
         if mode not in ("off", "draft"):
             raise ValueError("mode: off or draft (nothing else exists yet: the agent never transmits)")
+        if mode != "off" and not self.cfg.get("enabled"):
+            raise ValueError("turn the station agent on first (Settings → Station agent)")
         with self.lock:
             self.cfg.setdefault("radios", {})[rid] = mode
             self._save()
         return self.view()
 
     def mode(self, rid) -> str:
+        if not self.cfg.get("enabled"):
+            return "off"
         return (self.cfg.get("radios") or {}).get(rid, "off")
 
     def view(self) -> dict:
@@ -485,6 +492,8 @@ class Agent:
         if what == "radio":
             return self.set_radio(arg, str(body.get("mode") or "off"))
         if what == "ask":
+            if not self.cfg.get("enabled"):
+                raise ValueError("the station agent is off (Settings → Station agent)")
             if arg not in self.st.radios:
                 raise ValueError(f"no radio called {arg!r}")
             self.draft(arg, asked=True)

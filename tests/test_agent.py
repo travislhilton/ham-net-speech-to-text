@@ -1,5 +1,7 @@
 """The station agent in Draft mode: FCC checks in code, timing, and that nothing is ever transmitted."""
 import copy
+
+import pytest
 from datetime import timedelta
 
 from station import agent, engine
@@ -72,7 +74,11 @@ def test_a_draft_runs_the_model_checks_it_and_never_transmits(tmp_path):
     import os
     os.environ["XAI_API_KEY"] = "xai-" + "a" * 30
     try:
-        st.agent.settings({"operator": "Pat", "license_class": "extra", "checkin": "This is W9XYZ, Pat in Springfield"})
+        assert st.agent.mode("ic") == "off"                      # off by default
+        with pytest.raises(ValueError):
+            st.agent.set_radio("ic", "draft")                    # the operator must enable the agent first
+        st.agent.settings({"enabled": True, "operator": "Pat", "license_class": "extra",
+                           "checkin": "This is W9XYZ, Pat in Springfield"})
         st.agent.set_radio("ic", "draft")
         st.tx.append({"id": "t1", "radio": "ic", "status": "final", "start": T.replace(hour=20, minute=4).isoformat(),
                       "text": "Any more check-ins for the net?", "callsigns": [], "speaker": "K7ABC"})
@@ -83,7 +89,7 @@ def test_a_draft_runs_the_model_checks_it_and_never_transmits(tmp_path):
     assert "Pat in Springfield" in seen["user"] and "automated voice assistant" in seen["system"]
     assert d["silence_s"] >= 1.2
     assert (tmp_path / "agent_drafts.jsonl").exists()
-    import pytest
+
     with pytest.raises(ValueError):
         st.agent.set_radio("ic", "transmit")                 # no mode that keys the radio exists
     from station import cat

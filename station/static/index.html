@@ -1159,7 +1159,7 @@ function renderRadios(){
     el.querySelector(".rsetup").innerHTML=(r.antenna?`<span>Antenna <span class="rseg" role="group" aria-label="Antenna on ${esc(r.name)}">${seg("setant","hf","HF",r.antenna==="hf")}${seg("setant","vu","VHF/UHF",r.antenna==="vu")}</span></span>`:"")
       +`<span>Used for <span class="rseg" role="group" aria-label="${esc(r.name)} is used for">${seg("setrole","nets","Nets",r.role!=="winlink")}${seg("setrole","winlink","Winlink only",r.role==="winlink")}</span></span>`
       +(r.scan&&!r.scan.can?`<span title="Scan HF for conversations between nets. A net always comes first.">Scan <span class="rseg" role="group" aria-label="Scan on ${esc(r.name)}">${seg("scanmode","off","Off",r.scan.mode==="off")}${seg("scanmode","on","On",r.scan.mode==="on")}${seg("scanmode","auto","Auto",r.scan.mode==="auto")}</span> <button class="linkish small" data-scanset="${esc(r.id)}" title="Antenna, bands and remembered frequencies">${esc((r.scan.antenna||{}).name||"Antenna")}…</button></span>`:"")
-      +(r.role!=="winlink"&&AG?`<span title="${esc(agName())} drafts what it would say on this radio. It never transmits.">${esc(agName())} <span class="rseg" role="group" aria-label="${esc(agName())} on ${esc(r.name)}">${seg("agmode","off","Off",agMode(r.id)==="off")}${seg("agmode","draft","Draft",agMode(r.id)==="draft")}</span></span>`:"");
+      +(r.role!=="winlink"&&AG&&(AG.settings||{}).enabled?`<span title="${esc(agName())} drafts what it would say on this radio. It never transmits.">${esc(agName())} <span class="rseg" role="group" aria-label="${esc(agName())} on ${esc(r.name)}">${seg("agmode","off","Off",agMode(r.id)==="off")}${seg("agmode","draft","Draft",agMode(r.id)==="draft")}</span></span>`:"");
     renderEcho(r.id);
     {let sl=el.querySelector(".scanline");if(!sl){sl=document.createElement("div");sl.className="scanline";el.querySelector(".rsetup").after(sl)}
      const sc=r.scan||{};sl.hidden=!sc.mode||sc.mode==="off"||!!sc.can;sl.classList.toggle("live",sc.state==="conversation");
@@ -2083,6 +2083,7 @@ function renderAgentSet(){
   const box=$("agentSet");if(!AG){box.innerHTML="";return}const s=AG.settings||{};
   const opt=(v,l,on)=>`<option value="${esc(v)}"${on?" selected":""}>${esc(l)}</option>`;
   box.innerHTML=`<p class="muted">The station agent listens and <b>drafts</b> what it would say on each radio where you switch it to Draft (on the radio's card). It never transmits. Every draft is checked against FCC Part 97 in the station's own code (identification every 10 minutes and at the end of a contact, saying it is automated, no business, music, codes or relayed messages, emergency traffic first, your license privileges); a draft that breaks one is marked <b>Would not send</b>.</p>
+  <label style="display:block;margin:6px 0"><input type="checkbox" id="agOn"${s.enabled?" checked":""} style="width:auto"> <b>Enable the station agent</b> <span class="muted">(off by default; when on, each radio's card gets an ${esc(s.name||"Echo")} Off / Draft switch, also off until you choose Draft)</span></label>
   <div class="agentform">
     <label for="agName">On-air name</label><input id="agName" value="${esc(s.name||"")}" maxlength="24" placeholder="Echo">
     <label for="agOp">Your first name</label><input id="agOp" value="${esc(s.operator||"")}" maxlength="24" placeholder="(said as control operator)">
@@ -2092,7 +2093,7 @@ function renderAgentSet(){
     <label for="agModel">Model</label><select id="agModel">${(AG.models||[]).map(m=>opt(m.id,m.label+(m.ready?"":" (no key)"),s.model===m.id)).join("")}</select>
     <span>Compare with</span><span class="cmp">${(AG.models||[]).filter(m=>m.id!==s.model).map(m=>`<label><input type="checkbox" data-agcmp="${esc(m.id)}"${(s.compare||[]).includes(m.id)?" checked":""}${m.ready?"":" disabled"}> ${esc(m.label)}${m.ready?"":" (no key)"}</label>`).join("")}</span>
   </div><button type="button" id="agSave">Save agent settings</button> <span class="muted">Spoken ID: ${esc(AG.call||"")} (${esc(AG.phonetic||"")})</span>`;
-  $("agSave").onclick=()=>agPost("/api/agent/settings",{name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,license_class:$("agClass").value,model:$("agModel").value,
+  $("agSave").onclick=()=>agPost("/api/agent/settings",{enabled:$("agOn").checked,name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,license_class:$("agClass").value,model:$("agModel").value,
     compare:[...box.querySelectorAll("[data-agcmp]:checked")].map(x=>x.dataset.agcmp)})}
 async function renderKeys(msg){
   const box=$("keySet");let d;try{d=await api("/api/secrets")}catch(e){box.textContent=e.message;return}
