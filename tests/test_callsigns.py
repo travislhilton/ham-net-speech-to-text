@@ -81,3 +81,10 @@ def test_fox_and_the_2026_11_09_mishearings():
     for heard in ("So this is Gila X-ray 7 Quebec Zulu Indy calling the net.", "Cilo X-ray 7, Quebec, Zulu, Indy."):
         assert normalize(heard, validate=known)[1] == ["KX7QZI"], heard
         assert normalize(heard, validate=lambda c: False)[1] == [], heard   # unknown: not taken
+
+
+def test_austin_for_oscar_and_vicky_for_victor_when_known():
+    """An HF net's accurate pass, 2026-11-09: "November 7, Austin, Vicky, Quebec". NX7OVQ: unassigned in the FCC data."""
+    heard = "Okay, November X-ray 7, Austin, Vicky, Quebec. Thanks."
+    assert normalize(heard, validate={"NX7OVQ"}.__contains__)[1] == ["NX7OVQ"]
+    assert normalize(heard, validate=lambda c: False)[1] == []

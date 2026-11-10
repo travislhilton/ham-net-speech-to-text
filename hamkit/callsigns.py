@@ -24,7 +24,9 @@ FUZZY = {"helo": "K", "hilo": "K", "keelo": "K", "kiloh": "K", "sheila": "K", "k
          "yanki": "Y", "whisky": "W", "charley": "C", "siera": "S", "juliette": "J", "foxtrott": "F", "xray": "X",
          "romio": "R", "oskar": "O", "lema": "L", "leema": "L", "victer": "V", "tengo": "T", "hotell": "H",
          # 2026-11-09 (a 2-m net and an HF net): "Gila" and "Cilo" for Kilo, "Indy" for India
-         "gila": "K", "cilo": "K", "indy": "I"}
+         "gila": "K", "cilo": "K", "indy": "I",
+         # 2026-11-09 HF net, accurate pass: "Austin" for Oscar, "Vicky" for Victor
+         "austin": "O", "vicky": "V"}
 FUZZY = {k: v for k, v in FUZZY.items() if k not in PHON}
 # A run of 4-7 tokens, each a phonetic word or a bare digit (Whisper often writes "Kilo 7"),
 # separated by spaces, hyphens or commas ("Kilo 7, Alpha Bravo Charlie").
