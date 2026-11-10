@@ -748,6 +748,14 @@ async function openRadios(){
   try{RD=await api("/api/radio-list")}catch(e){alert(e.message);return}
   RD.list=RD.radios.map(r=>({...r}));RD.msg="";renderRadiosDlg();if(!$("radiosDlg").open)$("radiosDlg").showModal();
 }
+// CAT on a radio card: read from the radio (✓), not answering (!), tuned for a net
+function catBadge(r){const c=r.cat;if(!c)return"";
+  const t=c.ok===false?`CAT on ${c.port}: ${c.error||"not answering"}`:c.ok?`The frequency is read from the radio (CAT on ${c.port}); it is tuned to each of this radio's nets and put back after.${c.error?" "+c.error:""}`:`CAT on ${c.port}: connecting…`;
+  return ` <span class="cat ${c.ok===false?"bad":""}" title="${esc(t)}">· CAT${c.ok===false?" !":c.ok?" ✓":""}${c.tuned_for?" · tuned for "+esc(c.tuned_for):""}</span>`}
+function catOpt(cur){
+  const ps=RD.ports||[],have=ps.some(p=>p.port===cur);
+  return `<option value="">— none —</option>${cur&&!have?`<option selected value="${esc(cur)}">${esc(cur)} (not found now)</option>`:""}${ps.map(p=>`<option value="${esc(p.port)}"${p.port===cur?" selected":""}>${esc(p.port)}${p.desc&&p.desc!==p.port?" · "+esc(p.desc):""}</option>`).join("")}`;
+}
 function renderRadiosDlg(){
   const ins=RD.inputs||[],used=new Set(RD.list.map(r=>r.device));
   const opt=(cur)=>{const have=ins.includes(cur);
@@ -757,7 +765,9 @@ function renderRadiosDlg(){
      <label>Sound input <select data-k="device">${opt(r.device||"")}</select></label>
      <label>Audio from <select data-k="gate"><option value="voice"${r.gate==="voice"?" selected":""}>Speaker / earphone jack, or SSB (squelch closed)</option><option value="carrier"${r.gate==="carrier"?" selected":""}>FM data jack (hiss always on)</option></select></label>
      <label>Mode <select data-k="mode">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===(r.mode||"FM")?" selected":""}>${m}</option>`).join("")}</select></label>
-     <label>Frequency, MHz <input data-k="freq_mhz" value="${r.freq_mhz??""}" inputmode="decimal" placeholder="146.940" style="width:8em"></label></div>
+     <label>Frequency, MHz <input data-k="freq_mhz" value="${r.freq_mhz??""}" inputmode="decimal" placeholder="146.940" style="width:8em"></label>
+     <label title="Icom CI-V (CAT): the station reads the radio's frequency and tunes it for this radio's nets, any band. On Wi-Fi: Icom Remote Utility's virtual COM port; on USB: the radio's first COM port. It never transmits.">CAT port (Icom CI-V) <select data-cat="port">${catOpt(r.cat&&r.cat.port)}</select></label>
+     ${r.cat&&r.cat.port?`<label title="The radio's CI-V address (MENU → SET → Connectors → CI-V → CI-V Address). IC-705: A4.">CI-V address <input data-cat="civ" value="${esc((r.cat&&r.cat.civ)||"A4")}" maxlength="2" style="width:4em"></label>`:""}</div>
      <div class="row small">${r.state?`<span class="muted">now: ${esc(r.state)}${r.error?" · "+esc(r.error):""}</span>`:'<span class="muted">new</span>'}
      ${(RD.nets[r.id]||[]).length?`<span class="muted">nets: ${esc(RD.nets[r.id].join(", "))}</span>`:""}
      <button class="linkish" data-rm="${i}">Remove</button></div></div>`).join("");
@@ -767,6 +777,8 @@ function renderRadiosDlg(){
    <div class="row"><button class="primary" id="rdSave">Save and restart the station</button> <button onclick="$('radiosDlg').close()">Cancel</button> <span class="bad small">${esc(RD.msg)}</span></div>
    <p class="small muted">Saving restarts the station (about 15 s; the page reconnects by itself). The list is then kept in data\radios.json (station.yaml's radios are no longer read).${RD.from==="station.yaml"?"":" Delete that file to go back to station.yaml's list."}</p>`;
   for(const el of $("radiosBody").querySelectorAll("[data-k]"))el.onchange=el.oninput=()=>{RD.list[+el.closest(".rad").dataset.i][el.dataset.k]=el.value};
+  for(const el of $("radiosBody").querySelectorAll("[data-cat]"))el.onchange=()=>{const r=RD.list[+el.closest(".rad").dataset.i];
+    if(el.dataset.cat==="port"){r.cat=el.value?{...(r.cat||{civ:"A4"}),port:el.value}:null;renderRadiosDlg()}else if(r.cat)r.cat.civ=el.value.trim().toUpperCase()};
   for(const b of $("radiosBody").querySelectorAll("[data-rm]"))b.onclick=()=>{const r=RD.list[+b.dataset.rm];
     if((RD.nets[r.id]||[]).length){RD.msg=`${r.name} has nets: move them to another radio in Nets… first`;renderRadiosDlg();return}
     if(confirm(`Remove ${r.name||"this radio"}? Its log and recordings stay on disk.`)){RD.list.splice(+b.dataset.rm,1);renderRadiosDlg()}};
@@ -1077,8 +1089,8 @@ function renderRadios(){
     el.querySelector(".nm").textContent=r.name;
     const nb=el.querySelector(".nb");nb.textContent=net.type&&net.type!=="unknown"?net.label:"";nb.className="nb badge "+(net.type||"");nb.style.display=nb.textContent?"":"none";
     if(!(document.activeElement&&document.activeElement.closest("#r-"+CSS.escape(r.id)+" .tuneform"))){
-      el.querySelector(".fq").innerHTML=`<b>${r.freq_mhz?Number(r.freq_mhz).toFixed(3)+" MHz":"frequency not set"}</b> <span class="muted">${r.band&&r.band.band?esc(r.band.band):""} · ${esc(r.mode||"")} · ${r.gate==="carrier"?"carrier gate":"voice gate"}</span>
-        <button class="tune" data-tune="${esc(r.id)}" title="Set what this radio is tuned to">Change</button>`;
+      el.querySelector(".fq").innerHTML=`<b>${r.freq_mhz?Number(r.freq_mhz).toFixed(3)+" MHz":"frequency not set"}</b> <span class="muted">${r.band&&r.band.band?esc(r.band.band):""} · ${esc(r.mode||"")} · ${r.gate==="carrier"?"carrier gate":"voice gate"}</span>${catBadge(r)}
+        <button class="tune" data-tune="${esc(r.id)}" title="${r.cat?"Tune the radio (CAT)":"Set what this radio is tuned to"}">Change</button>`;
       el.querySelector(".tunebox").innerHTML=editing===r.id?`<form class="tuneform" data-rid="${esc(r.id)}"><input name="f" inputmode="decimal" value="${r.freq_mhz??""}" aria-label="Frequency in MHz"> MHz
         <select name="m">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===r.mode?" selected":""}>${m}</option>`).join("")}</select>
         <button type="submit">Save</button> <button type="button" data-cancel>Cancel</button> <span class="err tuneerr"></span>

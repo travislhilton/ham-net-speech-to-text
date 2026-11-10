@@ -218,6 +218,10 @@ class Station:
         if listen:
             for r in self.cfg["radios"]:
                 threading.Thread(target=self._listen, args=(r,), daemon=True, name=f"radio-{r['id']}").start()
+        from .cat import CatControl                   # CAT: read and tune radios that have a CI-V port
+        self.cat = CatControl(self, getattr(self, "_cat_factory", None))
+        if self.cat.cfg:
+            threading.Thread(target=self.cat.run, args=(self.stop,), daemon=True, name="cat").start()
         threading.Thread(target=self._ticker, daemon=True, name="ticker").start()
         from .accurate import AccuratePass
         from . import accurate_local
@@ -501,7 +505,7 @@ class Station:
         for n in self.cfg.get("schedule", []):
             if n.get("radio"):
                 nets.setdefault(n["radio"], []).append(n.get("name"))
-        return {"radios": cur, "inputs": rmod.fresh_inputs() or rmod.inputs(), "nets": nets,
+        return {"radios": cur, "inputs": rmod.fresh_inputs() or rmod.inputs(), "nets": nets, "ports": rmod.serial_ports(),
                 "from": "dashboard" if (self.data / "radios.json").exists() else "station.yaml",
                 "restart": os.name == "nt"}
 

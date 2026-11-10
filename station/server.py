@@ -227,6 +227,9 @@ def make_handler(station):
                     return self._json(station.clear_radio(m.group(1)))
                 if m.group(2) == "level":                        # Set level…: {"action": "auto"} | {"db"} | {"step"}
                     return self._json(station.set_level(m.group(1), body))
+                cat = getattr(station, "cat", None)
+                if cat is not None and cat.has(m.group(1)):        # a CAT radio: Change tunes the radio itself
+                    return self._json(cat.tune_now(m.group(1), body.get("freq_mhz"), body.get("mode")))
                 return self._json(station.set_radio(m.group(1), body.get("freq_mhz"), body.get("mode")))
             except (RuntimeError, FileNotFoundError) as e:
                 return self._json({"error": str(e)}, 409)

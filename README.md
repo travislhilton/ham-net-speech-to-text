@@ -100,7 +100,7 @@ nets cannot be removed until its nets move to another radio. Inputs are matched 
 |---|---|---|
 | A handheld (Baofeng, Wouxun KG-UV9PX+, …) | speaker/earphone jack → Digirig Lite or Mobile (USB) | Audio from: *speaker / earphone jack* (voice gate). The jack is very loud: Set level… step 1 finds the cleanest volume knob position. On all day: run it from a charger or battery eliminator — a flat battery shows as **the radio seems to be OFF** on its card. |
 | Yaesu FTM-150R (VHF/UHF) | DATA jack (10-pin mini-DIN) → Masters DRA-50M (USB) | Set 45 DATA BAND = A-BAND FIX, tune band A to the net; leave 41 DUAL RECEIVE MODE (a priority scan) OFF. The DATA jack is unsquelched, so the recorder's **carrier gate** detects transmissions from the drop in hiss. Step by step: `docs/FTM-150R-SETUP.txt`. |
-| Icom IC-705 (HF/VHF/UHF, Wi-Fi) | Icom **Remote Utility** (connected to the radio) → its virtual sound input `IC-705 (Icom Virtual Audio Driver)` | In `station.yaml`: `device: IC-705`, `gate: voice` (SSB has no carrier to detect). Remote Utility must be running and connected. Set the frequency and mode with **Change** on the radio's card; reading them from the radio (CAT) is planned. |
+| Icom IC-705 (HF/VHF/UHF, Wi-Fi) | Icom **Remote Utility** (connected to the radio) → its virtual sound input `IC-705 (Icom Virtual Audio Driver)` | In `station.yaml`: `device: IC-705`, `gate: voice` (SSB has no carrier to detect). Remote Utility must be running and connected. **CAT** (optional, recommended): in **Radios…** choose the radio's **CAT port** — Remote Utility's virtual CI-V COM port on Wi-Fi, the radio's first COM port on USB (CI-V address A4). The card then shows the frequency read from the radio, **Change** tunes the radio, and each of its scheduled nets tunes it (any band) and puts it back after. |
 
 ## Using it
 
@@ -438,7 +438,8 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | HF / voice gate: 600 ms pre-roll; a short piece waits 0.6 s after the hangover for its continuation (a call sign spelled with gaps, a kerchunk before the words) | built + unit-tested (`merge_gap_ms`, `merge_max_s`, `preroll_ms`); not yet measured on a live HF net |
 | Sub-audible tone + mains hum removed before Whisper (high-pass 300 Hz on FM data-jack radios) | working (`highpass_hz`) |
 | Whisper's noise phrases ("So.", "We'll be right back.") shown greyed as probable noise, left out of the ICS-309 | working |
-| Icom IC-705 via Icom Remote Utility (voice gate) | working on the test PC; frequency read from the radio planned |
+| Icom IC-705 via Icom Remote Utility (voice gate) | working on the test PC |
+| **CAT control (Icom CI-V)** per radio (`cat: {port: COM11, civ: A4}`, or Radios… → CAT port): the frequency and mode are read from the radio every 5 s (card + every transmission); **Change** tunes the radio; a scheduled net on that radio — VHF/UHF or HF — tunes it at the net's start (frequency, mode, tone squelch off; the net's repeater offset and tone when it gives them) and puts back what it was on when the net ends, unless the operator retuned during the net (kept across a restart). Never transmits: only reads and these settings can be sent (`station/cat.py`) | built + tested on a simulated IC-705 (CI-V echo, HF/VHF/UHF, restart mid-net, missing port); first test on the radio pending |
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |
 | FCC callbook (1.7 M licenses, daily updates) + country lookup for any callsign | working |

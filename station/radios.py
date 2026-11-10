@@ -16,7 +16,7 @@ import json
 import re
 from pathlib import Path
 
-EDITABLE = ("id", "name", "device", "gate", "mode", "freq_mhz")
+EDITABLE = ("id", "name", "device", "gate", "mode", "freq_mhz", "cat")   # cat: CI-V port (station/cat.py)
 GATES = ("carrier", "voice")
 MODES = ("FM", "USB", "LSB", "AM", "CW", "DIG")
 SKIP = ("stereo mix", "primary sound capture", "microsoft sound mapper")
@@ -135,10 +135,36 @@ def clean(radios: list[dict]) -> list[dict]:
                 f = round(float(f), 4)
             except (TypeError, ValueError):
                 raise ValueError(f"{name}: frequency must be in MHz, like 146.940")
+        cat = r.get("cat")
+        if isinstance(cat, str):
+            cat = {"port": cat.strip()} if cat.strip() else None
+        if cat:
+            port = str(cat.get("port") or "").strip()
+            if not re.fullmatch(r"(COM\d{1,3}|/dev/[\w./-]+)", port, re.I):
+                raise ValueError(f"{name}: CAT port must be like COM11")
+            try:
+                civ = cat.get("civ", "A4")
+                civ = int(civ, 16) if isinstance(civ, str) else int(civ)
+            except ValueError:
+                raise ValueError(f"{name}: CI-V address must be hex, like A4") from None
+            if not 0x01 <= civ <= 0xDF:
+                raise ValueError(f"{name}: CI-V address must be 01-DF (hex)")
+            cat = {"port": port.upper() if port.upper().startswith("COM") else port, "civ": f"{civ:02X}",
+                   "baud": int(cat.get("baud") or 19200), "model": str(cat.get("model") or "IC-705")}
         ids.add(rid); devs.add(dev.lower())
         out.append({"id": rid, "name": name, "device": dev, "gate": gate, "mode": mode,
-                    "freq_mhz": None if f in (None, "") else f})
+                    "freq_mhz": None if f in (None, "") else f} | ({"cat": cat} if cat else {}))
     return out
+
+
+def serial_ports() -> list[dict]:
+    """The PC's serial (COM) ports for a radio's CAT control, with what Windows calls them. Icom Remote Utility's
+    virtual CI-V port is listed like a real one."""
+    try:
+        from serial.tools import list_ports
+        return [{"port": p.device, "desc": p.description or ""} for p in sorted(list_ports.comports(), key=lambda p: p.device)]
+    except Exception:  # noqa: BLE001 - no pyserial (a dev machine), or no ports
+        return []
 
 
 def save(path: Path, radios: list[dict]):

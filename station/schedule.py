@@ -90,9 +90,23 @@ def validate(body: dict, radios: dict) -> dict:
         raise ValueError("the alert must be a whole number of minutes (0 = no alert)") from None
     if not 0 <= alert <= 120:
         raise ValueError("the alert must be 0 to 120 minutes before the net")
+    def num(k, lo, hi, what):
+        v = body.get(k)
+        if v in (None, ""):
+            return None
+        try:
+            v = round(float(str(v).replace(",", ".")), 4)
+        except ValueError:
+            raise ValueError(f"{what} must be a number") from None
+        if not lo <= v <= hi:
+            raise ValueError(f"{what} must be between {lo} and {hi}")
+        return v
+    offset = num("offset_mhz", -10, 10, "the repeater offset (MHz, like -5 or 0.6; 0 = simplex)")
+    tone = num("tone_hz", 60, 260, "the repeater tone (Hz, like 100.0)")
     out = {"name": name, "radio": rid, "freq_mhz": f, "mode": mode, "start": start, "duration_min": dur, "ncs": ncs,
            "repeat": rule, "exceptions": recur.normalize_exceptions(body.get("exceptions"), MODES) or None,
-           "alert_min": alert, "emergency": True if body.get("emergency") else None}
+           "alert_min": alert, "emergency": True if body.get("emergency") else None,
+           "offset_mhz": offset, "tone_hz": tone}             # CAT: set on the radio with the frequency (station/cat.py)
     return {k: v for k, v in out.items() if v is not None}
 
 
@@ -108,7 +122,7 @@ def item(n: dict, o: dict) -> dict:
             "key": recur.key(n.get("id"), o["date"]), "start": o["start"].isoformat(timespec="minutes"),
             "end": o["end"].isoformat(timespec="minutes"), "freq_mhz": o.get("freq_mhz"), "mode": o.get("mode"),
             "ncs": n.get("ncs"), "note": o.get("note"), "moved": o.get("moved", False),
-            "emergency": bool(n.get("emergency"))}
+            "emergency": bool(n.get("emergency")), "offset_mhz": n.get("offset_mhz"), "tone_hz": n.get("tone_hz")}
 
 
 def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace=GRACE_MIN, skip=()):
@@ -416,6 +430,10 @@ class NetSchedule:
                 if self._want.get(rid) == want:
                     continue
                 self._want[rid] = want
+                cat = getattr(self.st, "cat", None)
+                if cat is not None and cat.has(rid):
+                    # CAT (station/cat.py): tune the radio to the net at its start, put it back at the end
+                    cat.on_net(rid, cur if want else None)
                 if not L.get("scheduled"):
                     # A scheduled net is always recorded (owner, 2026-11-03): a radio paused by hand is resumed
                     # LEAD_MIN before its net and put back to paused GRACE_MIN after it, unless the operator
