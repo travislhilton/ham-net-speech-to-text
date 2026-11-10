@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Situation report read-out</title>
+<style>
+:root{--bg:#f6f5f1;--panel:#fff;--ink:#1b1a17;--muted:#5d5a52;--line:#dcd8ce;--accent:#1f5f8b;--ok:#2e7d4f;--warn:#9a6200;--bad:#b3261e;--card:#10314a;--cardink:#f1f6fa}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--panel:#1e1e1c;--ink:#ecebe6;--muted:#a8a49a;--line:#3a3935;--accent:#73b4e2;--ok:#6cc596;--warn:#e2b04a;--bad:#f08a80;--card:#0c2638;--cardink:#e6eef4}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:14px 16px 60px}h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+a{color:var(--accent)}.muted{color:var(--muted)}.small{font-size:.88rem}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}input[type=text],input[type=url]{flex:1 1 220px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
+button,.btn{font:inherit;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;text-decoration:none}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button:disabled{opacity:.5;cursor:default}
+.tag{display:inline-block;font-size:.75rem;font-weight:700;padding:.05em .55em;border-radius:99px;border:1px solid currentColor}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}td:first-child{color:var(--muted);width:42%}
+.seg{border-bottom:1px dashed var(--line);padding:8px 0}.seg:last-child{border:0}.seg .h{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.err{color:var(--bad);font-weight:600}
+#card{position:fixed;inset:0;background:var(--card);color:var(--cardink);display:none;flex-direction:column;padding:14px 18px calc(14px + env(safe-area-inset-bottom,0px));z-index:9}
+#card.on{display:flex}#card .top{display:flex;justify-content:space-between;gap:10px;font-size:.9rem;opacity:.85}
+#card .bar{height:5px;background:rgba(255,255,255,.2);border-radius:3px;margin:8px 0}#card .bar i{display:block;height:100%;background:#7cc3f0;border-radius:3px}
+#card .say{flex:1;overflow-y:auto;font-size:clamp(22px,4.2vw,34px);line-height:1.45;padding:10px 0}
+#card .hint{font-size:.95rem;background:rgba(255,255,255,.12);border-radius:8px;padding:6px 10px;margin-bottom:8px}
+#card .ctl{display:flex;gap:10px}#card .ctl button{flex:1;padding:14px;font-size:1.05rem;background:rgba(255,255,255,.12);color:inherit;border-color:rgba(255,255,255,.3)}
+#card .ctl button.next{background:#7cc3f0;color:#062033;border-color:#7cc3f0}
+</style>
+</head>
+<body>
+<main>
+<div class="row" style="justify-content:space-between"><h1>Situation report read-out</h1><a href="/" class="small">← Station</a></div>
+<p class="small muted">The EOC's report, written for the ear by a fixed template (no AI), approved, then read by you in your own voice from a large-type card. Injuries and missionary status are never part of it. The station does not key your radio.</p>
+
+<div class="box">
+  <div class="row"><input type="url" id="url" aria-label="EOC address" placeholder="http://127.0.0.1:8080/api/readout"><button id="get" class="primary">Get from the EOC</button>
+  <label class="btn">Load a file<input type="file" id="file" accept=".json,application/json" hidden></label></div>
+  <div id="src" class="small" style="margin-top:8px"></div>
+</div>
+
+<div id="body"></div>
+</main>
+
+<div id="card" role="dialog" aria-label="Read-out card">
+  <div class="top"><span id="cPos"></span><span id="cId"></span><button id="cClose" style="background:none;color:inherit;border-color:rgba(255,255,255,.3);padding:4px 10px">Close</button></div>
+  <div class="bar"><i id="cBar"></i></div>
+  <div class="hint" id="cHint"></div>
+  <div class="say" id="cSay"></div>
+  <div class="ctl"><button id="cBack">‹ Back</button><button id="cNext" class="next">Read · Next ›</button></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let V=null,I=0,lastId=0,RADIO=null;
+async function api(p,b){const r=await fetch(p,b?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d}
+async function load(){try{V=await api("/api/readout");render()}catch(e){$("body").innerHTML=`<p class="err">${esc(e.message)}</p>`}}
+async function act(p,b){try{V=await api(p,b);render();return true}catch(e){alert(e.message);return false}}
+function age(iso){if(!iso)return null;const m=Math.round((Date.now()-new Date(iso).getTime())/60000);return m<0?null:m}
+function render(){
+  if(!$("url").value)$("url").value=V.url||"";
+  const d=V.doc;
+  if(!d){$("src").innerHTML=(V.error?`<span class="err">${esc(V.error)}</span>`:`<span class="muted">No report loaded yet.</span>`);$("body").innerHTML="";return}
+  const a=age(d.as_of),stale=a!==null&&a>V.stale_min;
+  $("src").innerHTML=`<b>${esc(d.source.eoc.name||"EOC")}</b> · ${esc(d.source.event.name||"")} ${d.exercise?'<span class="tag warn">EXERCISE</span>':""}<br>
+   As of ${esc((d.as_of||"").slice(11,16)||"?")} local${a!==null?` · <span class="${stale?"warn":"muted"}">${a} min old${stale?": get a newer report, or say the as-of time":""}</span>`:""} · from ${esc(V.how||"")}
+   ${V.error?`<br><span class="err">${esc(V.error)}</span>`:""}`;
+  const ap=V.approval,rv=V.revoked;
+  $("body").innerHTML=`
+  ${rv&&!ap?`<div class="box"><b class="warn">New report since the last approval</b> (approved by ${esc(rv.by||"")}): ${rv.changes&&rv.changes.length?esc(rv.changes.join("; ")):"the facts changed"}. It needs approval again.</div>`:""}
+  <h2>Facts</h2><div class="box"><table>${V.facts.map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></div>
+  <h2>Script <span class="muted small">· about ${Math.round(V.seconds/60*10)/10} min · ${V.script.length} sections</span></h2>
+  <div class="box">${V.script.map(s=>`<div class="seg"><div class="h">${esc(s.title)} · ~${s.seconds} s${s.wait?" · wait for go ahead":""}</div>${esc(s.text)}</div>`).join("")}</div>
+  <h2>Approval</h2><div class="box">${ap?`<span class="tag ok">Approved</span> by <b>${esc(ap.by)}</b> (${esc(ap.role)}) at ${esc(ap.at.slice(11,16))}.
+     <div class="row" style="margin-top:10px"><button class="primary" id="air">Read on the air</button></div>`
+    :`<p class="small">Approved by the <b>${esc(V.role)}</b> before it is read.</p>
+     <div class="row"><input type="text" id="by" placeholder="Approver's name" aria-label="Approver's name"></div>
+     <label class="small" style="display:block;margin:8px 0"><input type="checkbox" id="role"> I am the ${esc(V.role)}, and I approve these facts for an open frequency.</label>
+     <button class="primary" id="apr">Approve for the net</button>`}</div>`;
+  if($("apr"))$("apr").onclick=()=>act("/api/readout/approve",{by:$("by").value,confirm_role:$("role").checked,fingerprint:d.fingerprint});
+  if($("air"))$("air").onclick=()=>{I=0;lastId=Date.now();show()};
+}
+function show(){
+  const S=V.script,s=S[I];$("card").classList.add("on");
+  $("cPos").textContent=`Section ${I+1} of ${S.length} · ${s.title}`;
+  $("cBar").style.width=((I+1)/S.length*100)+"%";
+  $("cSay").textContent=s.text;
+  $("cHint").textContent=s.wait?"Key your radio and call net control. Wait for “go ahead” before the next section.":
+    (I===S.length-1?"Last section: you hand the net back to net control.":"Pause after the call sign: stations may have questions.");
+  $("cNext").textContent=I===S.length-1?"Read · Done":"Read · Next ›";$("cBack").disabled=I===0;
+  tick()}
+function tick(){if(!$("card").classList.contains("on"))return;const m=Math.floor((Date.now()-lastId)/60000);$("cId").textContent=`Last ID ${m} min ago`;setTimeout(tick,15000)}
+$("cNext").onclick=async()=>{const s=V.script[I];if(await act("/api/readout/read",{section:s.id,radio:RADIO})){lastId=Date.now();if(I<V.script.length-1){I++;show()}else{$("card").classList.remove("on");alert("Read-out logged.")}}};
+$("cBack").onclick=()=>{if(I>0){I--;show()}};
+$("cClose").onclick=()=>$("card").classList.remove("on");
+$("get").onclick=()=>act("/api/readout/fetch",{url:$("url").value});
+$("file").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await act("/api/readout/load",{doc:JSON.parse(await f.text())})}catch(err){alert("That file is not a read-out report: "+err.message)}e.target.value=""};
+try{RADIO=new URLSearchParams(location.search).get("radio")}catch(e){}
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+{
+ "schema": "emcomm-readout/1",
+ "generated_at": "2026-11-10T19:02:11-07:00",
+ "as_of": "2026-11-10T18:57:00-07:00",
+ "source": {
+  "app": "church-emcomm-eoc",
+  "forms_version": "2026-11-09.1",
+  "eoc": {
+   "name": "Juniper Plains Area EOC",
+   "level": "area"
+  },
+  "event": {
+   "id": "ev_example",
+   "name": "Larkspur earthquake",
+   "exercise": false
+  }
+ },
+ "approver": {
+  "role": "Area Authority or his delegate"
+ },
+ "pace": {
+  "level": "C",
+  "since": "2026-11-10T16:40:00-07:00"
+ },
+ "incident": {
+  "name": "Larkspur earthquake",
+  "type": "Earthquake",
+  "area": "Larkspur",
+  "interval_hours": 4,
+  "next_sitrep_at": "2026-11-10T23:00:00-07:00"
+ },
+ "reporting": {
+  "unit_word": "stake",
+  "units_expected": 8,
+  "units_reported": 3,
+  "reported": [
+   "Larkspur Stake",
+   "Larkspur East Stake",
+   "Kestrel Stake"
+  ],
+  "not_reported": [
+   "Larkspur West Stake",
+   "Copper Ridge Stake",
+   "Juniper Springs Stake",
+   "Alder Flat Stake",
+   "Saddleback Stake"
+  ],
+  "reports": {
+   "dr": 14,
+   "so": 6,
+   "wcl": 3
+  },
+  "via_rollup": [
+   "Larkspur Stake EOC",
+   "Kestrel Stake EOC"
+  ]
+ },
+ "property": {
+  "homes_damaged": 41,
+  "homes_destroyed": 2
+ },
+ "needs": {
+  "local": [],
+  "neighbor": [
+   "Kestrel Stake"
+  ],
+  "hq": [
+   "Larkspur Stake"
+  ]
+ },
+ "supplies": {
+  "orders": 3,
+  "top_items": [
+   {
+    "desc": "Water, 1 gallon",
+    "qty": 200
+   },
+   {
+    "desc": "Tarp, 12 by 16 feet",
+    "qty": 60
+   }
+  ]
+ },
+ "crews": {
+  "logs": 2,
+  "members": 19,
+  "hours": 74.5
+ },
+ "volunteers": {
+  "count": 46,
+  "hours": 210
+ },
+ "notes": [],
+ "fingerprint": "sha256:1d0243078216bd370c972f5926f476f281dd13d08995415d1db92df31f8c775d"
+}

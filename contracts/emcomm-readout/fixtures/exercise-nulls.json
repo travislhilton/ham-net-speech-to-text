@@ -1,0 +1,79 @@
+{
+ "schema": "emcomm-readout/1",
+ "generated_at": "2026-11-10T19:02:11-07:00",
+ "as_of": "2026-11-10T18:57:00-07:00",
+ "source": {
+  "app": "church-emcomm-eoc",
+  "forms_version": "2026-11-09.1",
+  "eoc": {
+   "name": "Larkspur Stake EOC",
+   "level": "stake"
+  },
+  "event": {
+   "id": "ev_example",
+   "name": "Larkspur earthquake drill",
+   "exercise": true
+  }
+ },
+ "approver": {
+  "role": "Stake President or his delegate"
+ },
+ "pace": {
+  "level": null,
+  "since": null
+ },
+ "incident": {
+  "name": "Larkspur earthquake",
+  "type": "Earthquake",
+  "area": "Larkspur",
+  "interval_hours": 4,
+  "next_sitrep_at": "2026-11-10T23:00:00-07:00"
+ },
+ "reporting": {
+  "unit_word": "ward",
+  "units_expected": null,
+  "units_reported": 4,
+  "reported": [
+   "Larkspur 1st Ward",
+   "Larkspur 2nd Ward",
+   "Larkspur 3rd Ward",
+   "Larkspur 5th Ward"
+  ],
+  "not_reported": null,
+  "reports": {
+   "dr": 5,
+   "so": 3,
+   "wcl": 2
+  },
+  "via_rollup": []
+ },
+ "property": {
+  "homes_damaged": 41,
+  "homes_destroyed": null
+ },
+ "needs": {
+  "local": [
+   "Larkspur 2nd Ward"
+  ],
+  "neighbor": [],
+  "hq": [
+   "Larkspur 2nd Ward",
+   "Larkspur 5th Ward"
+  ]
+ },
+ "supplies": {
+  "orders": 0,
+  "top_items": []
+ },
+ "crews": {
+  "logs": 0,
+  "members": null,
+  "hours": null
+ },
+ "volunteers": {
+  "count": null,
+  "hours": null
+ },
+ "notes": [],
+ "fingerprint": "sha256:4e9af219c41144e906b69caa6ca1d73402832f1e7793f6f52b40a70c7f5e14da"
+}

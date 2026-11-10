@@ -186,6 +186,8 @@ class Station:
         self.agent = Agent(self)                                 # the station agent: Draft mode only, never transmits
         from .scan import Scanner
         self.scan = Scanner(self)                                # HF scan between nets (station/scan.py), receive only
+        from .readout import Readout
+        self.readout = Readout(self)                             # the EOC's incident report, read on a voice net
         from .history import History            # net history, search, analysis, minutes (data/history.db)
         self.history = History(self.data, nets=lambda: self.cfg.get("schedule") or [], radios=lambda: self.radios,
                                callbook=callbook, clock=clock, me=self.me, bus=self.bus)

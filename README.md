@@ -476,6 +476,23 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 .\.venv\Scripts\python.exe tools\pick_engine.py                    # re-measure after a hardware/driver change
 ```
 
+## Incident read-out (situation report on a voice net)
+
+The station can read an EOC's situation report on a voice net — from the companion EOC Message Center
+(`GET http://<eoc>:8080/api/readout`) or a file carried by hand. The shared format is `contracts/emcomm-readout/`
+(`emcomm-readout/1`, JSON Schema + example fixtures). Open **Read-out** in the dashboard header (or `/readout` on a phone):
+
+1. **Get from the EOC** or **Load a file**. A document that carries injuries, deaths, missionary status or details
+   about people is refused, not filtered: those are never read on an open frequency.
+2. The facts and a voice script written by a fixed template (no AI): sections of about 30 seconds, numbers in words,
+   the call sign at the end of each section, "This is an exercise" around each section during a drill.
+3. **Approve**: by the Stake President or his delegate (stake and satellite EOCs) or the Area Authority or his
+   delegate (area EOC). The approval binds to the report's fingerprint; a newer report with different facts needs a
+   new approval and shows what changed.
+4. **Read on the air**: a large-type card, one section at a time. The operator keys the radio and reads in their own
+   voice; the station never keys a transmitter. Reading it is logged (`data/readouts.jsonl`) and noted in the minutes
+   of the net that is on.
+
 ## Status
 
 | Piece | State |

@@ -1,0 +1,93 @@
+{
+ "schema": "emcomm-readout/1",
+ "generated_at": "2026-11-10T19:02:11-07:00",
+ "as_of": "2026-11-10T18:57:00-07:00",
+ "source": {
+  "app": "church-emcomm-eoc",
+  "forms_version": "2026-11-09.1",
+  "eoc": {
+   "name": "Larkspur Stake EOC",
+   "level": "stake"
+  },
+  "event": {
+   "id": "ev_example",
+   "name": "Larkspur earthquake",
+   "exercise": false
+  }
+ },
+ "approver": {
+  "role": "Stake President or his delegate"
+ },
+ "pace": {
+  "level": "C",
+  "since": "2026-11-10T16:40:00-07:00"
+ },
+ "incident": {
+  "name": "Larkspur earthquake",
+  "type": "Earthquake",
+  "area": "Larkspur",
+  "interval_hours": 4,
+  "next_sitrep_at": "2026-11-10T23:00:00-07:00"
+ },
+ "reporting": {
+  "unit_word": "ward",
+  "units_expected": 6,
+  "units_reported": 4,
+  "reported": [
+   "Larkspur 1st Ward",
+   "Larkspur 2nd Ward",
+   "Larkspur 3rd Ward",
+   "Larkspur 5th Ward"
+  ],
+  "not_reported": [
+   "Larkspur 4th Ward",
+   "Larkspur 6th Ward"
+  ],
+  "reports": {
+   "dr": 5,
+   "so": 3,
+   "wcl": 2
+  },
+  "via_rollup": []
+ },
+ "property": {
+  "homes_damaged": 41,
+  "homes_destroyed": 2
+ },
+ "needs": {
+  "local": [
+   "Larkspur 2nd Ward"
+  ],
+  "neighbor": [],
+  "hq": [
+   "Larkspur 2nd Ward",
+   "Larkspur 5th Ward"
+  ]
+ },
+ "supplies": {
+  "orders": 3,
+  "top_items": [
+   {
+    "desc": "Water, 1 gallon",
+    "qty": 200
+   },
+   {
+    "desc": "Tarp, 12 by 16 feet",
+    "qty": 60
+   }
+  ]
+ },
+ "crews": {
+  "logs": 2,
+  "members": 19,
+  "hours": 74.5
+ },
+ "volunteers": {
+  "count": 46,
+  "hours": 210
+ },
+ "notes": [
+  "Shelter open at the Larkspur Stake Center."
+ ],
+ "fingerprint": "sha256:e0ba5c2a98068ad22b0f8d2d5d04bb284fd285b67b59eae682eba63068ba9507"
+}

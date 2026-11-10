@@ -96,6 +96,10 @@ def make_handler(station):
                 return self._json({"text": test_text(station.cfg.get("callsign")), "history": station.test_history()})
             if u.path == "/api/settings":
                 return self._json(station.operator())
+            if u.path in ("/readout", "/readout.html"):         # the read-out: approve, then the large-type card
+                return self._send(200, (STATIC / "readout.html").read_bytes(), "text/html; charset=utf-8")
+            if u.path == "/api/readout":
+                return self._json(station.readout.view())
             if u.path == "/api/scan":                            # HF scan: each radio's mode + antenna, remembered spots
                 return self._json(station.scan.view())
             if u.path == "/api/agent":                           # the station agent: settings + drafts
@@ -171,8 +175,9 @@ def make_handler(station):
             sec = re.fullmatch(r"/api/secrets/([A-Z_]+)(/test)?", u.path)                               # Settings: a key
             agent = re.fullmatch(r"/api/agent/(settings|radio|ask|rate)(/[\w-]+)?", u.path)               # station agent
             scan = re.fullmatch(r"/api/scan/[\w-]+(/antenna)?", u.path)                                   # HF scan
+            rdo = re.fullmatch(r"/api/readout/(fetch|load|approve|read|url)", u.path)                      # read-out
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or sched or who or fix or alert or item or close or sec or agent or scan or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or who or fix or alert or item or close or sec or agent or scan or rdo or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 self.close_connection = True                   # its body is unread: never reuse the connection
                 return self._json({"error": "not found"}, 404)
             try:
@@ -182,6 +187,8 @@ def make_handler(station):
                     return self._json(station.agent.post(u.path, body))
                 if scan:
                     return self._json(station.scan.post(u.path, body))
+                if rdo:
+                    return self._json(station.readout.post(u.path, body))
                 if sched:
                     return self._json(station.nets.post(u.path, body))
                 if sec:                                          # {"value": key | null}; /test asks the provider

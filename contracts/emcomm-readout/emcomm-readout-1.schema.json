@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "emcomm-readout/1",
+  "title": "EMCOMM incident read-out, version 1",
+  "description": "What an EOC (Emergency Operations Center) publishes for a voice net to read: counts, unit names and times only. It never carries people's names, phone numbers, email or street addresses, GPS coordinates, injuries or missionary status (owner decision 2026-11-10: those are not read on an open frequency, so they are not in the document at all). A value that could not be computed is null and is spoken as 'not reported', never 'zero'. Producer: church-emcomm-wnlk-forms (eoc/readout.py, GET /api/readout). Consumer: ham-net-speech-to-text (station/readout.py).",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema", "generated_at", "as_of", "fingerprint", "source", "approver", "pace", "incident", "reporting",
+               "property", "needs", "supplies", "crews", "volunteers"],
+  "properties": {
+    "schema": {"const": "emcomm-readout/1"},
+    "generated_at": {"type": "string", "format": "date-time", "description": "When the producer built this document (local time with offset). Not part of the fingerprint."},
+    "as_of": {"type": ["string", "null"], "format": "date-time", "description": "The newest record counted."},
+    "fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "sha256 of the canonical JSON of the whole document without generated_at and fingerprint: json.dumps(doc, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8'). An approval binds to it."},
+    "source": {
+      "type": "object", "required": ["app", "eoc", "event"],
+      "properties": {
+        "app": {"type": "string", "description": "church-emcomm-eoc, or manual (typed in at the station)"},
+        "forms_version": {"type": ["string", "null"]},
+        "eoc": {"type": "object", "required": ["name", "level"], "properties": {
+          "name": {"type": ["string", "null"]},
+          "level": {"enum": ["satellite", "stake", "area"]}}},
+        "event": {"type": "object", "required": ["name", "exercise"], "properties": {
+          "id": {"type": ["string", "null"]}, "name": {"type": ["string", "null"]},
+          "exercise": {"type": "boolean", "description": "true = every spoken section begins and ends with 'This is an exercise'"}}}
+      }
+    },
+    "approver": {"type": "object", "required": ["role"], "description": "Who approves the content before it is read (owner decision 2026-11-10).", "properties": {
+      "role": {"enum": ["Stake President or his delegate", "Area Authority or his delegate"],
+               "description": "satellite and stake EOCs: Stake President or his delegate; area: Area Authority or his delegate"}}},
+    "pace": {"type": "object", "required": ["level"], "properties": {
+      "level": {"enum": ["P", "A", "C", "E", null]}, "since": {"type": ["string", "null"]}}},
+    "incident": {"type": "object", "required": ["name", "type", "area"], "properties": {
+      "name": {"type": ["string", "null"]}, "type": {"type": ["string", "null"]}, "area": {"type": ["string", "null"]},
+      "interval_hours": {"type": ["number", "null"]}, "next_sitrep_at": {"type": ["string", "null"]}}},
+    "reporting": {"type": "object", "required": ["unit_word", "units_reported", "reports"], "properties": {
+      "unit_word": {"enum": ["ward", "stake"], "description": "what one reporting unit is called at this level"},
+      "units_expected": {"type": ["integer", "null"], "description": "null when the EOC has not listed its units"},
+      "units_reported": {"type": "integer"},
+      "reported": {"type": "array", "items": {"type": "string"}},
+      "not_reported": {"type": ["array", "null"], "items": {"type": "string"}, "description": "null when units_expected is unknown"},
+      "reports": {"type": "object", "properties": {"dr": {"type": "integer"}, "so": {"type": "integer"}, "wcl": {"type": "integer"}}},
+      "via_rollup": {"type": "array", "items": {"type": "string"}}}},
+    "property": {"type": "object", "properties": {
+      "homes_damaged": {"type": ["integer", "null"]}, "homes_destroyed": {"type": ["integer", "null"]}}},
+    "needs": {"type": "object", "description": "units (names) asking for each kind of help", "properties": {
+      "local": {"type": "array", "items": {"type": "string"}}, "neighbor": {"type": "array", "items": {"type": "string"}},
+      "hq": {"type": "array", "items": {"type": "string"}}}},
+    "supplies": {"type": "object", "properties": {
+      "orders": {"type": "integer"},
+      "top_items": {"type": "array", "maxItems": 5, "items": {"type": "object", "required": ["desc", "qty"], "properties": {
+        "desc": {"type": "string"}, "qty": {"type": "number"}}}}}},
+    "crews": {"type": "object", "properties": {
+      "logs": {"type": "integer"}, "members": {"type": ["integer", "null"]}, "hours": {"type": ["number", "null"]}}},
+    "volunteers": {"type": "object", "properties": {
+      "count": {"type": ["integer", "null"]}, "hours": {"type": ["number", "null"]}}},
+    "notes": {"type": "array", "description": "Short lines the approver typed for the net (shelters open, roads to avoid). Read only after approval.", "items": {"type": "string", "maxLength": 200}}
+  }
+}
