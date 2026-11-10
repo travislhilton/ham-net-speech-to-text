@@ -152,12 +152,12 @@ def make_handler(station):
 
         def do_POST(self):
             u = urlparse(self.path)
-            m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen|level))?", u.path)
+            m = re.fullmatch(r"/api/radios/([\w-]+)(?:/(pause|clear|listen|level|setup))?", u.path)
             who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes", "/api/learned"}
-            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore))?)?", u.path)   # schedule
+            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net
@@ -225,6 +225,8 @@ def make_handler(station):
                     return self._json(station.nets.set_listen(m.group(1), body))
                 if m.group(2) == "clear":
                     return self._json(station.clear_radio(m.group(1)))
+                if m.group(2) == "setup":                        # the card: antenna (HF | VHF/UHF), nets | Winlink only
+                    return self._json(station.set_radio_setup(m.group(1), body))
                 if m.group(2) == "level":                        # Set level…: {"action": "auto"} | {"db"} | {"step"}
                     return self._json(station.set_level(m.group(1), body))
                 cat = getattr(station, "cat", None)

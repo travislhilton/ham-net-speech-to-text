@@ -16,6 +16,7 @@ import yaml
 from hamkit import glossary
 from hamkit.bands import band
 from hamkit.callsigns import load_roster, normalize, _ANY as CALL_SHAPE
+from .fit import infer_model as fit_infer
 from hamkit.hints import Hinter, phonetic
 from . import callfix
 from . import speaker
@@ -173,7 +174,10 @@ class Station:
                                  "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode", "FM"),
                                  "band": band(r.get("freq_mhz")), "gate": r["gate"], "state": "starting",
                                  "level_db": None, "carrier": False, "error": None,
-                                 "meter": self.meters[r["id"]].limits()}
+                                 "meter": self.meters[r["id"]].limits(),
+                                 # what it can hear (station/fit.py): model from Radios…, antenna/role on its card
+                                 "model": r.get("model") or fit_infer(r), "role": "nets",
+                                 "antenna": "hf" if (r.get("model") or fit_infer(r)) == "ic705" else None}
                        for r in config["radios"]}
         self._apply_operator()
         from .schedule import NetSchedule      # schedule: dashboard-edited nets + listen only during nets + alerts
@@ -515,11 +519,9 @@ class Station:
         if not new:
             raise ValueError("keep at least one radio")
         gone = {n.get("radio") for n in self.cfg.get("schedule", [])} - {r["id"] for r in new} - {None}
-        if gone:
-            names = [n.get("name") for n in self.cfg.get("schedule", []) if n.get("radio") in gone]
-            raise ValueError("a radio you removed has nets (" + ", ".join(map(str, names)) +
-                             "): move them to another radio in Nets… first")
         rmod.save(self.data / "radios.json", new)
+        if gone:                    # its nets stay in the list with no radio (Nets: "Needs you", a radio suggested)
+            self.nets.unassign(gone)
         print(f"{datetime.now():%H:%M:%S} radios saved on the dashboard: " +
               "; ".join(f"{r['id']}={r['name']} @ {r['device']}" for r in new), flush=True)
         self.restart_soon()
@@ -687,6 +689,10 @@ class Station:
                 if "freq_mhz" in s:
                     self._set_tuning(rid, s.get("freq_mhz"), s.get("mode"), s.get("set_at"))
                 self.radios[rid]["paused"] = bool(s.get("paused"))
+                if s.get("antenna") in ("hf", "vu") and self.radios[rid].get("antenna"):
+                    self.radios[rid]["antenna"] = s["antenna"]
+                if s.get("role") in ("nets", "winlink"):
+                    self.radios[rid]["role"] = s["role"]
                 self.radios[rid]["resumed_by"] = s.get("resumed_by")
                 self.radios[rid]["cleared_at"] = s.get("cleared_at")
 
@@ -696,6 +702,31 @@ class Station:
         for c in self.cfg["radios"]:
             if c["id"] == rid:
                 c["freq_mhz"], c["mode"] = freq, r["mode"]
+
+    def set_radio_setup(self, rid: str, body: dict) -> dict:
+        """The card: which antenna a one-socket multi-band radio has on ("hf" | "vu"), and whether the radio is used
+        for nets or kept for Winlink. Saved in data/operator.json; nets are re-checked at once (station/fit.py)."""
+        if rid not in self.radios:
+            raise KeyError(rid)
+        r = self.radios[rid]
+        with self.lock:
+            saved = self._saved()
+            s = saved.setdefault("radios", {}).setdefault(rid, {})
+            if "antenna" in body:
+                if not r.get("antenna"):
+                    raise ValueError(f"{r['name']} has no antenna choice")
+                if body["antenna"] not in ("hf", "vu"):
+                    raise ValueError("antenna must be hf or vu")
+                r["antenna"] = s["antenna"] = body["antenna"]
+            if "role" in body:
+                if body["role"] not in ("nets", "winlink"):
+                    raise ValueError("role must be nets or winlink")
+                r["role"] = s["role"] = body["role"]
+            self._save(saved)
+        print(f"{datetime.now():%H:%M:%S} {rid}: antenna {r.get('antenna')}, used for {r.get('role')}", flush=True)
+        self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
+        self.nets.publish()
+        return dict(r)
 
     def set_radio(self, rid: str, freq_mhz, mode: str | None = None) -> dict:
         """The operator says what the radio is tuned to. Validated, saved to data/operator.json
@@ -772,7 +803,7 @@ class Station:
                 if o["start"].date() != at.date():
                     continue
                 if o["end"] <= at:
-                    ov = self.overrun(it["radio"], at)
+                    ov = self.overrun(it["radio"], at) if it["radio"] in self.radios else None
                     if not ov or ov["key"] != it["key"]:
                         continue
                     it["overrun"] = True

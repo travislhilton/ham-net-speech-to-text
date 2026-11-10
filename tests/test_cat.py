@@ -153,9 +153,11 @@ CFG = {"callsign": "W9XYZ",
        "port": 0, "bind": "127.0.0.1", "qrz_online": False}
 
 
-def station(tmp_path, radio, clock):
+def station(tmp_path, radio, clock, antenna="vu"):
     st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path, clock=clock)
     st.cat = CatControl(st, lambda c: Icom(radio, c["civ"], c["model"]))
+    if antenna:
+        st.set_radio_setup("ic", {"antenna": antenna})
     return st
 
 
@@ -185,9 +187,18 @@ def test_the_station_reads_the_radio_and_tunes_it_for_a_vhf_net_then_puts_it_bac
     assert not any(f[4] == 0x1C for f in radio.sent)                     # never a PTT frame
 
 
+def test_with_the_hf_antenna_on_a_uhf_net_is_not_tuned_to(tmp_path):
+    radio, clock = FakeIC705(freq=7_185_000, mode=0x00), Clock(TUE.replace(hour=12))
+    st = station(tmp_path, radio, clock, antenna=None)                  # an IC-705 starts on its HF antenna
+    assert st.radios["ic"]["antenna"] == "hf"
+    assert st.nets.statuses()[st.cfg["schedule"][0]["id"]]["kind"] == "cant"
+    edge(st, clock, TUE.replace(hour=19, minute=59))
+    assert radio.mhz == pytest.approx(7.185) and "cat_restore" not in st._saved().get("radios", {}).get("ic", {})
+
+
 def test_an_hf_net_is_tuned_the_same_way(tmp_path):
     radio, clock = FakeIC705(freq=146_520_000, mode=0x05), Clock(TUE.replace(hour=12))
-    st = station(tmp_path, radio, clock)
+    st = station(tmp_path, radio, clock, antenna="hf")
     edge(st, clock, TUE.replace(day=4, hour=18, minute=59))              # Wednesday's HF net
     assert radio.mhz == pytest.approx(3.915) and radio.mode == 0x00
     edge(st, clock, TUE.replace(day=4, hour=19, minute=36))

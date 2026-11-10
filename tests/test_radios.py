@@ -69,9 +69,10 @@ def test_radio_list_routes(station):  # noqa: F811
     try:
         d = json.loads(urllib.request.urlopen(base + "/api/radio-list").read())
         assert d["radios"][0]["id"] == "ftm" and d["from"] == "station.yaml" and d["nets"]["ftm"] == ["Test net"]
-        with pytest.raises(urllib.error.HTTPError) as e:              # its net would be orphaned
-            post({"radios": [{"name": "Other", "device": "IC-705"}]})
-        assert e.value.code == 400 and "Nets" in json.loads(e.value.read())["error"]
+        out = json.loads(post({"radios": [{"name": "Other", "device": "IC-705"}]}).read())   # ftm removed:
+        assert out["ok"] and station.cfg["schedule"][0].get("radio") is None           # its net stays, no radio
+        assert station.nets.statuses()[station.cfg["schedule"][0]["id"]]["kind"] == "none"
+        station.nets.update(station.cfg["schedule"][0]["id"], station.cfg["schedule"][0] | {"radio": None})
         out = json.loads(post({"radios": [{"id": "ftm", "name": "Mobile", "device": "Digirig Lite NET-REC",
                                            "gate": "voice"}, {"name": "HF", "device": "IC-705", "gate": "voice",
                                                               "mode": "LSB"}]}).read())

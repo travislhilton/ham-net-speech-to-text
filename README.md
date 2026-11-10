@@ -230,8 +230,17 @@ you chose is remembered. Each column shows:
   others.
 - **Nets** (top of the page; **Nets…** on a radio card opens it for that radio). One window, full screen on a phone, with
   five tabs and a **Net** picker:
-  - **Schedule**: each net as a card in plain words ("Every 1st and 3rd Sunday at 19:00, 146.940 MHz FM, 60 min"),
-    its next date, net control and alert. **Add a net** / **Edit**: name, radio, start time, minutes, frequency and
+  - **Schedule**: one list of nets for this PC, each as a card in plain words ("Every 1st and 3rd Sunday at 19:00,
+    146.940 MHz FM, 60 min"), its next date, net control and alert. **Each net is assigned to a radio**: click the
+    radio on a net to move it to another (or to **No radio**: kept, not recorded). Every net says whether it will be
+    recorded: **Records** (a CAT radio tunes itself, or the radio is already on the frequency), **You tune** (the alert
+    asks you), **Clash** (the same radio has another net at that time: pick **Record this one when they meet**, or
+    move one), **Can't hear** (the radio's band, mode or antenna can't receive it, or it is kept for Winlink) or **No
+    radio**; the ones that need you are listed first, with one-click fixes (move to a radio that can, switch the
+    antenna). A net that can't be heard, or loses a clash, is not listened to or tuned for. What a radio can hear
+    comes from its model (2 m / 70 cm FM, IC-705, HF transceiver, or other: not checked; guessed from its name), its
+    card's **Antenna: HF | VHF/UHF** (a one-socket multi-band radio such as the IC-705; HF at first) and **Used for:
+    Nets | Winlink only**. Removing a radio in **Radios…** keeps its nets, with no radio. **Add a net** / **Edit**: name, radio, start time, minutes, frequency and
     mode, net control, **Alert, minutes before** (5 by default, 0 = none), **Emergency or priority net** (keeps an
     Urgent board), and **Repeats** like Outlook: **Once**, **Daily**, **Weekly** (every N weeks on chosen days),
     **Monthly** (on day 1–31 or the last day, or on the 1st/2nd/3rd/4th/5th/last chosen weekday, any mix such as

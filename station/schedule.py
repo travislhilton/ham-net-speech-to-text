@@ -26,7 +26,7 @@ import threading
 import uuid
 from datetime import datetime, timedelta
 
-from . import recur
+from . import fit, recur
 
 DAYS = recur.DAYS
 MODES = ("FM", "USB", "LSB", "AM", "CW", "DIG")
@@ -54,9 +54,9 @@ def validate(body: dict, radios: dict) -> dict:
         raise ValueError("give the net a name")
     if len(name) > 80:
         raise ValueError("the net's name is too long (80 characters at most)")
-    rid = str(body.get("radio") or "").strip()
-    if rid not in radios:
-        raise ValueError(f"no radio called {rid!r}" if rid else "choose a radio")
+    rid = str(body.get("radio") or "").strip() or None            # no radio: kept, not recorded (station/fit.py)
+    if rid is not None and rid not in radios:
+        raise ValueError(f"no radio called {rid!r}")
     start = recur.hhmm(body.get("start"))
     try:
         dur = int(str(body.get("duration_min", 60)).strip())
@@ -103,10 +103,14 @@ def validate(body: dict, radios: dict) -> dict:
         return v
     offset = num("offset_mhz", -10, 10, "the repeater offset (MHz, like -5 or 0.6; 0 = simplex)")
     tone = num("tone_hz", 60, 260, "the repeater tone (Hz, like 100.0)")
+    beats = body.get("beats") or []
+    if not isinstance(beats, list) or not all(isinstance(b, str) and re.fullmatch(r"[\w-]{1,24}", b) for b in beats):
+        raise ValueError("beats must be a list of net ids")
     out = {"name": name, "radio": rid, "freq_mhz": f, "mode": mode, "start": start, "duration_min": dur, "ncs": ncs,
            "repeat": rule, "exceptions": recur.normalize_exceptions(body.get("exceptions"), MODES) or None,
            "alert_min": alert, "emergency": True if body.get("emergency") else None,
-           "offset_mhz": offset, "tone_hz": tone}             # CAT: set on the radio with the frequency (station/cat.py)
+           "offset_mhz": offset, "tone_hz": tone,             # CAT: set on the radio with the frequency (station/cat.py)
+           "beats": sorted(set(beats)) or None}               # clashes settled: these nets lose to this one
     return {k: v for k, v in out.items() if v is not None}
 
 
@@ -125,13 +129,14 @@ def item(n: dict, o: dict) -> dict:
             "emergency": bool(n.get("emergency")), "offset_mhz": n.get("offset_mhz"), "tone_hz": n.get("tone_hz")}
 
 
-def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace=GRACE_MIN, skip=()):
+def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace=GRACE_MIN, skip=(), usable=None):
     """(the net whose listening window [start - lead, end + grace) holds `at`, or None;
     the next net on this radio whose window opens after `at`, or None). Pure: the ticker and tests use it.
-    `skip`: occurrence keys the operator chose to skip (not listened to)."""
+    `skip`: occurrence keys the operator chose to skip (not listened to). `usable(net)`: False = the radio can't hear
+    it, or it loses a settled clash now (station/fit.py) — not listened to or tuned for."""
     cur, nxt = None, None
     for n in nets:
-        if n.get("radio") != rid:
+        if n.get("radio") != rid or (usable is not None and not usable(n)):
             continue
         for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=LOOK_AHEAD_DAYS)):
             it = item(n, o)
@@ -238,6 +243,9 @@ class NetSchedule:
             raw = self.st.cfg.get("schedule") or []           # not edited yet: station.yaml's entries
         nets = []
         for i, n in enumerate(raw):
+            if isinstance(n, dict) and n.get("radio") and n["radio"] not in self.st.radios:
+                print(f"schedule: {n.get('name')!r} was on radio {n['radio']!r}, which is gone: no radio now", flush=True)
+                n = n | {"radio": None}
             try:
                 v = validate(n, self.st.radios)               # an old `days:` entry becomes a weekly rule here
             except ValueError as e:
@@ -258,12 +266,42 @@ class NetSchedule:
     def decorated(self, at: datetime | None = None) -> list[dict]:
         """The nets with what the dashboard shows beside each: the rule in words and the next time it meets."""
         at = at or self.st.clock()
+        nets = self.st.cfg.get("schedule") or []
+        try:
+            st = self.statuses(at)
+        except Exception as e:  # noqa: BLE001 - the list still shows without the checks
+            print(f"schedule status: {type(e).__name__}: {e}", flush=True)
+            st = {}
+        week = fit.windows(nets, at.replace(hour=0, minute=0, second=0, microsecond=0), 8)
         out = []
-        for n in self.st.cfg.get("schedule") or []:
+        for n in nets:
             nxt = [o for o in recur.upcoming(n, at, 2) if o["start"] > at][:1]      # the next start (not the one on now)
-            out.append(n | {"summary": recur.summary(n),
+            out.append(n | {"summary": recur.summary(n), "status": st.get(n["id"]),
+                            "week": [[s.isoformat(timespec="minutes"), e.isoformat(timespec="minutes")]
+                                     for s, e, _ in week.get(n["id"], [])],
                             "next": item(n, nxt[0]) if nxt else None})
         return out
+
+    def statuses(self, at=None) -> dict:
+        cat = getattr(self.st, "cat", None)
+        return fit.statuses(self.st.cfg.get("schedule") or [], self.st.radios, at or self.st.clock(),
+                            has_cat=lambda rid: bool(cat is not None and cat.has(rid)))
+
+    def usable(self, rid: str, at: datetime):
+        """For listen_window: the radio can hear the net and it does not lose a settled clash now."""
+        cat = getattr(self.st, "cat", None)
+        radio, nets = self.st.radios.get(rid), self.st.cfg.get("schedule") or []
+        has = bool(cat is not None and cat.has(rid))
+        return lambda n: fit.fit(n, radio, has)["kind"] in ("ready", "tune") and not fit.loses_at(n, nets, at)
+
+    def unassign(self, radio_ids: set):
+        """Radios removed in Radios…: their nets stay, with no radio."""
+        with self.lock:
+            nets = [dict(n) | ({"radio": None} if n.get("radio") in radio_ids else {}) for n in self.st.cfg["schedule"]]
+            for n in nets:
+                if n.get("radio") is None:
+                    n.pop("radio", None)
+            self._commit(nets)
 
     def publish(self):
         self.st.bus.publish("schedule", {"schedule": self.decorated(), "net": self.st.schedule_now()})
@@ -271,7 +309,9 @@ class NetSchedule:
     def list(self) -> dict:
         return {"schedule": self.decorated(), "edited": self.path.exists(), "days": DAYS, "modes": list(MODES),
                 "radios": [{"id": r["id"], "name": r["name"], "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode"),
-                            "listen": r.get("listen")} for r in self.st.radios.values()],
+                            "listen": r.get("listen"), "model": r.get("model"), "antenna": r.get("antenna"),
+                            "role": r.get("role")} for r in self.st.radios.values()],
+                "models": {k: v["label"] for k, v in fit.MODELS.items()},
                 "lead_min": LEAD_MIN, "grace_min": GRACE_MIN, "alert_min": ALERT_MIN}
 
     def _find(self, nid: str) -> tuple:
@@ -298,7 +338,37 @@ class NetSchedule:
             nets, i = self._find(nid)
             if "exceptions" not in body and nets[i].get("exceptions"):
                 body = body | {"exceptions": nets[i]["exceptions"]}       # the editor does not resend them
+            if "beats" not in body and nets[i].get("beats"):
+                body = body | {"beats": nets[i]["beats"]}
             nets[i] = {"id": nid} | validate(body, self.st.radios)
+            self._commit(nets)
+        return self.list()
+
+    def assign(self, nid: str, rid) -> dict:
+        """Move a net to another radio (or to no radio: kept, not recorded)."""
+        rid = str(rid or "").strip() or None
+        if rid is not None and rid not in self.st.radios:
+            raise ValueError(f"no radio called {rid!r}")
+        with self.lock:
+            nets, i = self._find(nid)
+            nets[i] = {"id": nid} | validate(nets[i] | {"radio": rid}, self.st.radios)
+            self._commit(nets)
+        print(f"{datetime.now():%H:%M:%S} net {nets[i]['name']!r} -> radio {rid}", flush=True)
+        return self.list()
+
+    def settle(self, nid: str, other: str, undo=False) -> dict:
+        """A clash on one radio: `nid` is recorded when it meets `other` (`other` is not listened to then)."""
+        with self.lock:
+            nets, i = self._find(nid)
+            j = next((k for k, n in enumerate(nets) if n["id"] == other), None)
+            if j is None:
+                raise NoSuchNet(other)
+            mine = set(nets[i].get("beats") or [])
+            mine = mine - {other} if undo else mine | {other}
+            nets[i] = {"id": nid} | validate(nets[i] | {"beats": sorted(mine)}, self.st.radios)
+            if not undo:
+                nets[j] = {"id": other} | validate(nets[j] | {"beats": [b for b in nets[j].get("beats") or []
+                                                                       if b != nid]}, self.st.radios)
             self._commit(nets)
         return self.list()
 
@@ -351,7 +421,7 @@ class NetSchedule:
         """POST /api/schedule (add), /api/schedule/preview, /api/schedule/<id> (replace), /api/schedule/<id>/delete,
         /api/schedule/<id>/skip|move|restore ({"date": the occurrence's own date; move: to_date, start, freq_mhz,
         mode, duration_min, note})."""
-        m = re.fullmatch(r"/api/schedule(?:/([\w-]+)(?:/(delete|skip|move|restore))?)?", path)
+        m = re.fullmatch(r"/api/schedule(?:/([\w-]+)(?:/(delete|skip|move|restore|radio|settle))?)?", path)
         if not m:
             raise NoSuchNet(path)
         if not m.group(1):
@@ -360,6 +430,10 @@ class NetSchedule:
             return self.preview(body)
         if m.group(2) == "delete":
             return self.delete(m.group(1))
+        if m.group(2) == "radio":                 # {"radio": id | null}: the chip on the net
+            return self.assign(m.group(1), body.get("radio"))
+        if m.group(2) == "settle":                # {"over": other net id}: this one is recorded when they meet
+            return self.settle(m.group(1), str(body.get("over") or ""), bool(body.get("undo")))
         if m.group(2):
             return self.except_one(m.group(1), body, m.group(2))
         return self.update(m.group(1), body)
@@ -416,7 +490,7 @@ class NetSchedule:
         with self.lock:
             for rid, r in list(self.st.radios.items()):
                 L = r.setdefault("listen", {"scheduled": False, "tune": False})
-                cur, nxt = listen_window(nets, rid, at, skip=skip)
+                cur, nxt = listen_window(nets, rid, at, skip=skip, usable=self.usable(rid, at))
                 if cur is None:
                     try:
                         cur = self.st.overrun(rid, at)               # still going past its end: keep listening
