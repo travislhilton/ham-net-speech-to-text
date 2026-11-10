@@ -339,7 +339,9 @@ ol.mtx button{font-size:11px;padding:0 5px}
 .srt{font-size:15px;margin:2px 0;overflow-wrap:anywhere}mark{background:color-mix(in srgb,var(--warnc) 55%,transparent);color:inherit;border-radius:2px;padding:0 1px}
 .srb{display:flex;gap:6px;flex-wrap:wrap}
 .today{display:flex;flex-direction:column;gap:2px;padding:4px 16px 6px;border-bottom:1px solid var(--line)}.today:empty{display:none}
-.today .th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.today .th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;gap:10px;align-items:center}
+.today .th button{all:unset;cursor:pointer;color:var(--accent,#2b6cb0);text-transform:none;letter-spacing:0;font-size:12.5px}.today .th button:focus-visible{outline:2px solid var(--accent,#2b6cb0);border-radius:4px}
+.today .tlist{display:flex;flex-direction:column;gap:2px;max-height:min(34vh,260px);overflow-y:auto}
 .today button.tn{all:unset;cursor:pointer;display:flex;gap:10px;align-items:baseline;padding:3px 8px;border-radius:6px;font-size:14px;line-height:1.3;white-space:nowrap;overflow:hidden}
 .today .tn .tt{font-variant-numeric:tabular-nums;color:var(--muted);min-width:7.5em}.today .tn .nm{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .today .tn .fq{font-variant-numeric:tabular-nums}.today .tn .rd{color:var(--muted);font-size:12px}
@@ -1117,7 +1119,8 @@ function renderRadios(){
     el.querySelector(".rsetup").innerHTML=(r.antenna?`<span>Antenna <span class="rseg" role="group" aria-label="Antenna on ${esc(r.name)}">${seg("setant","hf","HF",r.antenna==="hf")}${seg("setant","vu","VHF/UHF",r.antenna==="vu")}</span></span>`:"")
       +`<span>Used for <span class="rseg" role="group" aria-label="${esc(r.name)} is used for">${seg("setrole","nets","Nets",r.role!=="winlink")}${seg("setrole","winlink","Winlink only",r.role==="winlink")}</span></span>`;
     const run=(S.net||{}).running||[],nets=(S.schedule||[]).filter(n=>n.radio===r.id);
-    el.querySelector(".sch").innerHTML=nets.length?"Nets: "+nets.map(n=>{const on=run.some(x=>x.id===n.id);return `<span class="${on?"now":""}" title="${esc(n.summary||"")}">${on?"now: ":""}${esc(n.name)}${!on&&n.next?" · next "+esc(fmtWhen(n.next.start)):""}${n.freq_mhz?" · "+esc(Number(n.freq_mhz).toFixed(3))+" MHz":""}</span>`}).join("; "):'<span class="muted">No nets scheduled on this radio.</span>';
+    const ord=[...nets].sort((a,b)=>(run.some(x=>x.id===b.id)-run.some(x=>x.id===a.id))||((a.next||{}).start||"9").localeCompare((b.next||{}).start||"9")),few=ord.slice(0,2);
+    el.querySelector(".sch").innerHTML=nets.length?"Nets: "+few.map(n=>{const on=run.some(x=>x.id===n.id);return `<span class="${on?"now":""}" title="${esc(n.summary||"")}">${on?"now: ":""}${esc(n.name)}${!on&&n.next?" · next "+esc(fmtWhen(n.next.start)):""}${n.freq_mhz?" · "+esc(Number(n.freq_mhz).toFixed(3))+" MHz":""}</span>`}).join("; ")+(nets.length>2?` · <button class="linkish small" data-nets="${esc(r.id)}">${nets.length-2} more…</button>`:""):'<span class="muted">No nets scheduled on this radio.</span>';
     const sil=r.paused?null:r.silent;                     // a radio switched off / asleep / unplugged (station/silence.py)
     el.querySelector(".err").innerHTML=r.paused?"":r.error?esc(r.error)+(/input/i.test(r.error)?' <button class="linkish small" data-pickinput>Choose its input…</button>':""):sil?`<span class="silent ${esc(sil.kind)}">⚠ ${esc(sil.say)} <span class="muted">(since ${esc(new Date(sil.since*1000).toTimeString().slice(0,5))})</span></span>`:"";
     el.classList.toggle("paused",!!r.paused);
@@ -1164,11 +1167,16 @@ function renderToday(){
   if(!L.length){box.innerHTML="";return}
   const hm=s=>new Date(s).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   const mhz=x=>x.freq_mhz?`${Number(x.freq_mhz).toFixed(3)} ${esc(x.mode||"")}`:"";
-  box.innerHTML=`<div class="th">Nets today</div>`+L.map(x=>{
+  let open=false;try{open=localStorage.getItem("todayOpen")==="1"}catch(e){}
+  const key=x=>x.state==="on"||(x.state==="next"&&!x.skipped);
+  const shown=open?L:L.filter(key),more=L.length-shown.length;
+  const tog=L.length>shown.length||open?`<button data-todaytog aria-expanded="${open}">${open?"▴ Show less":`▾ ${more} more today`}</button>`:"";
+  box.innerHTML=`<div class="th">Nets today <span>(${L.length})</span>${tog}</div><div class="tlist">`+shown.map(x=>{
     const rp=(S.radios.find(r=>r.id===x.radio)||{}).paused;   // on the air but its radio is paused = not recording
     const cls=x.skipped?"skip":x.state==="on"&&rp?"later":x.state,tag=x.state==="on"?(rp?"radio paused":x.overrun?"running over":"on the air"):x.state==="next"&&!x.skipped?"next":"";
     return `<button class="tn ${cls}" data-goto="schedule" data-net="${esc(x.id)}" title="${esc(x.name)} · ${hm(x.start)}–${hm(x.end)}${x.skipped?" · skipped":""} — open in Nets">
-      <span class="tt">${hm(x.start)}<span class="te">–${hm(x.end)}</span></span><span class="nm">${esc(x.name)}</span><span class="fq">${mhz(x)}</span>${x.radio_name?`<span class="rd">${esc(x.radio_name)}</span>`:""}${tag?`<span class="tag${tag==="radio paused"?" ps":""}">${tag}</span>`:""}</button>`}).join("")}
+      <span class="tt">${hm(x.start)}<span class="te">–${hm(x.end)}</span></span><span class="nm">${esc(x.name)}</span><span class="fq">${mhz(x)}</span>${x.radio_name?`<span class="rd">${esc(x.radio_name)}</span>`:""}${tag?`<span class="tag${tag==="radio paused"?" ps":""}">${tag}</span>`:""}</button>`}).join("")+"</div>";
+  const t=box.querySelector("[data-todaytog]");if(t)t.onclick=()=>{try{localStorage.setItem("todayOpen",open?"0":"1")}catch(e){}renderToday()}}
 function renderHints(){
   const H=S.hints||{},radios=S.radios.length?S.radios:[];
   const name=id=>(radios.find(r=>r.id===id)||{}).name||id;
