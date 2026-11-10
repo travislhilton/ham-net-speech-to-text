@@ -90,6 +90,17 @@ def test_it_can_never_transmit():
     assert rig.t.sent == []                                    # nothing reached the port
 
 
+def test_the_port_opens_with_rts_and_dtr_low():
+    """Opening a COM port raises RTS/DTR by default; a radio set to key on them would transmit."""
+    seen = {}
+
+    class S:
+        def open(self):
+            seen.update(rts=self.rts, dtr=self.dtr, port=self.port)
+    cat.serial_port("COM11", 19200, serial_mod=type("m", (), {"Serial": S}))
+    assert seen == {"rts": False, "dtr": False, "port": "COM11"}
+
+
 def test_parse_skips_noise_and_keeps_a_partial_frame():
     buf = bytearray(b"\x00\x11\xFE\xFE\xE0\xA4\xFB\xFD\xFE\xFE\xE0")
     assert cat.parse(buf) == [b"\xFE\xFE\xE0\xA4\xFB\xFD"] and bytes(buf) == b"\xFE\xFE\xE0"

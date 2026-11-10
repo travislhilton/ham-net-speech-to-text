@@ -15,7 +15,8 @@ alike. A radio with `cat:` in its settings (Radios… → CAT port, or station.y
   operator retuned the radio during the net (then the operator is in charge and nothing is put back).
 * ANY BAND the radio receives (IC-705: 0.03-199.999 MHz and 400-470 MHz); a net outside it is skipped with a reason.
 * NEVER TRANSMITS: only the commands in ALLOWED can be sent (reads; frequency, mode, data mode, duplex, offset, tone).
-  PTT (0x1C) and everything else are refused before anything reaches the port.
+  PTT (0x1C) and everything else are refused before anything reaches the port; and the port is opened with RTS and
+  DTR held low (serial_port), since a radio or interface set to key on those lines would otherwise transmit.
 
 Wire format (Icom CI-V): FE FE <radio> <E0> <cmd> [sub] [data] FD. With "CI-V USB echo back" on, the radio's port
 echoes our own frame first; frames from E0 are ours and are skipped. FB = OK, FA = refused.
@@ -103,9 +104,16 @@ def parse(buf: bytearray) -> list[bytes]:
         del buf[:j + 1]
 
 
-def serial_port(port: str, baud: int):
-    import serial                                   # pyserial: in the Windows requirements
-    return serial.Serial(port, baud, timeout=0.1, write_timeout=1.0)
+def serial_port(port: str, baud: int, serial_mod=None):
+    """Open the CI-V port with RTS and DTR held LOW before it opens: an Icom radio (USB SEND / USB Keying set to RTS
+    or DTR) or a Digirig keys the transmitter on those lines, and opening a port raises them by default."""
+    if serial_mod is None:
+        import serial as serial_mod                 # pyserial: in the Windows requirements
+    s = serial_mod.Serial()
+    s.port, s.baudrate, s.timeout, s.write_timeout = port, baud, 0.1, 1.0
+    s.rts, s.dtr = False, False
+    s.open()
+    return s
 
 
 class Icom:
