@@ -775,7 +775,7 @@ class Station:
             for o in recur.upcoming(n, at, 2):
                 if o["start"] > at and (nxt is None or o["start"] < nxt[0]):
                     nxt = (o["start"], item(n, o))
-                r = n.get("radio")
+                r = o.get("radio") or n.get("radio")
                 if o["start"] > at and r and (r not in nxt_r or o["start"] < nxt_r[r][0]):
                     nxt_r[r] = (o["start"], item(n, o))
         return {"current": deco(run[0]) if run else None, "next": deco(nxt[1]) if nxt else None,

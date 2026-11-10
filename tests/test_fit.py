@@ -73,3 +73,25 @@ def test_the_station_moves_a_net_settles_a_clash_and_keeps_both_through_an_edit(
     assert next(n for n in st.cfg["schedule"] if n["id"] == b)["beats"] == [a]    # the editor does not resend it
     st.nets.post(f"/api/schedule/{b}/settle", {"over": a, "undo": True})
     assert not next(n for n in st.cfg["schedule"] if n["id"] == b).get("beats")
+
+
+def test_one_date_moved_to_another_radio_is_listened_to_there_only(tmp_path):
+    from tests.test_cat import CFG, Clock, TUE as T
+    import copy
+    from station import engine
+    from station.core import Station
+    from station.schedule import listen_window
+    cfg = copy.deepcopy(CFG)
+    cfg["radios"].append({"id": "ht", "name": "Handheld", "device": "Digirig", "gate": "voice", "freq_mhz": 442.1,
+                          "mode": "FM"})
+    st = Station(cfg, lambda: engine.FakeEngine(), data_dir=tmp_path, clock=Clock(T.replace(hour=12)))
+    st.set_radio_setup("ic", {"antenna": "vu"})
+    a = st.cfg["schedule"][0]                                    # the Tuesday 442.100 net on the IC-705
+    st.nets.post(f"/api/schedule/{a['id']}/move", {"date": T.date().isoformat(), "radio": "ht"})
+    nets, at = st.cfg["schedule"], T.replace(hour=20, minute=10)
+    assert listen_window(nets, "ht", at)[0]["id"] == a["id"] and listen_window(nets, "ht", at)[0]["radio"] == "ht"
+    assert listen_window(nets, "ic", at)[0] is None                      # not on its own radio that night
+    nxt = T.replace(day=T.day + 7, hour=20, minute=10)
+    assert listen_window(nets, "ic", nxt)[0]["id"] == a["id"] and listen_window(nets, "ht", nxt)[0] is None
+    st.nets.post(f"/api/schedule/{a['id']}/move", {"date": T.date().isoformat(), "radio": "ic"})   # back: no exception
+    assert not next(n for n in st.cfg["schedule"] if n["id"] == a["id"]).get("exceptions")

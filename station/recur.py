@@ -169,6 +169,11 @@ def normalize_exceptions(ex, modes=("FM", "USB", "LSB", "AM", "CW", "DIG")) -> d
                 if m not in modes:
                     raise ValueError(f"mode must be one of {', '.join(modes)}")
                 e["mode"] = m
+            if v.get("radio"):                       # this date only, on another radio (dragged with "just this time")
+                r = str(v["radio"]).strip()
+                if not re.fullmatch(r"[\w-]{1,32}", r):
+                    raise ValueError("radio must be a radio id")
+                e["radio"] = r
         if v.get("note"):
             e["note"] = str(v["note"]).strip()[:120]
         if e:
@@ -286,7 +291,8 @@ def occurrences(net: dict, frm: datetime, to: datetime, cancelled=False) -> list
             continue
         o = {"date": d.isoformat(), "start": s, "end": en, "freq_mhz": e.get("freq_mhz", net.get("freq_mhz")),
              "mode": e.get("mode", net.get("mode")), "moved": bool({"date", "start", "duration_min", "freq_mhz",
-                                                                   "mode"} & set(e)), "note": e.get("note")}
+                                                                   "mode"} & set(e)), "note": e.get("note"),
+             "radio": e.get("radio")}                  # None = the net's own radio
         if e.get("cancel"):
             o["cancelled"] = True
         out.append(o)

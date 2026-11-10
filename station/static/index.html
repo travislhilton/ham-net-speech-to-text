@@ -143,7 +143,7 @@ body.dragging{user-select:none;cursor:row-resize}
 .tabs button .gn.has{background:var(--accent)}.tabs button .gn.high{background:var(--bad)}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
 .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
-.sch{margin-top:4px;font-size:13px}.sch .now{font-weight:700;color:var(--ok)}.cardbtns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.sch{display:none!important;margin-top:4px;font-size:13px}.sch .now{font-weight:700;color:var(--ok)}.cardbtns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
 .hsearch{display:flex;gap:4px;align-items:center;margin:0}#q{width:200px;text-transform:none}
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 .radio .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.radio .top .nm{flex:1}
@@ -197,6 +197,24 @@ section h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:va
 button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:2px 8px;cursor:pointer}
 .card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px}.card.high{border-color:var(--bad);background:var(--badbg)}
 .card h3{font-size:15px;margin:0 0 4px}.card ol{margin:4px 0 6px 18px;padding:0}.say{overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--bg);border-radius:6px;padding:4px 6px;margin:3px 0;display:flex;justify-content:space-between;gap:6px}
+/* each radio column opens with its nets; drag a net onto another radio's column (owner 2026-11-10) */
+.rnets{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:5px 6px;font-size:13px;flex:none}
+.rnets .rh{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:0 4px 2px}
+.rnets .rh button{all:unset;cursor:pointer;color:var(--accent);text-transform:none;letter-spacing:0;font-size:12.5px}.rnets .rh button:focus-visible{outline:2px solid var(--accent);border-radius:4px}
+.rnets .rh .sp{flex:1}
+.rnets .rlist{display:flex;flex-direction:column;gap:1px;max-height:min(30vh,240px);overflow-y:auto}
+.rn{display:flex;gap:8px;align-items:center;padding:3px 6px;border-radius:6px;cursor:grab;white-space:nowrap;min-width:0;border:0;background:none;color:var(--ink);font:inherit;text-align:left;width:100%}
+.rn:hover{background:var(--chip)}.rn:focus-visible{outline:2px solid var(--accent)}
+.rn .tt{font-variant-numeric:tabular-nums;color:var(--muted);min-width:6.2em}.rn .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.rn .fq{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}.rn .np{font-size:11px;padding:0 6px}
+.rn.on{background:color-mix(in srgb,var(--ok) 14%,var(--panel));font-weight:600}.rn.next .nm{font-weight:600}
+.rn.off{opacity:.55}.rn.off .nm{text-decoration:line-through}.rn .once{font-size:11px;color:var(--accent)}
+.rnets .none{color:var(--muted);padding:2px 6px}
+.dropv{border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rcol.dz{outline:2px dashed var(--line);outline-offset:3px;border-radius:12px}
+.rcol.dz.over{outline-style:solid;outline-color:var(--accent)}.rcol.dz.no{opacity:.6}
+#hamtoast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;background:var(--ink);color:var(--bg);border-radius:9px;padding:8px 12px;display:flex;gap:12px;align-items:center;font-size:13.5px;max-width:calc(100vw - 32px);flex-wrap:wrap}
+#hamtoast button{all:unset;cursor:pointer;font-weight:700;text-decoration:underline}
+.attn{display:flex;gap:8px;align-items:center;font-size:13px}.attn button{all:unset;cursor:pointer;color:var(--bad);font-weight:600}
 /* one schedule per PC: each net's radio, whether it will be recorded (station/fit.py) */
 .npills{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.np{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap;border:1px solid transparent}
 button.np{cursor:pointer;font-size:12.5px;padding:2px 10px}button.np.sel{border-color:currentColor}
@@ -426,7 +444,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <label>Callsign <input name="call" maxlength="12" list="whoList" autocomplete="off"></label><datalist id="whoList"></datalist>
   <div class="row"><button type="submit">Save</button> <button type="button" id="whoAuto" title="Forget my choice; use what was said or heard">Automatic</button> <button type="button" onclick="$('whoDlg').close()">Cancel</button> <span class="err" id="whoErr"></span></div>
 </form></dialog>
-<div id="rpick" hidden role="menu"></div>
+<div id="rpick" hidden role="menu"></div><div id="hamtoast" hidden role="status"></div>
 <script>
 let editing=null;
 const S={tx:[],heard:[],radios:[],hints:{},net:{},schedule:[],accurate:[],alerts:[],urgent:[],netclose:{closes:[],soon:{},learned:{}}};
@@ -1053,7 +1071,9 @@ function ensureCard(r){
   const sp=document.createElement("div");sp.className="split";sp.title="Drag to resize · double-click to reset";
   sp.setAttribute("role","separator");sp.setAttribute("aria-orientation","horizontal");sp.dataset.rid=r.id;
   const ab=document.createElement("div");ab.className="abox";ab.id="ab-"+r.id;ab.hidden=true;
-  col.append(ab,top,sp,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
+  const rn=document.createElement("div");rn.className="rnets";rn.id="rn-"+r.id;rn.setAttribute("aria-label","Nets on "+r.name);
+  const dv=document.createElement("div");dv.className="dropv";dv.id="dv-"+r.id;dv.hidden=true;
+  col.append(dv,rn,ab,top,sp,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
 // ---------- splitter (guidance / stations tabs) ----------
 const splitKey=rid=>"hamnet.split."+rid;
 function setFold(rid,f){$("col-"+rid).classList.toggle("folded",f);try{localStorage.setItem("hamnet.fold."+rid,f?"1":"")}catch(e){}}
@@ -1116,6 +1136,7 @@ function renderRadios(){
         <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.</div></form>`:"";
     }
     el.querySelector(".cap").textContent=wfCaption(r);
+    renderRadioNets(r);
     const seg=(k,v,l,on)=>`<button data-${k}="${esc(r.id)}" data-v="${v}" class="${on?"on":""}" aria-pressed="${on}">${l}</button>`;
     el.querySelector(".rsetup").innerHTML=(r.antenna?`<span>Antenna <span class="rseg" role="group" aria-label="Antenna on ${esc(r.name)}">${seg("setant","hf","HF",r.antenna==="hf")}${seg("setant","vu","VHF/UHF",r.antenna==="vu")}</span></span>`:"")
       +`<span>Used for <span class="rseg" role="group" aria-label="${esc(r.name)} is used for">${seg("setrole","nets","Nets",r.role!=="winlink")}${seg("setrole","winlink","Winlink only",r.role==="winlink")}</span></span>`;
@@ -1164,6 +1185,11 @@ function renderNet(){
 }
 // Today: one line per net still to come today (and the one on the air), the next one highlighted
 function renderToday(){
+  const box=$("today"),bad=(S.schedule||[]).filter(n=>["none","cant"].includes((n.status||{}).kind));
+  box.innerHTML=bad.length?`<div class="attn">⚠ <button data-attn>${bad.length} net${bad.length>1?"s":""} can't be recorded (no radio, or the radio can't hear ${bad.length>1?"them":"it"}): open Nets</button></div>`:"";
+  const a=box.querySelector("[data-attn]");if(a)a.onclick=()=>{NV.kind=null;openNetsArea({tab:"schedule",radio:null})};
+  return}
+function renderTodayStrip(){
   const L=(S.net||{}).today||[],box=$("today");
   if(!L.length){box.innerHTML="";return}
   const hm=s=>new Date(s).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
@@ -1741,25 +1767,108 @@ async function renderOpen(){
     (n?sec("urgent","Urgent, still open",d.urgent)+sec("announcement","Announcements still valid",d.announcements)+sec("event","Coming up",d.upcoming)+sec("action","Open action items",d.actions)+sec("traffic","Traffic not yet handled",d.traffic)
       :`<div class="empty"><b>Nothing open${NV.net?" for this net":""}.</b><br>Announcements, upcoming events and action items from the minutes show here until they are done or out of date.</div>`);
 }
+// ----- each radio column's nets; drag a net to another radio -----
+const hm12=s=>new Date(s).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+function radioMeetings(rid){
+  const now=Date.now(),out=[];
+  for(const n of S.schedule||[])for(const w of n.week||[])if(w.radio===rid&&new Date(w.end).getTime()>now)out.push({n,w});
+  return out.sort((a,b)=>a.w.start.localeCompare(b.w.start))}
+function renderRadioNets(r){
+  const box=document.getElementById("rn-"+r.id);if(!box)return;
+  if(document.body.classList.contains("dragging"))return;              // never re-render under a drag
+  let open=false;try{open=localStorage.getItem("hamnet.rnets."+r.id)==="1"}catch(e){}
+  const all=radioMeetings(r.id),now=Date.now(),td=new Date().toDateString();
+  const isOn=x=>new Date(x.w.start).getTime()<=now;
+  const today=all.filter(x=>new Date(x.w.start).toDateString()===td);
+  const nextI=all.findIndex(x=>!isOn(x)&&!x.w.skipped&&!x.w.loses);
+  const key=all.filter((x,i)=>isOn(x)||i===nextI);
+  const shown=open?all.filter(x=>today.includes(x)||key.includes(x)||new Date(x.w.start)-now<36e5*24*2):key;
+  const more=today.filter(x=>!shown.includes(x)).length;
+  const when=w=>{const d=new Date(w.start);return d.toDateString()===td?hm12(w.start):d.toLocaleDateString([],{weekday:"short"})+" "+hm12(w.start)};
+  const line=x=>{const n=x.n,w=x.w,on=isOn(x),k=w.radio===n.radio?kindOf(n):(((n.status||{}).fits||{})[r.id]||{}).kind||"ready";
+    const off=w.skipped||w.loses,cls=on?"on":all.indexOf(x)===nextI?"next":"";
+    const tip=`${n.name} · ${when(w)}–${hm12(w.end)}${w.moved_radio?" · moved to this radio for this date":""}${w.loses?" · loses a clash: not recorded":""}${w.skipped?" · skipped":""} — drag to another radio, or click to choose`;
+    return `<button class="rn ${cls}${off?" off":""}" draggable="true" data-rn="${esc(n.id)}" data-date="${esc(w.date)}" data-from="${esc(r.id)}" title="${esc(tip)}">
+      <span class="tt">${esc(when(w))}</span><span class="nm">${esc(n.name)}</span>${w.moved_radio?'<span class="once">this date</span>':""}<span class="fq">${n.freq_mhz?Number(n.freq_mhz).toFixed(3):""}</span>${on?'<span class="np k-ready">on the air</span>':off?`<span class="np k-none">${w.loses?"not recorded":"skipped"}</span>`:k!=="ready"?`<span class="np k-${k}">${KLABEL[k]}</span>`:""}</button>`};
+  const tog=open?`<button data-rntog="${esc(r.id)}" aria-expanded="true">▴ Less</button>`:more?`<button data-rntog="${esc(r.id)}" aria-expanded="false">▾ ${more} more today</button>`:all.length>key.length?`<button data-rntog="${esc(r.id)}" aria-expanded="false">▾ Next 2 days</button>`:"";
+  box.innerHTML=`<div class="rh"><span>Nets</span>${tog}<span class="sp"></span><button data-nets="${esc(r.id)}">This week…</button></div>
+    <div class="rlist">${shown.length?shown.map(line).join(""):`<div class="none">${(S.schedule||[]).some(n=>n.radio===r.id)?"No more nets on this radio today.":"No nets on this radio. Drag one here, or add one in Nets."}</div>`}</div>`}
+document.addEventListener("click",e=>{const t=e.target.closest("[data-rntog]");if(!t)return;const rid=t.dataset.rntog;
+  try{const k="hamnet.rnets."+rid;localStorage.setItem(k,localStorage.getItem(k)==="1"?"0":"1")}catch(err){}
+  const r=S.radios.find(x=>x.id===rid);if(r)renderRadioNets(r)});
+document.addEventListener("click",e=>{const b=e.target.closest("[data-rn]");if(!b||document.body.classList.contains("dragging"))return;e.preventDefault();openPick(b,b.dataset.rn,{date:b.dataset.date,from:b.dataset.from})});
+function toast(html,acts=[]){const t=$("hamtoast");t.innerHTML=`<span>${html}</span>`;for(const[l,f]of acts){const b=document.createElement("button");b.textContent=l;b.onclick=()=>{t.hidden=true;f()};t.append(b)}
+  t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,9000)}
+const fmtOcc=d=>dt(d).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
+// The verdict a column shows while a net is dragged over the page (the station's own check: station/fit.py)
+function verdict(n,rid,from){
+  const r=S.radios.find(x=>x.id===rid)||{};
+  if(rid===from)return{ok:false,k:"none",say:"Now on this radio"};
+  if(r.role==="winlink")return{ok:false,k:"cant",say:"Winlink only: no nets on this radio"};
+  const f=((n.status||{}).fits||{})[rid]||{kind:"ready",why:""};
+  if(f.clash)return{ok:true,k:"clash",say:`Clashes with ${f.clash.name} (${f.clash.start})`,f};
+  return{ok:true,k:f.kind,say:{ready:"Records",tune:"You tune",cant:"Can't hear"}[f.kind]+": "+(f.why||""),f}}
+let DRAG=null;
+document.addEventListener("dragstart",e=>{const b=e.target.closest&&e.target.closest("[data-rn]");if(!b)return;
+  const n=(S.schedule||[]).find(x=>x.id===b.dataset.rn);if(!n)return;
+  DRAG={n,date:b.dataset.date,from:b.dataset.from};closePick();
+  try{e.dataTransfer.setData("text/plain",n.name);e.dataTransfer.effectAllowed="move"}catch(err){}
+  document.body.classList.add("dragging");
+  for(const r of S.radios){const col=$("col-"+r.id),v=verdict(n,r.id,DRAG.from),dv=$("dv-"+r.id);if(!col||!dv)continue;
+    col.classList.add("dz");col.classList.toggle("no",!v.ok);dv.className="dropv k-"+v.k;dv.textContent=(v.ok?"Drop here · ":"")+v.say;dv.title=dv.textContent;dv.hidden=false}});
+document.addEventListener("dragover",e=>{if(!DRAG)return;const col=e.target.closest&&e.target.closest(".rcol");
+  document.querySelectorAll(".rcol.over").forEach(c=>{if(c!==col)c.classList.remove("over")});
+  if(!col)return;const rid=col.id.slice(4);if(!verdict(DRAG.n,rid,DRAG.from).ok)return;
+  e.preventDefault();try{e.dataTransfer.dropEffect="move"}catch(err){}col.classList.add("over")});
+function endDrag(){document.body.classList.remove("dragging");document.querySelectorAll(".rcol.dz").forEach(c=>c.classList.remove("dz","over","no"));
+  document.querySelectorAll(".dropv").forEach(d=>d.hidden=true);
+  const d=DRAG;DRAG=null;return d}
+document.addEventListener("dragend",()=>{if(DRAG)endDrag();renderRadios()});
+document.addEventListener("drop",e=>{if(!DRAG)return;const col=e.target.closest&&e.target.closest(".rcol");const d=endDrag();
+  if(!col)return;e.preventDefault();const rid=col.id.slice(4);if(!verdict(d.n,rid,d.from).ok)return;
+  askScope(e.clientX,e.clientY,d.n,d.date,d.from,rid)});
+// Every time, or just this date? (a small menu where the net was dropped)
+function askScope(x,y,n,date,from,rid){
+  const m=$("rpick");if(m.parentElement!==document.body)document.body.append(m);
+  const v=verdict(n,rid,from),to=(S.radios.find(r=>r.id===rid)||{}).name||rid;
+  m.innerHTML=`<div class="h">Move ${esc(n.name)} to ${esc(to)}<br><span class="np k-${v.k}">${esc(v.say)}</span></div>
+    <button class="opt" data-scope="all"><span>↻</span><span><b>Every time</b></span><span class="d">From now on this net is on ${esc(to)}</span></button>
+    <button class="opt" data-scope="one"><span>1</span><span><b>Just ${esc(fmtOcc(date))}</b></span><span class="d">Then back to ${esc((S.radios.find(r=>r.id===n.radio)||{}).name||"its radio")}</span></button>
+    <hr><button class="opt" data-scope="no"><span></span><span>Cancel</span></button>`;
+  m.hidden=false;const w=m.offsetWidth,h=m.offsetHeight;m.style.left=Math.max(16,Math.min(x-w/2,innerWidth-w-16))+"px";m.style.top=Math.max(8,Math.min(y-20,innerHeight-h-8))+"px";
+  m.querySelector("[data-scope]").focus();
+  m.onclick=async ev=>{const b=ev.target.closest("[data-scope]");if(!b)return;ev.stopPropagation();closePick();m.onclick=null;
+    if(b.dataset.scope==="no")return;await moveNet(n,date,from,rid,b.dataset.scope==="all")}}
+async function moveNet(n,date,from,rid,always){
+  const to=(S.radios.find(r=>r.id===rid)||{}).name||rid,was=n.radio;
+  const ok=await netAct(()=>always?post(`/api/schedule/${enc(n.id)}/radio`,{radio:rid}):post(`/api/schedule/${enc(n.id)}/move`,{date,radio:rid}));
+  if(ok===false)return;
+  const undo=()=>netAct(()=>always?post(`/api/schedule/${enc(n.id)}/radio`,{radio:was}):post(`/api/schedule/${enc(n.id)}/move`,{date,radio:from}));
+  const nn=(S.schedule||[]).find(x=>x.id===n.id)||n,f=((nn.status||{}).fits||{})[rid]||{},acts=[["Undo",undo]];
+  if(f.kind==="cant"&&f.antenna)acts.unshift([`Switch ${to} to ${f.antenna==="hf"?"HF":"VHF/UHF"}`,()=>netAct(()=>post(`/api/radios/${enc(rid)}/setup`,{antenna:f.antenna}))]);
+  toast(`${esc(n.name)} ${always?"is now on":`on ${esc(fmtOcc(date))} is on`} <b>${esc(to)}</b>.${f.kind==="cant"?" It can't hear it yet.":""}`,acts)}
 // ----- the radio picker on a net, antenna / used-for on a card, clashes -----
 function closePick(){const m=$("rpick");if(m)m.hidden=true}
-function openPick(btn,id){
+function openPick(btn,id,occ){
   const n=(S.schedule||[]).find(x=>x.id===id);if(!n)return;
   const m=$("rpick"),host=btn.closest("dialog")||document.body;if(m.parentElement!==host)host.append(m);
   const fits=(n.status||{}).fits||{};
   m.innerHTML=`<div class="h">${esc(n.name)}${n.freq_mhz?" · "+mhz(n.freq_mhz,n.mode):""}</div>`+S.radios.map(r=>{const f=fits[r.id]||{},k=f.clash?"clash":f.kind||"ready",ok=k==="ready"||k==="tune";
     return `<button class="opt${ok?"":" no"}" role="menuitemradio" aria-checked="${n.radio===r.id}" data-assign="${esc(id)}" data-to="${esc(r.id)}"><span class="np k-${k}" style="padding:0 4px">${n.radio===r.id?"✓":"&nbsp;"}</span><span><b>${esc(r.name)}</b> <span class="np k-${k}">${KLABEL[k]}</span></span><span class="d">${esc(f.clash?`Meets ${f.clash.name} (${f.clash.start}) there`:f.why||"")}</span></button>`}).join("")
-    +`<hr><button class="opt" role="menuitemradio" aria-checked="${!n.radio}" data-assign="${esc(id)}" data-to=""><span>${n.radio?"&nbsp;":"✓"}</span><span>No radio</span><span class="d">Kept in the list, not recorded</span></button>`;
+    +`<hr><button class="opt" role="menuitemradio" aria-checked="${!n.radio}" data-assign="${esc(id)}" data-to=""><span>${n.radio?"&nbsp;":"✓"}</span><span>No radio</span><span class="d">Kept in the list, not recorded</span></button>`
+    +(occ?`<hr><div class="h">Just ${esc(fmtOcc(occ.date))}: put it on</div>`+S.radios.filter(r=>r.id!==occ.from&&r.role!=="winlink").map(r=>`<button class="opt" data-once="${esc(id)}" data-date="${esc(occ.date)}" data-from="${esc(occ.from)}" data-to="${esc(r.id)}"><span>1</span><span>${esc(r.name)}</span></button>`).join("")
+      +`<button class="opt" data-goto="schedule" data-net="${esc(id)}"><span>↗</span><span>Open in Nets</span></button>`:"");
   m.hidden=false;const b=btn.getBoundingClientRect(),w=m.offsetWidth,h=m.offsetHeight;
   m.style.left=Math.max(16,Math.min(b.left,innerWidth-w-16))+"px";m.style.top=(b.bottom+h+8<innerHeight?b.bottom+4:Math.max(8,b.top-h-4))+"px";
   m.querySelector(".opt")?.focus()}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("rpick").hidden){e.preventDefault();e.stopPropagation();closePick()}},true);
 addEventListener("resize",closePick);
-async function netAct(fn){try{const d=await fn();if(d&&d.schedule){S.schedule=d.schedule;renderNetPick();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(true);renderRadios()}}catch(err){alert(err.message)}}
+async function netAct(fn){try{const d=await fn();if(d&&d.schedule){S.schedule=d.schedule;renderNetPick();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(true);renderRadios();renderToday()}return true}catch(err){alert(err.message);return false}}
 document.addEventListener("click",e=>{
   const p=e.target.closest("[data-rpick]");if(p){e.preventDefault();openPick(p,p.dataset.rpick);return}
   if(!e.target.closest("#rpick"))closePick();
   const a=e.target.closest("[data-assign]");if(a){closePick();netAct(()=>post(`/api/schedule/${enc(a.dataset.assign)}/radio`,{radio:a.dataset.to||null}));return}
+  const o1=e.target.closest("[data-once]");if(o1){closePick();const n=(S.schedule||[]).find(x=>x.id===o1.dataset.once);if(n)moveNet(n,o1.dataset.date,o1.dataset.from,o1.dataset.to,false);return}
   const mv=e.target.closest("[data-netmove]");if(mv){netAct(()=>post(`/api/schedule/${enc(mv.dataset.netmove)}/radio`,{radio:mv.dataset.to}));return}
   const st=e.target.closest("[data-settle]");if(st){netAct(()=>post(`/api/schedule/${enc(st.dataset.settle)}/settle`,{over:st.dataset.over,undo:!!st.dataset.undo}));return}
   const an=e.target.closest("[data-setant]");if(an){netAct(()=>post(`/api/radios/${enc(an.dataset.setant)}/setup`,{antenna:an.dataset.v}));return}

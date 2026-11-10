@@ -283,7 +283,16 @@ you chose is remembered. Each column shows:
   transmissions (header and Nets today: **running over**) until net control closes it, it is quiet for 5 minutes
   (`overrun_quiet_min`), or 1 minute before the next net on that radio; at most 3 hours over (`overrun_max_min`).
   Then the usual end of a net: the final accurate pass, the minutes, and the radio paused if the station resumed it.
-- **Nets today**: a strip under the header lists, one line each, the nets still to come today and the one on the
+- **Nets on each radio**: each radio's column opens with its own nets: the one on the air and the next one
+  (**N more today** / **Next 2 days** opens more, **This week…** opens Nets for that radio), each with its time,
+  frequency and state (**on the air**, **You tune**, **Clash**, **Can't hear**, **not recorded** when it loses a clash).
+  **Drag a net onto another radio's column** (a computer with a mouse): while dragging, every column says what would
+  happen there (Records / You tune / Clash / Can't hear; a Winlink-only radio takes none), and on the drop you choose
+  **Every time** or **Just Tue Nov 10** (that date only; the next time it is back on its own radio). **Undo** on the
+  note that follows; when the radio can't hear it, the note offers to switch its antenna. Without a mouse (a phone),
+  click a net in the column: the same menu moves it every time or just that date, or opens it in Nets. Above the
+  columns, a red line counts the nets that can't be recorded (no radio, or the radio can't hear them).
+- **Nets today** (older layout, replaced by the columns above): a strip under the header lists, one line each, the nets still to come today and the one on the
   air (time, name, frequency, radio). The next one is highlighted; one on the air shows **on the air**, or
   **radio paused** when its radio is not recording. Tap a line to open it in Nets. Folded by default to the net on
   the air and the next one (**N more today** opens the rest, in a short scrolling list; the choice is remembered in

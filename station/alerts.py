@@ -102,12 +102,13 @@ class Alerts:
                 sn = self.state["snooze"].get(key)
                 if sn and datetime.fromisoformat(sn) > at:
                     continue
-                r = self.st.radios.get(n.get("radio")) or {}
+                from .schedule import on_radio
+                r = self.st.radios.get(on_radio(n, o)) or {}
                 f, mode = o.get("freq_mhz"), o.get("mode")
                 on = bool(f and r.get("freq_mhz") and abs(f - r["freq_mhz"]) < 0.0005
                           and (not mode or mode == r.get("mode")))
                 from .schedule import item
-                a = item(n, o) | {"radio_name": r.get("name") or n.get("radio"), "alert_min": lead,
+                a = item(n, o) | {"radio_name": r.get("name") or on_radio(n, o), "alert_min": lead,
                                   "radio_freq_mhz": r.get("freq_mhz"), "radio_mode": r.get("mode"),
                                   "phase": "soon" if at < s else "started",
                                   "minutes": max(0, int((s - at).total_seconds() + 59) // 60),

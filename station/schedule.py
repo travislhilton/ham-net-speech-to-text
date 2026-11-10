@@ -122,11 +122,21 @@ def occurrences(net: dict, at: datetime, back_days=1, ahead_days=8):
 
 def item(n: dict, o: dict) -> dict:
     """One occurrence as the dashboard, the alerts and the history see it."""
-    return {"id": n.get("id"), "name": n.get("name"), "radio": n.get("radio"), "date": o["date"],
+    return {"id": n.get("id"), "name": n.get("name"), "radio": o.get("radio") or n.get("radio"), "date": o["date"],
             "key": recur.key(n.get("id"), o["date"]), "start": o["start"].isoformat(timespec="minutes"),
             "end": o["end"].isoformat(timespec="minutes"), "freq_mhz": o.get("freq_mhz"), "mode": o.get("mode"),
             "ncs": n.get("ncs"), "note": o.get("note"), "moved": o.get("moved", False),
             "emergency": bool(n.get("emergency")), "offset_mhz": n.get("offset_mhz"), "tone_hz": n.get("tone_hz")}
+
+
+def may_be_on(n: dict, rid: str) -> bool:
+    """`n` meets on radio `rid` at least sometimes: its own radio, or one date moved there."""
+    return n.get("radio") == rid or any((e or {}).get("radio") == rid for e in (n.get("exceptions") or {}).values())
+
+
+def on_radio(n: dict, o: dict) -> str | None:
+    """The radio one occurrence meets on: a date moved to another radio, else the net's own."""
+    return o.get("radio") or n.get("radio")
 
 
 def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace=GRACE_MIN, skip=(), usable=None):
@@ -136,9 +146,16 @@ def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace
     it, or it loses a settled clash now (station/fit.py) — not listened to or tuned for."""
     cur, nxt = None, None
     for n in nets:
-        if n.get("radio") != rid or (usable is not None and not usable(n)):
+        if not may_be_on(n, rid):
             continue
+        ok = None                                      # usable(): once per net, only if it meets on this radio
         for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=LOOK_AHEAD_DAYS)):
+            if on_radio(n, o) != rid:
+                continue
+            if ok is None:
+                ok = usable is None or bool(usable(n | {"radio": rid}))
+            if not ok:
+                break
             it = item(n, o)
             if it["key"] in skip:
                 continue
@@ -162,9 +179,11 @@ def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, 
     early check-ins), but a lone net keeps its own after a long quiet spell. None = not a scheduled net."""
     best = None
     for n in nets:
-        if n.get("radio") != rid:
+        if not may_be_on(n, rid):
             continue
         for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=1)):
+            if on_radio(n, o) != rid:
+                continue
             if o["start"] - timedelta(minutes=before) <= at < o["end"] + timedelta(minutes=after):
                 over = recur.key(n.get("id"), o["date"]) in ended     # ranks last: wins only when nothing else can
                 f = o.get("freq_mhz") or n.get("freq_mhz")
@@ -186,9 +205,11 @@ def overrun(nets: list[dict], rid: str, at: datetime, last_heard: dict, closed=(
     best = None
     due = False
     for n in nets:
-        if n.get("radio") != rid:
+        if not may_be_on(n, rid):
             continue
         for o in recur.occurrences(n, at - timedelta(days=1), at + timedelta(days=1)):
+            if on_radio(n, o) != rid:
+                continue
             k = recur.key(n.get("id"), o["date"])
             if o["start"] - timedelta(minutes=lead) <= at < o["end"]:
                 due = True                                      # another net is on (or about to be): it wins
@@ -272,13 +293,22 @@ class NetSchedule:
         except Exception as e:  # noqa: BLE001 - the list still shows without the checks
             print(f"schedule status: {type(e).__name__}: {e}", flush=True)
             st = {}
-        week = fit.windows(nets, at.replace(hour=0, minute=0, second=0, microsecond=0), 8)
+        day0 = at.replace(hour=0, minute=0, second=0, microsecond=0)
+        try:
+            skipped = set(self.alerts.skipped())
+        except Exception:  # noqa: BLE001
+            skipped = set()
         out = []
         for n in nets:
             nxt = [o for o in recur.upcoming(n, at, 2) if o["start"] > at][:1]      # the next start (not the one on now)
-            out.append(n | {"summary": recur.summary(n), "status": st.get(n["id"]),
-                            "week": [[s.isoformat(timespec="minutes"), e.isoformat(timespec="minutes")]
-                                     for s, e, _ in week.get(n["id"], [])],
+            week = []                       # each meeting today and the next 7 days, on the radio it meets on (columns)
+            for o in recur.occurrences(n, day0, day0 + timedelta(days=8)):
+                rid = on_radio(n, o)
+                week.append({"date": o["date"], "start": o["start"].isoformat(timespec="minutes"),
+                             "end": o["end"].isoformat(timespec="minutes"), "radio": rid, "moved_radio": bool(o.get("radio")),
+                             "key": recur.key(n["id"], o["date"]), "skipped": recur.key(n["id"], o["date"]) in skipped,
+                             "loses": bool(rid) and fit.loses_at(n | {"radio": rid}, nets, o["start"] + timedelta(minutes=1))})
+            out.append(n | {"summary": recur.summary(n), "status": st.get(n["id"]), "week": week,
                             "next": item(n, nxt[0]) if nxt else None})
         return out
 
@@ -397,8 +427,18 @@ class NetSchedule:
                 if what == "skip":
                     ex[occ] = {"cancel": True} | ({"note": body["note"]} if body.get("note") else {})
                 else:
-                    ex[occ] = {k: body[k] for k in ("start", "duration_min", "freq_mhz", "mode", "note")
-                               if body.get(k) not in (None, "")}
+                    only_radio = "radio" in body and not any(body.get(k) not in (None, "") for k in
+                                                             ("start", "duration_min", "freq_mhz", "mode", "to_date"))
+                    if only_radio:                                   # a drag: keep that date's other changes
+                        ex[occ] = {k: v for k, v in (ex.get(occ) or {}).items() if k != "cancel"} | \
+                                  {"radio": body.get("radio") or n.get("radio")}
+                    else:
+                        ex[occ] = {k: body[k] for k in ("start", "duration_min", "freq_mhz", "mode", "note", "radio")
+                                   if body.get(k) not in (None, "")}
+                    if ex[occ].get("radio") == n.get("radio"):
+                        ex[occ].pop("radio")                         # back on its own radio
+                    elif ex[occ].get("radio") and ex[occ]["radio"] not in self.st.radios:
+                        raise ValueError(f"no radio called {ex[occ]['radio']!r}")
                     if body.get("to_date"):                          # moved to another day
                         ex[occ]["date"] = body["to_date"]
             n["exceptions"] = recur.normalize_exceptions(ex, MODES)
