@@ -160,7 +160,7 @@ def make_handler(station):
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes", "/api/learned"}
-            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle))?)?", u.path)   # schedule
+            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net

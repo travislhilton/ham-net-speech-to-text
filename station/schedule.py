@@ -139,12 +139,20 @@ def on_radio(n: dict, o: dict) -> str | None:
     return o.get("radio") or n.get("radio")
 
 
-def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace=GRACE_MIN, skip=(), usable=None):
+QUIET_MIN = 10          # an HF net on a CAT radio with nothing heard this long: try another net scheduled then
+QUIET_MAX_MHZ = 54.0    # HF and 6 m (a repeater net is either up or it isn't)
+UNHEARD_RUN = 3         # a net not heard this many times in a row is flagged "Not heard" (Remove / Keep it)
+
+
+def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace=GRACE_MIN, skip=(), usable=None,
+                  loses=None, dead=()):
     """(the net whose listening window [start - lead, end + grace) holds `at`, or None;
     the next net on this radio whose window opens after `at`, or None). Pure: the ticker and tests use it.
     `skip`: occurrence keys the operator chose to skip (not listened to). `usable(net)`: False = the radio can't hear
-    it, or it loses a settled clash now (station/fit.py) — not listened to or tuned for."""
-    cur, nxt = None, None
+    it (station/fit.py) — not listened to or tuned for. `loses(net)`: it loses a settled clash now, and `dead`: keys
+    of nets found quiet just now (owner 11-10: "if the radio can't hear anything for a current net and there is
+    another net scheduled at the same time it should switch"): both are listened to only when nothing better is on."""
+    cur, nxt, cands = None, None, []
     for n in nets:
         if not may_be_on(n, rid):
             continue
@@ -161,11 +169,14 @@ def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace
                 continue
             s, e = o["start"], o["end"]
             if s - timedelta(minutes=lead) <= at < e + timedelta(minutes=grace):
-                if cur is None or it["start"] > cur["start"]:        # back-to-back: the one starting now
-                    cur = it
-            elif s - timedelta(minutes=lead) > at and (nxt is None or it["start"] < nxt["start"]):
+                cands.append((it["key"] in dead, bool(loses and loses(n)), it))
+            elif s - timedelta(minutes=lead) > at and (nxt is None or it["start"] < nxt["start"]) \
+                    and not (loses and loses(n)):
                 nxt = it
-    return cur, nxt
+    for d, lo, it in cands:              # quiet ones last, then clash losers; back-to-back: the one starting now
+        if cur is None or (d, lo) < cur[0] or ((d, lo) == cur[0] and it["start"] > cur[1]["start"]):
+            cur = ((d, lo), it)
+    return (cur[1] if cur else None), nxt
 
 
 def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, after=BELONGS_MIN,
@@ -247,10 +258,93 @@ class NetSchedule:
         self.st = station
         self.lock = threading.RLock()
         self._want: dict[str, str | None] = {}    # radio -> the net window wanted at the last tick ("" = none)
+        self._quiet: dict[str, dict] = {}         # radio -> {"key", "since": listening to it since, "dead": quiet keys}
+        self._heard = self._load_heard()          # net id -> [{"date", "heard", "min"} | {"kept": date}] (newest last)
         self.st.cfg["schedule"] = self._load()
         self._apply_saved()
         from .alerts import Alerts
         self.alerts = Alerts(station, self)
+
+    # ---------- quiet nets (owner 2026-11-10) ----------
+    def _heard_since(self, rid: str, since: datetime) -> bool:
+        s = since.isoformat(timespec="seconds")
+        return any(t.get("radio") == rid and str(t.get("start") or "") >= s for t in list(self.st.tx))
+
+    def _quiet_check(self, rid, r, cur, nets, at, skip):
+        """An HF net on a CAT radio with nothing heard for QUIET_MIN while another net is scheduled now: mark it quiet
+        and return the other one (the radio retunes to it). With every candidate quiet it stays where it is."""
+        q = self._quiet[rid]
+        cat = getattr(self.st, "cat", None)
+        if not cur or cat is None or not cat.has(rid) or r.get("paused"):
+            return None
+        if not cur.get("freq_mhz") or float(cur["freq_mhz"]) > QUIET_MAX_MHZ:
+            return None
+        if q["key"] != cur["key"] or not q["since"] or at - q["since"] < timedelta(minutes=QUIET_MIN):
+            return None
+        if self._heard_since(rid, q["since"]):
+            return None
+        alt, _ = listen_window(nets, rid, at, skip=skip, usable=self.usable(rid, at), loses=self.loses(at),
+                               dead=q["dead"] | {cur["key"]})
+        if not alt or alt["key"] == cur["key"] or alt["key"] in q["dead"]:
+            return None
+        q["dead"].add(cur["key"])
+        print(f"{at:%H:%M:%S} {rid}: nothing heard on {cur['name']} for {QUIET_MIN} min -> {alt['name']}", flush=True)
+        r.setdefault("listen", {})["switched"] = {"from": cur["name"], "to": alt["name"], "at": at.isoformat(timespec="minutes")}
+        return alt
+
+    @property
+    def heard_path(self):
+        return self.st.data / "net_heard.json"
+
+    def _load_heard(self) -> dict:
+        try:
+            return json.loads(self.heard_path.read_text(encoding="utf-8")) or {}
+        except (OSError, ValueError):
+            return {}
+
+    def _save_heard(self):
+        try:
+            self.heard_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.heard_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self._heard, indent=1), encoding="utf-8")
+            os.replace(tmp, self.heard_path)
+        except OSError as e:
+            print(f"net_heard: {e}", flush=True)
+
+    def _heard_end(self, rid, key, at):
+        """The radio stops listening to `key`: note whether anything was heard (counted after 10 minutes of listening,
+        or when something was heard at all)."""
+        q = self._quiet.get(rid) or {}
+        if not key or q.get("key") != key or not q.get("since"):
+            return
+        mins = int((at - q["since"]).total_seconds() // 60)
+        heard = self._heard_since(rid, q["since"])
+        if not heard and mins < QUIET_MIN:
+            return
+        nid, _, date = key.partition("@")
+        rows = [x for x in self._heard.get(nid, []) if x.get("date") != date or "kept" in x]
+        rows.append({"date": date, "heard": heard, "min": mins})
+        self._heard[nid] = rows[-12:]
+        self._save_heard()
+        if not heard:
+            self.publish()
+
+    def heard_of(self, nid: str) -> dict:
+        """{"run": times in a row not heard (since the last Keep it), "last": the latest few}"""
+        rows, run = self._heard.get(nid, []), 0
+        for x in reversed(rows):
+            if "kept" in x or x.get("heard"):
+                break
+            run += 1
+        return {"run": run, "flag": run >= UNHEARD_RUN, "last": [x for x in rows if "kept" not in x][-5:]}
+
+    def keep(self, nid: str) -> dict:
+        """The operator keeps a net flagged "Not heard": the count starts again."""
+        self._find(nid)
+        self._heard.setdefault(nid, []).append({"kept": datetime.now().isoformat(timespec="minutes")})
+        self._save_heard()
+        self.publish()
+        return self.list()
 
     # ---------- storage ----------
     @property
@@ -309,6 +403,7 @@ class NetSchedule:
                              "key": recur.key(n["id"], o["date"]), "skipped": recur.key(n["id"], o["date"]) in skipped,
                              "loses": bool(rid) and fit.loses_at(n | {"radio": rid}, nets, o["start"] + timedelta(minutes=1))})
             out.append(n | {"summary": recur.summary(n), "status": st.get(n["id"]), "week": week,
+                            "heard": self.heard_of(n["id"]),
                             "next": item(n, nxt[0]) if nxt else None})
         return out
 
@@ -322,7 +417,11 @@ class NetSchedule:
         cat = getattr(self.st, "cat", None)
         radio, nets = self.st.radios.get(rid), self.st.cfg.get("schedule") or []
         has = bool(cat is not None and cat.has(rid))
-        return lambda n: fit.fit(n, radio, has)["kind"] in ("ready", "tune") and not fit.loses_at(n, nets, at)
+        return lambda n: fit.fit(n, radio, has)["kind"] in ("ready", "tune")
+
+    def loses(self, at: datetime):
+        nets = self.st.cfg.get("schedule") or []
+        return lambda n: fit.loses_at(n, nets, at)
 
     def unassign(self, radio_ids: set):
         """Radios removed in Radios…: their nets stay, with no radio."""
@@ -461,7 +560,7 @@ class NetSchedule:
         """POST /api/schedule (add), /api/schedule/preview, /api/schedule/<id> (replace), /api/schedule/<id>/delete,
         /api/schedule/<id>/skip|move|restore ({"date": the occurrence's own date; move: to_date, start, freq_mhz,
         mode, duration_min, note})."""
-        m = re.fullmatch(r"/api/schedule(?:/([\w-]+)(?:/(delete|skip|move|restore|radio|settle))?)?", path)
+        m = re.fullmatch(r"/api/schedule(?:/([\w-]+)(?:/(delete|skip|move|restore|radio|settle|keep))?)?", path)
         if not m:
             raise NoSuchNet(path)
         if not m.group(1):
@@ -470,6 +569,8 @@ class NetSchedule:
             return self.preview(body)
         if m.group(2) == "delete":
             return self.delete(m.group(1))
+        if m.group(2) == "keep":                  # a net flagged "Not heard": keep it, count again
+            return self.keep(m.group(1))
         if m.group(2) == "radio":                 # {"radio": id | null}: the chip on the net
             return self.assign(m.group(1), body.get("radio"))
         if m.group(2) == "settle":                # {"over": other net id}: this one is recorded when they meet
@@ -530,7 +631,10 @@ class NetSchedule:
         with self.lock:
             for rid, r in list(self.st.radios.items()):
                 L = r.setdefault("listen", {"scheduled": False, "tune": False})
-                cur, nxt = listen_window(nets, rid, at, skip=skip, usable=self.usable(rid, at))
+                q = self._quiet.setdefault(rid, {"key": None, "since": None, "dead": set()})
+                cur, nxt = listen_window(nets, rid, at, skip=skip, usable=self.usable(rid, at), loses=self.loses(at),
+                                         dead=q["dead"])
+                cur = self._quiet_check(rid, r, cur, nets, at, skip) or cur
                 if cur is None:
                     try:
                         cur = self.st.overrun(rid, at)               # still going past its end: keep listening
@@ -543,6 +647,10 @@ class NetSchedule:
                 first = rid not in self._want
                 if self._want.get(rid) == want:
                     continue
+                self._heard_end(rid, self._want.get(rid), at)          # the net it leaves: heard or not
+                q["key"], q["since"] = (want or None), at
+                if not want:
+                    q["dead"] = set()
                 self._want[rid] = want
                 cat = getattr(self.st, "cat", None)
                 if cat is not None and cat.has(rid):

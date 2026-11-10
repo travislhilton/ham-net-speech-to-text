@@ -95,3 +95,35 @@ def test_one_date_moved_to_another_radio_is_listened_to_there_only(tmp_path):
     assert listen_window(nets, "ic", nxt)[0]["id"] == a["id"] and listen_window(nets, "ht", nxt)[0] is None
     st.nets.post(f"/api/schedule/{a['id']}/move", {"date": T.date().isoformat(), "radio": "ic"})   # back: no exception
     assert not next(n for n in st.cfg["schedule"] if n["id"] == a["id"]).get("exceptions")
+
+
+def test_a_quiet_net_ranks_after_another_net_on_at_the_same_time():
+    from datetime import datetime
+    from station.schedule import listen_window
+    a = {"id": "a", "name": "A", "radio": "ic", "days": ["tue"], "start": "19:00", "duration_min": 60, "freq_mhz": 3.915}
+    b = {"id": "b", "name": "B", "radio": "ic", "days": ["tue"], "start": "19:00", "duration_min": 60, "freq_mhz": 7.272}
+    at = datetime(2026, 11, 10, 19, 15)
+    first = listen_window([a, b], "ic", at)[0]
+    other = listen_window([a, b], "ic", at, dead={first["key"]})[0]
+    assert other["id"] != first["id"]
+    # every candidate quiet: it stays on one rather than going silent
+    assert listen_window([a, b], "ic", at, dead={"a@2026-11-10", "b@2026-11-10"})[0] is not None
+
+
+def test_a_net_not_heard_three_times_is_flagged_until_kept(tmp_path):
+    from tests.test_cat import CFG, Clock, TUE as T
+    import copy
+    from datetime import timedelta
+    from station import engine
+    from station.core import Station
+    st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path, clock=Clock(T))
+    s, nid = st.nets, st.cfg["schedule"][0]["id"]
+    for i in range(3):
+        at = T + timedelta(days=7 * i)
+        s._quiet["ic"] = {"key": f"{nid}@{at.date().isoformat()}", "since": at, "dead": set()}
+        s._heard_end("ic", f"{nid}@{at.date().isoformat()}", at + timedelta(minutes=30))
+    h = s.heard_of(nid)
+    assert h["run"] == 3 and h["flag"]
+    s.keep(nid)
+    assert not s.heard_of(nid)["flag"]
+    assert (tmp_path / "net_heard.json").exists()

@@ -292,6 +292,10 @@ you chose is remembered. Each column shows:
   note that follows; when the radio can't hear it, the note offers to switch its antenna. Without a mouse (a phone),
   click a net in the column: the same menu moves it every time or just that date, or opens it in Nets. Above the
   columns, a red line counts the nets that can't be recorded (no radio, or the radio can't hear them).
+- **Quiet HF nets**: on a radio the station tunes (CAT), when an HF or 6 m net has been silent for 10 minutes and
+  another net is scheduled at the same time, the station switches to that one (it goes back only if everything else
+  is quiet too). Each net remembers whether it was heard; a net **not heard 3 times in a row** is marked in its
+  radio's column and in Nets, with **Remove** and **Keep it** (keeping starts the count again).
 - **Nets today** (older layout, replaced by the columns above): a strip under the header lists, one line each, the nets still to come today and the one on the
   air (time, name, frequency, radio). The next one is highlighted; one on the air shows **on the air**, or
   **radio paused** when its radio is not recording. Tap a line to open it in Nets. Folded by default to the net on

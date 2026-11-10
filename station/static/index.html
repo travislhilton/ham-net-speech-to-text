@@ -1185,8 +1185,10 @@ function renderNet(){
 }
 // Today: one line per net still to come today (and the one on the air), the next one highlighted
 function renderToday(){
-  const box=$("today"),bad=(S.schedule||[]).filter(n=>["none","cant"].includes((n.status||{}).kind));
-  box.innerHTML=bad.length?`<div class="attn">⚠ <button data-attn>${bad.length} net${bad.length>1?"s":""} can't be recorded (no radio, or the radio can't hear ${bad.length>1?"them":"it"}): open Nets</button></div>`:"";
+  const box=$("today"),bad=(S.schedule||[]).filter(n=>["none","cant"].includes((n.status||{}).kind)),uh=(S.schedule||[]).filter(n=>(n.heard||{}).flag);
+  const parts=[];if(bad.length)parts.push(`${bad.length} net${bad.length>1?"s":""} can't be recorded (no radio, or the radio can't hear ${bad.length>1?"them":"it"})`);
+  if(uh.length)parts.push(`${uh.length} net${uh.length>1?"s":""} not heard 3× in a row`);
+  box.innerHTML=parts.length?`<div class="attn">⚠ <button data-attn>${parts.join(" · ")}: open Nets</button></div>`:"";
   const a=box.querySelector("[data-attn]");if(a)a.onclick=()=>{NV.kind=null;openNetsArea({tab:"schedule",radio:null})};
   return}
 function renderTodayStrip(){
@@ -1483,7 +1485,9 @@ function netFit(n){
   let why=k==="clash"&&st.clash?`Same radio as <b>${esc(st.clash.name)}</b> (${esc(st.clash.start)}), first on ${esc(fmtDay(st.clash.date))}. Choose which one is recorded, or move one.`:esc(st.why||"");
   for(const c of st.settled||[])why+=c.wins?` · Recorded when it meets ${esc(c.name)} <button class="linkish small" data-settle="${esc(n.id)}" data-over="${esc(c.id)}" data-undo="1">change</button>`
     :` · <b>Skipped</b> when it meets ${esc(c.name)} <button class="linkish small" data-settle="${esc(c.id)}" data-over="${esc(n.id)}" data-undo="1">change</button>`;
-  return `<div class="nwhy"><button class="rchip k-${k}" data-rpick="${esc(n.id)}" aria-haspopup="menu" title="Choose the radio for this net"><span class="dot"></span><span class="nm2">${esc(n.radio?rName(n.radio):"No radio")}</span> ▾</button><span class="np k-${k}">${KLABEL[k]}</span> <span class="muted">${why}</span>${bits.join(" ")}</div>`}
+  const h=n.heard||{};
+  const unheard=h.flag?`<div class="nwhy"><span class="np k-cant">Not heard ${h.run}× in a row</span> <span class="muted">Listened ${h.run} times and nothing came through (propagation, antenna, or the net may have moved or ended).</span> <button data-netdel="${esc(n.id)}">Remove</button> <button data-netkeep="${esc(n.id)}">Keep it</button></div>`:"";
+  return unheard+`<div class="nwhy"><button class="rchip k-${k}" data-rpick="${esc(n.id)}" aria-haspopup="menu" title="Choose the radio for this net"><span class="dot"></span><span class="nm2">${esc(n.radio?rName(n.radio):"No radio")}</span> ▾</button><span class="np k-${k}">${KLABEL[k]}</span> <span class="muted">${why}</span>${bits.join(" ")}</div>`}
 function netCard(n){
   const k=kindOf(n),att=["none","cant","clash"].includes(k);
   const now=((S.net||{}).running||[]).some(x=>x.id===n.id);
@@ -1789,7 +1793,7 @@ function renderRadioNets(r){
     const off=w.skipped||w.loses,cls=on?"on":all.indexOf(x)===nextI?"next":"";
     const tip=`${n.name} · ${when(w)}–${hm12(w.end)}${w.moved_radio?" · moved to this radio for this date":""}${w.loses?" · loses a clash: not recorded":""}${w.skipped?" · skipped":""} — drag to another radio, or click to choose`;
     return `<button class="rn ${cls}${off?" off":""}" draggable="true" data-rn="${esc(n.id)}" data-date="${esc(w.date)}" data-from="${esc(r.id)}" title="${esc(tip)}">
-      <span class="tt">${esc(when(w))}</span><span class="nm">${esc(n.name)}</span>${w.moved_radio?'<span class="once">this date</span>':""}<span class="fq">${n.freq_mhz?Number(n.freq_mhz).toFixed(3):""}</span>${on?'<span class="np k-ready">on the air</span>':off?`<span class="np k-none">${w.loses?"not recorded":"skipped"}</span>`:k!=="ready"?`<span class="np k-${k}">${KLABEL[k]}</span>`:""}</button>`};
+      <span class="tt">${esc(when(w))}</span><span class="nm">${esc(n.name)}</span>${w.moved_radio?'<span class="once">this date</span>':""}<span class="fq">${n.freq_mhz?Number(n.freq_mhz).toFixed(3):""}</span>${(n.heard||{}).flag&&!on?`<span class="np k-cant" title="Not heard ${n.heard.run} times in a row: open Nets to remove or keep it">not heard ${n.heard.run}×</span>`:""}${on?'<span class="np k-ready">on the air</span>':off?`<span class="np k-none">${w.loses?"not recorded":"skipped"}</span>`:k!=="ready"?`<span class="np k-${k}">${KLABEL[k]}</span>`:""}</button>`};
   const tog=open?`<button data-rntog="${esc(r.id)}" aria-expanded="true">▴ Less</button>`:more?`<button data-rntog="${esc(r.id)}" aria-expanded="false">▾ ${more} more today</button>`:all.length>key.length?`<button data-rntog="${esc(r.id)}" aria-expanded="false">▾ Next 2 days</button>`:"";
   box.innerHTML=`<div class="rh"><span>Nets</span>${tog}<span class="sp"></span><button data-nets="${esc(r.id)}">This week…</button></div>
     <div class="rlist">${shown.length?shown.map(line).join(""):`<div class="none">${(S.schedule||[]).some(n=>n.radio===r.id)?"No more nets on this radio today.":"No nets on this radio. Drag one here, or add one in Nets."}</div>`}</div>`}
@@ -1870,6 +1874,7 @@ document.addEventListener("click",e=>{
   const a=e.target.closest("[data-assign]");if(a){closePick();netAct(()=>post(`/api/schedule/${enc(a.dataset.assign)}/radio`,{radio:a.dataset.to||null}));return}
   const o1=e.target.closest("[data-once]");if(o1){closePick();const n=(S.schedule||[]).find(x=>x.id===o1.dataset.once);if(n)moveNet(n,o1.dataset.date,o1.dataset.from,o1.dataset.to,false);return}
   const mv=e.target.closest("[data-netmove]");if(mv){netAct(()=>post(`/api/schedule/${enc(mv.dataset.netmove)}/radio`,{radio:mv.dataset.to}));return}
+  const kp=e.target.closest("[data-netkeep]");if(kp){netAct(()=>post(`/api/schedule/${enc(kp.dataset.netkeep)}/keep`,{}));return}
   const st=e.target.closest("[data-settle]");if(st){netAct(()=>post(`/api/schedule/${enc(st.dataset.settle)}/settle`,{over:st.dataset.over,undo:!!st.dataset.undo}));return}
   const an=e.target.closest("[data-setant]");if(an){netAct(()=>post(`/api/radios/${enc(an.dataset.setant)}/setup`,{antenna:an.dataset.v}));return}
   const ro=e.target.closest("[data-setrole]");if(ro){if(ro.dataset.v==="winlink"&&!confirm("Keep this radio for Winlink only? Its nets are not recorded on it until you move them or switch back."))return;
