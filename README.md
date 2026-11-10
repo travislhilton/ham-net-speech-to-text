@@ -78,7 +78,8 @@ and roster in `config\local.yaml`; the accurate-pass server's address in `statio
 key in `config\secrets.env`; your own **xAI API key** for the station agent (optional: **Settings → Station agent**,
 paste it and **Save key**; **Test** asks xAI whether it works; the page only ever shows "set …abcd"; it is kept in
 `config\secrets.env` as `XAI_API_KEY=…`, readable only by the station's user, SYSTEM and Administrators — create one at
-console.x.ai → API Keys after adding a little credit under Billing); the QRZ.com password in Windows Credential Manager; SSH public keys for remote
+console.x.ai → API Keys after adding a little credit under Billing; optionally an **Anthropic API key** the same way,
+to compare Claude Haiku with Grok); the QRZ.com password in Windows Credential Manager; SSH public keys for remote
 management in `deploy\windows\ssh-keys.txt`. The server keeps its settings in `~/.config/emcomm-stt/env`.
 
 ## Connecting a radio
@@ -292,6 +293,21 @@ you chose is remembered. Each column shows:
   note that follows; when the radio can't hear it, the note offers to switch its antenna. Without a mouse (a phone),
   click a net in the column: the same menu moves it every time or just that date, or opens it in Nets. Above the
   columns, a red line counts the nets that can't be recorded (no radio, or the radio can't hear them).
+- **Station agent (Draft mode)**: an optional AI operator's assistant with an on-air name of your choosing (default
+  "Echo"). Switch it to **Draft** on a radio's card: after each transmission (once the frequency has been quiet 1.2 s)
+  it decides whether your station should speak and drafts exactly what it would say and how long it would wait,
+  shown at the top of that radio's column; **What would you say now?** asks on demand, 👍/👎 rates a draft. **It
+  never transmits**: there is no transmit mode, and the CAT code still refuses PTT. Every draft is checked in code
+  against FCC Part 97 (the model cannot talk its way past them): your call at the end of each exchange and every
+  10 minutes, spoken in English or phonetics, never an SSID (97.119); on its first transmission in a contact it says
+  it is an automated assistant and names you as control operator, and it never claims to be a person (97.113(a)(4));
+  no music, indecent language or codes (97.113(a)(4)); no business (97.113(a)(2),(3)); no relayed messages
+  (97.115); silent during emergency or priority traffic unless net control calls it, and while anyone transmits
+  (97.101); under about 30 seconds; inside your license class's phone privileges (97.301/97.305). A draft that fails
+  any check is shown struck through, **Would not send**, with the rule. Settings → Station agent holds the name, your
+  first name, your check-in line, license class, model (Grok 4.20 fast by default: measured 0.55 s, against 3–11 s for
+  the reasoning models) and up to two models to compare on the same traffic. Drafts are kept in
+  `data\agent_drafts.jsonl` (never committed), up to 240 model calls an hour.
 - **Quiet HF nets**: on a radio the station tunes (CAT), when an HF or 6 m net has been silent for 10 minutes and
   another net is scheduled at the same time, the station switches to that one (it goes back only if everything else
   is quiet too). Each net remembers whether it was heard; a net **not heard 3 times in a row** is marked in its

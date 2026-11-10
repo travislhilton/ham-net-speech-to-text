@@ -182,6 +182,8 @@ class Station:
         self._apply_operator()
         from .schedule import NetSchedule      # schedule: dashboard-edited nets + listen only during nets + alerts
         self.nets = NetSchedule(self)
+        from .agent import Agent
+        self.agent = Agent(self)                                 # the station agent: Draft mode only, never transmits
         from .history import History            # net history, search, analysis, minutes (data/history.db)
         self.history = History(self.data, nets=lambda: self.cfg.get("schedule") or [], radios=lambda: self.radios,
                                callbook=callbook, clock=clock, me=self.me, bus=self.bus)
@@ -824,7 +826,8 @@ class Station:
         from .schedule import running
         out = {}
         for it in running(self.cfg.get("schedule", []), at):
-            out.setdefault(it["radio"], {"name": it["name"], "ncs": it.get("ncs"), "key": it["key"], "id": it["id"]})
+            out.setdefault(it["radio"], {"name": it["name"], "ncs": it.get("ncs"), "key": it["key"], "id": it["id"],
+                                         "emergency": it.get("emergency", False)})
         return out
 
     def ended_nets(self, rid: str, at: datetime, gap_min: int = 15) -> set[str]:
@@ -1807,6 +1810,8 @@ class Station:
         self.voice.queue(tx)
         if getattr(self, "accurate", None):
             self.accurate.on_final(tx)                           # the accurate pass follows the live text
+        if getattr(self, "agent", None):
+            self.agent.on_final(tx)                              # the station agent's draft (never transmitted)
         self._hear_close(tx)
         if new and self.callbook and self.callbook.qrz and self.cfg.get("qrz_online", True):
             threading.Thread(target=self._qrz_refresh, args=(new,), daemon=True).start()

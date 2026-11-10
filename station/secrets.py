@@ -3,6 +3,7 @@
 Each station owner supplies their own keys:
   EMCOMM_STT_KEY  the home server's upload key (station/accurate.py)
   XAI_API_KEY     the station agent's xAI key (console.x.ai), set in Settings -> Station agent
+  ANTHROPIC_API_KEY  optional: Claude as a comparison model for the station agent (console.anthropic.com)
 
 An environment variable of the same name wins over the file. The dashboard never receives a key: only whether one
 is set and its last 4 characters. Writing keeps the file's own permissions (it is rewritten in place); a new file is
@@ -21,7 +22,10 @@ from pathlib import Path
 
 KEYS = {
     "XAI_API_KEY": {"label": "xAI API key", "shape": r"xai-[A-Za-z0-9_-]{20,200}",
-                    "test": "https://api.x.ai/v1/models"},
+                    "test": "https://api.x.ai/v1/models", "who": "xAI"},
+    "ANTHROPIC_API_KEY": {"label": "Anthropic API key (optional: Claude for comparison)",
+                          "shape": r"sk-ant-[A-Za-z0-9_-]{20,300}", "test": "https://api.anthropic.com/v1/models",
+                          "who": "Anthropic", "headers": lambda v: {"x-api-key": v, "anthropic-version": "2023-06-01"}},
 }
 
 
@@ -108,13 +112,14 @@ def test(root, name: str, opener=urllib.request.urlopen) -> dict:
     v = read(root, name)
     if not v:
         return {"ok": False, "say": "No key set."}
-    req = urllib.request.Request(KEYS[name]["test"], headers={"Authorization": f"Bearer {v}"})
+    k = KEYS[name]
+    req = urllib.request.Request(k["test"], headers=k["headers"](v) if k.get("headers") else {"Authorization": f"Bearer {v}"})
     try:
         with opener(req, timeout=10) as r:
             n = len((json.loads(r.read() or b"{}").get("data") or []))
         return {"ok": True, "say": f"The key works ({n} models available)."}
     except urllib.error.HTTPError as e:
-        return {"ok": False, "say": "xAI refused the key (check it was copied whole, and that the team has credit)."
-                if e.code in (401, 403) else f"xAI answered {e.code}; try again later."}
+        return {"ok": False, "say": f"{k['who']} refused the key (check it was copied whole, and that the account has "
+                "credit)." if e.code in (401, 403) else f"{k['who']} answered {e.code}; try again later."}
     except (urllib.error.URLError, OSError, ValueError) as e:
-        return {"ok": False, "say": f"Couldn't reach xAI ({type(e).__name__}): is this PC online?"}
+        return {"ok": False, "say": f"Couldn't reach {k['who']} ({type(e).__name__}): is this PC online?"}
