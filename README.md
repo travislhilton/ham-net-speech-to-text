@@ -467,6 +467,7 @@ Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
 | The end of a net: net control's close heard (wording, roll-call-learned net control, questions/plans/quotes excluded), 2 min tail, pause only a radio the station turned on, final accurate pass at once, minutes, Winlink messages ready; End net by hand; Not closed undoes | working (`station/netclose.py`; built from the 2026-11-03 FM net, where the close had no speaker); not yet seen on a live net |
 | Accurate second pass on the home server (large-v3), progress + time left on each net and in the Winlink window | working (`accurate:` in station.yaml) |
 | Accurate pass WITH CONTEXT: provisional text per transmission (heard with the net before it), final text for the whole net when it goes quiet (`POST /accurate/context`, `transcribe/context.py`) | working (home server; synthetic FM nets: word errors 53 % → 38 %, callsigns found 11 % → 30 %; real 3.915 net: FCC-valid callsigns 39 → 62; see "How the accurate pass works"); older Mac services fall back to one at a time |
+| Home server GPU on demand: Whisper loaded on the first request, its memory released after each one, the model unloaded after 10 idle minutes (`transcribe/gpu.py`, `/health` shows it) | working (replayed final passes: 4.5 GB flat instead of growing to 20+ GB; idle: 0.77 GB) |
 | Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | working on both station PCs (i5-12600H desktop: final text only; Core Ultra laptop: large-v3 on the GPU at 0.34× real time), see "The accurate pass on this PC" |
 | Live engine checked while a dashboard is open: a clear transmission read as one word re-checks the engine on a recent good read and reloads it if broken (`station/core.py`) | working (a fake engine in the tests; the failure seen once after Modern Standby) |
 | Full speed while transcribing on laptops: your power plan + mode saved, the installer's HamNet Station plan + Best performance + the screen held on during nets and traffic (+10 min; Settings: or the whole time a radio listens / always / never) or while the accurate pass has work, all put back after (and at the next start after a crash; left on the HamNet plan with nothing saved, it goes back to Windows' Balanced plan and your power mode) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
@@ -665,6 +666,13 @@ When the station is on the home network it can upload each transmission to the h
 PostgreSQL; `analyze/` uses LLMs on an optional OpenAI-compatible LLM server for structuring and summaries, and falls back to
 rules when it is unreachable. `python -m tools.net start|stop|status` opens and closes a net.
 Details: `docs/ARCHITECTURE.md`, deploy: `deploy/my-server/`.
+
+**The server holds the GPU only while nets need it** (`transcribe/gpu.py`). Whisper loads on the first request
+(about 2 s from the local model cache), the GPU memory a decode frees is handed back after every request, and after
+`STT_IDLE_UNLOAD_S` seconds with no request (default 600; 0 keeps it loaded) the model is unloaded and the service
+returns to well under 1 GB. `GET /health` shows `whisper_loaded`, `idle_s` and the GPU memory in use. `STT_MLX_CACHE_GB`
+(default 4) caps what MLX may keep between decodes. Before this the cache was never returned: a server with no
+restart grew to 43 GB in 12 hours of final passes; six replayed final passes now stay at 4.5 GB, no slower.
 
 ## Development
 

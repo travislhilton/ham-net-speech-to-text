@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 
+from . import gpu
 from . import nets as netlogic
 from .engine import MODEL, Engine
 
@@ -22,6 +23,14 @@ API_KEY = os.environ.get("EMCOMM_STT_KEY")
 DSN = os.environ.get("EMCOMM_DB_DSN")  # postgresql+psycopg://...
 
 app = FastAPI(title="ham-net-speech-to-text transcribe")
+
+
+@app.on_event("startup")
+def _gpu_on_demand():
+    """Whisper loads on the first request and is unloaded when the requests stop (transcribe/gpu.py)."""
+    gpu.configure()
+    gpu.start_idle_watcher()
+
 engine = Engine()
 _db = None
 if DSN:
@@ -72,7 +81,7 @@ def _open_nets(s, at: datetime):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "model": MODEL, "accurate_model": ACCURATE_MODEL, "db": bool(_db)}
+    return {"ok": True, "model": MODEL, "accurate_model": ACCURATE_MODEL, "db": bool(_db), **gpu.status()}
 
 
 @app.post("/reload-vocab", dependencies=[Depends(auth)])
@@ -82,7 +91,6 @@ def reload_vocab():
 
 
 ACCURATE_MODEL = os.environ.get("STT_ACCURATE_MODEL", "mlx-community/whisper-large-v3-mlx")
-_accurate_lock = __import__("threading").Lock()
 
 
 def _wav16k(data: bytes):
@@ -162,7 +170,7 @@ async def accurate_context(request: Request):
 
     def run():
         t0 = time.time()
-        with _accurate_lock:
+        with gpu.using():
             res = cx.transcribe_clips(clips, _whisper_decode(ACCURATE_MODEL), mode=method)
         return res, time.time() - t0
     res, took = await asyncio.get_running_loop().run_in_executor(None, run)
@@ -179,7 +187,7 @@ def accurate(audio: UploadFile = File(...), prompt: str = Form(""), highpass_hz:
     import mlx_whisper
     x = _highpass(_wav16k(audio.file.read()), highpass_hz)
     t0 = time.time()
-    with _accurate_lock:
+    with gpu.using():
         r = mlx_whisper.transcribe(x, path_or_hf_repo=ACCURATE_MODEL, language="en", initial_prompt=prompt or None,
                                    condition_on_previous_text=False, temperature=0)
     return {"text": r["text"].strip(), "model": ACCURATE_MODEL.split("/")[-1], "audio_s": round(len(x) / 16000, 2),
@@ -196,7 +204,8 @@ async def transcribe(audio: UploadFile = File(...), meta: str = Form("{}")):
     wav.write_bytes(await audio.read())
     wav.with_suffix(".json").write_text(json.dumps(m, indent=2))
 
-    out = engine.transcribe(wav)
+    with gpu.using():
+        out = engine.transcribe(wav)
     out["net_id"] = None
     if _db:
         with _db() as s:
