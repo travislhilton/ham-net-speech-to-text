@@ -56,7 +56,7 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 }
 header .xs{display:none}
 .logbox>h2{margin-bottom:6px}.guide .empty{margin:0}
-/* the top of each column: one tab set (Radio | What you can do now | Stations heard). All three panes share one
+/* the top of each column: one tab set (Radio | Coach | Stations heard). All three panes share one
    grid cell; the radio card sets its height, the others scroll inside it, so the conversation below never jumps. */
 .toptabs{flex:none;padding-top:6px}.toptabs>.tabs{margin-bottom:8px}
 .stack{display:grid}.stack>.pane{grid-area:1/1;min-width:0}.stack>.pane:not(.show){visibility:hidden}
@@ -424,6 +424,8 @@ document.addEventListener("scroll",e=>{const t=e.target;if(t===document||t===doc
 addEventListener("resize",pageTop);addEventListener("load",pageTop);addEventListener("pageshow",pageTop);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hhmm=iso=>iso?iso.slice(11,16):"";
+// Stations heard: when a station was last heard, date and time ("Nov 9 21:03"; owner 2026-11-09)
+const lastHeard=iso=>iso?new Date(iso).toLocaleDateString([],{month:"short",day:"numeric"})+" "+hhmm(iso):"";
 function freq(b){return b?esc(b.label):""}
 function tick(){const d=new Date();$("clock").textContent=d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})+" local · "+d.toISOString().slice(11,16)+" UTC"}
 setInterval(tick,1000);tick();
@@ -1011,7 +1013,7 @@ function ensureCard(r){
    <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-nets="${esc(r.id)}" title="This radio's nets, and listening only while they are on">Nets…</button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button> <button data-level="${esc(r.id)}" title="Set this radio's audio level just right, with a meter and a target">Set level…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
-  top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">What you can do now</span><span class="sm">Do now</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button><button class="fold" data-fold="${id}" title="Fold this panel away to see more of the log (or tap the open tab)"></button></div>
+  top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">Coach</span><span class="sm">Coach</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button><button class="fold" data-fold="${id}" title="Fold this panel away to see more of the log (or tap the open tab)"></button></div>
     <div class="stack"><div class="pane guide" id="guide-${id}"></div><div class="pane heard" id="heard-${id}"><p class="muted small">None yet.</p></div></div>`;
   el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
   try{if(localStorage.getItem("hamnet.fold."+r.id))col.classList.add("folded")}catch(e){}
@@ -1160,7 +1162,7 @@ function renderGuide(rid){
 function cardHtml(c,e){
   const rows=[["Name",c.name],["Location",[c.city,c.state,c.country].filter(Boolean).join(", ")],["License",c.license_class?`${c.license_class}${c.license_status&&c.license_status!=="Active"?" ("+c.license_status+")":""}${c.expires?", expires "+c.expires:""}`:""],
     ["Club",c.club?("yes"+(c.trustee?", trustee "+c.trustee:"")):""],["Grid",c.grid],["Zones",c.cq_zone?`CQ ${c.cq_zone}, ITU ${c.itu_zone}, ${c.continent}`:""],["Email",c.email],["Address",c.address]].filter(r=>r[1]);
-  return `<div class="station"><div class="hd"><span class="call" data-call="${esc(c.call)}">${esc(c.call)}</span>${e?`<span class="muted small">heard ${e.count}× · last ${hhmm(e.last)}</span>`:""}</div>
+  return `<div class="station"><div class="hd"><span class="call" data-call="${esc(c.call)}">${esc(c.call)}</span>${e?`<span class="muted small">heard ${e.count}× · last ${lastHeard(e.last)}</span>`:""}</div>
    <dl class="st">${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join("")}</dl>
    ${e&&e.unconfirmed?`<div class="small">Can't be confirmed: ${esc(e.unconfirmed)}. Still counted as a station.</div>`:""}
    <div class="small muted">${(c.sources||[]).join(" · ")||"not found in the callbooks"}${c.qrz_url?` · <a href="${esc(c.qrz_url)}" target="_blank" rel="noopener">QRZ page</a>`:""}</div></div>`;
@@ -1172,7 +1174,7 @@ function heardRow(rid,c,e){
   const u=e&&e.unconfirmed;
   return `<details class="hrow" data-hk="${esc(k)}"${HEARD_OPEN.has(k)?" open":""}><summary><span class="call${u?" unc":""}"${u?` title="Can't be confirmed: ${esc(u)}. Still counted."`:""}>${esc(c.call)}</span>`+
     `<span class="who">${esc(where)}${c.name&&where?" · ":""}<span class="muted">${esc(tc(c.name))}</span>${!c.name&&!where?'<span class="muted">not in the callbooks</span>':""}</span>`+
-    `<span class="n">${e.count}× ${hhmm(e.last)}</span></summary>${cardHtml(c,e)}</details>`;
+    `<span class="n" title="Heard ${e.count}×, last ${esc(lastHeard(e.last))}">${e.count}× · ${lastHeard(e.last)}</span></summary>${cardHtml(c,e)}</details>`;
 }
 function renderHeard(rid){
   const cards=Object.fromEntries((S.heard||[]).map(e=>[e.call,e.card]));
@@ -1182,7 +1184,7 @@ function renderHeard(rid){
     const seen={};
     for(const t of S.tx){if(t.radio!==r.id||t.status!=="final")continue;
       for(const c of callsOf(t)){const s=seen[c]||(seen[c]={call:c,count:0,last:t.start});s.count++;if(t.start>s.last)s.last=t.start}}
-    const list=Object.values(seen).sort((a,b)=>b.last.localeCompare(a.last));
+    const list=Object.values(seen).sort((a,b)=>b.last.localeCompare(a.last)||a.call.localeCompare(b.call));   // most recently heard first
     box.innerHTML=list.length?list.map(e=>heardRow(r.id,cards[e.call]||{call:e.call},e)).join(""):'<p class="muted small">None yet.</p>';
     const n=document.querySelector(`#col-${CSS.escape(r.id)} .hn`);if(n)n.textContent=list.length?`(${list.length})`:"";
   }

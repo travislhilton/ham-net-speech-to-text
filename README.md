@@ -110,10 +110,10 @@ or `http://<station-name>:8091/` from another PC or phone on your home network o
 **Open on phone** at the top of the dashboard and point the phone's camera at the code.
 
 The dashboard has one column per radio, with everything about that radio in it. The top of each column is
-one set of tabs, **Radio** (meters, waterfall, frequency) | **What you can do now** |
+one set of tabs, **Radio** (meters, waterfall, frequency) | **Coach** |
 **Stations heard**, all the same height, so the log always fills the space below
-and never moves when you switch tabs. A dot on "What you can do now" means it has guidance (red: urgent).
-On the What you can do now and Stations heard tabs, drag the bar between the tabs and the conversation to
+and never moves when you switch tabs. A dot on "Coach" means it has guidance (red: urgent).
+On the Coach and Stations heard tabs, drag the bar between the tabs and the conversation to
 give either one more room (remembered per radio; double-click the bar to reset).
 On a wide screen the page itself never scrolls; the conversation and the tab contents scroll on their own.
 On a phone (or any window under 900 px wide) the radios are tabs under the header, one radio at a time; a
@@ -212,12 +212,12 @@ you chose is remembered. Each column shows:
     of the live text, the accurate pass and the consensus text against everything you corrected, per radio, mode
     and net, with how many lines it is based on (under 20 is a rough guide; your eye starts from the text shown).
     The same from a terminal: `python -m tools.accuracy` (or `--data data` with the station stopped).
-- **What you can do now** (per radio): step-by-step help and example phrases when someone asks for a relay,
+- **Coach** (per radio, the tab was "What you can do now" until 2026-11-09): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
 - **Stations heard** (per radio, a tab above the log; the same calls as the log: your corrections, then the
   net-wide agreement, then the accurate pass, then the live text): one line per callsign (city, state, country · name, how
-  often and when last heard); tap a line for the license, grid, zones and address (FCC, QRZ.com and the country file). Click any callsign for its card (with
+  often, and the date and time last heard — the most recently heard first); tap a line for the license, grid, zones and address (FCC, QRZ.com and the country file). Click any callsign for its card (with
   the nets that station takes part in: how many times and when last).
 - **Net type** (a badge on each radio card): the kind of net being heard (ARES/RACES, SKYWARN, exercise, check-in, traffic, DX…),
   with a red banner if it sounds like a real emergency.
