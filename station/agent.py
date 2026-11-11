@@ -309,7 +309,9 @@ CHECKIN_CALL = re.compile(
     r"wanting|with)|takers)|(stations?|anyone|anybody|centers?)\b[^.?!]{0,60}\b(wishing|wanting|who would like|"
     r"that would like|would like|desiring) to check[- ]?in|(taking|take|open(ing)? (the net )?for|calling for|"
     r"now for|accepting) (any )?check[- ]?ins?|check[- ]?ins?,? (please|go ahead|call now|are open|now)|"
-    r"please call now|call now with your call)", re.I)
+    r"please call now|call now with your call|any (visitors|visiting stations|late or missed|missed or late)|"
+    r"(visitors|visiting stations|any other stations?|stations not (yet )?(on the|in the) (roster|list))\b[^.?!]{0,40}"
+    r"\b(come now|call now|check[- ]?in|please))", re.I)
 # during open check-ins, net control hands the frequency on with "next station, please"
 NEXT_STATION = re.compile(r"\b(next|first|another) station,? (please|go ahead)\b|\bnext (check[- ]?in|one),? please\b",
                           re.I)
@@ -684,7 +686,8 @@ class Agent:
         ctx = {"call": call, "name": name, "op": op, "first": first, "id_due": id_due, "emergency": emergency,
                "busy": busy, "freq_mhz": r.get("freq_mhz") or lastrow.get("freq_mhz"), "mode": r.get("mode"),
                "license_class": self.cfg.get("license_class"), "addressed": addressed,
-               "roll_call": bool(rows) and bool(ROLL_CALL.search(lastrow.get("text", ""))) and not checkin_invited(rows)[0]}
+               "roll_call": bool(rows) and bool(ROLL_CALL.search(lastrow.get("text", ""))),
+               "invited": checkin_invited(rows)[0]}
         main_model = self.cfg.get("model") or DEFAULT_MODEL
         models = [main_model] + list(self.cfg.get("compare") or [])
         results = {}
@@ -766,9 +769,12 @@ class Agent:
             return d
         d = dict(d)
         p = p or {}
-        if d["kind"] == "check_in" and ctx.get("roll_call"):
+        if d["kind"] == "check_in" and not ctx.get("invited", True):
+            # 11-10 replay: the quick model checked in twice during a net's roll call of its city stations. A check-in
+            # that breaks into a roll call costs more than a late one: it needs net control's general call.
             d["fcc"] = d.get("fcc", []) + [{"rule": "protocol", "ok": False, "note":
-                                            "a roll call of places or named stations, no general call for check-ins"}]
+                                            "a roll call of places or named stations, no general call for check-ins"
+                                            if ctx.get("roll_call") else "no general call for check-ins heard"}]
             d["ok"] = False
             return d
         if d["kind"] == "working":

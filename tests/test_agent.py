@@ -406,8 +406,13 @@ def test_a_check_in_during_a_roll_call_of_places_is_stopped(tmp_path, xai_key):
     _say(st, "Got you, Riverside. Now calling Springfield, log in as well.")
     d = st.agent.draft("ic", "t0")
     assert not d["ok"] and any(c["rule"] == "protocol" for c in d["fcc"] if not c["ok"])
-    _say(st, "We'll now take check-ins from any station, anywhere. Now calling for check-ins.", minute=5)
-    assert st.agent.draft("ic", "t1")["ok"]
+    _say(st, "Strong signal as well. Thank you. Riverside City.", minute=5)        # a place, no "now calling"
+    assert not st.agent.draft("ic", "t1")["ok"]
+    _say(st, "We'll now take check-ins from any station, anywhere.", minute=6)
+    assert st.agent.draft("ic", "t2")["ok"]
+    _say(st, "Any visitors? Come now, please.", minute=7)
+    st.agent.state["ic"].pop("checked_in", None)
+    assert st.agent.draft("ic", "t3")["ok"]
 
 
 def test_one_timeout_is_a_slow_answer_two_are_an_outage():
