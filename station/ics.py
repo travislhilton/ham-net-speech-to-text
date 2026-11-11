@@ -85,7 +85,7 @@ def participants(span, me_calls: set[str], heard: dict) -> list[dict]:
 
 
 def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | None, title: str | None,
-           minutes: str = "") -> list[dict]:
+           minutes: str = "", local_terms: str = "") -> list[dict]:
     if not span:
         return []
     first, last = datetime.fromisoformat(span[0]["start"]), datetime.fromisoformat(span[-1]["start"])
@@ -124,6 +124,8 @@ def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | Non
             f"  {datetime.fromisoformat(t['start']):%H:%M} {t.get('speaker') or '?'}: {t.get('text', '')[:160]}" for t in traffic)
     if minutes:
         msg += "\n\nMinutes (drafted from the transcript, reviewed by the operator):\n" + minutes
+    if local_terms:                       # the area's names said on this net, for a reader outside the area
+        msg += "\n\n" + local_terms
     msg += "\n\nThe full log is in the attached ICS-309. Machine transcription, reviewed by the operator before sending."
     now = datetime.now()
     out.append({"form": "ics213", "label": "ICS-213 General Message (summary)",

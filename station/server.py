@@ -112,6 +112,14 @@ def make_handler(station):
                 return self._json({"keys": [secrets.status(station.root, k) for k in secrets.KEYS]})
             if u.path == "/api/learned":                         # Learned fixes (station/corrections.py)
                 return self._json(station.learned())
+            if u.path == "/api/local-names":                     # Settings → Local names (station/localnames.py)
+                return self._json(station.local_names())
+            if u.path == "/api/local-names/pack":                # the area pack, as a download
+                from . import localnames
+                d = station.local_names()
+                body = json.dumps(localnames.pack(d["names"], d["area"]), indent=1, ensure_ascii=False).encode("utf-8")
+                return self._send(200, body, "application/json; charset=utf-8",
+                                  {"Content-Disposition": 'attachment; filename="area-pack.json"'})
             if u.path == "/api/accuracy":                        # accuracy from the operator's corrections
                 return self._json(station.accuracy())
             if u.path == "/api/schedule":                        # schedule: the nets, for the editor
@@ -170,7 +178,7 @@ def make_handler(station):
             who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
-                      "/api/history/minutes", "/api/learned"}
+                      "/api/history/minutes", "/api/learned", "/api/local-names", "/api/local-names/import"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
@@ -233,6 +241,8 @@ def make_handler(station):
                                                                          noise=bool(body.get("noise")))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
+                if u.path in ("/api/local-names", "/api/local-names/import"):    # {"names", "area"} | {"pack"} | {"url"}
+                    return self._json(station.local_names("import" if u.path.endswith("import") else "save", body))
                 if u.path == "/api/learned":                    # {"action": accept|ignore|unignore|remove, heard, say}
                     return self._json(station.learned(str(body.get("action") or ""), str(body.get("heard") or ""),
                                                       str(body.get("say") or "")) if body.get("action")

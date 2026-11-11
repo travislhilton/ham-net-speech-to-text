@@ -465,7 +465,10 @@ class Station:
                 pass
         name = title or sched.get("name") or (inst or {}).get("name") if (inst or {}).get("kind") == "net" \
             else title or sched.get("name")
-        d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), name, minutes=notes)
+        from . import localnames
+        terms = localnames.footer(localnames.terms_in([t.get("text") for t in span] + [notes, name or ""],
+                                                      localnames.load(self.data)))
+        d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), name, minutes=notes, local_terms=terms)
         acc = None
         if getattr(self, "accurate", None):
             jobs = [j for j in self.accurate.status() if j["radio"] == rid and start <= j["start"] <= end]
@@ -1208,7 +1211,8 @@ class Station:
                 print(f"consensus: QRZ: {type(e).__name__}: {e}", flush=True)
         recs, res = consensus.for_session(rows, lic, prior, callfix.home_state(self), self.roster,
                                           self.me, fx, fixups.net_names_for(self._sched_entry(net_id)),
-                                          where=self.where(), qrz=answers, reach_km=self.reach_km())
+                                          where=self.where(), qrz=answers, reach_km=self.reach_km(),
+                                          net_name=(self._sched_entry(net_id) or {}).get("name"))
         changed = []
         unconf = self.__dict__.setdefault("unconfirmed", {})
         with self.lock:
@@ -1273,6 +1277,45 @@ class Station:
                         for t in self.tx if t.get("radio") == rid and t.get("status") == "final"
                         and s["start"] <= t["start"] <= s["end"]))
         return out
+
+    # ---------- local names (Settings → Local names; station/localnames.py) ----------
+    def local_names(self, action: str | None = None, body: dict | None = None) -> dict:
+        """GET: the list, the area, the schedule's net names. POST {"names": [...], "area"}: save. POST import
+        {"pack": {...}} or {"url": "https://..."}: merge an area pack. Saving re-runs the agreement (and with it the
+        local-name repair) on the nets of the last two days still on screen."""
+        from . import localnames as ln
+        body = body or {}
+        p = ln.path(self.data)
+        try:
+            doc = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            doc = {}
+        area = (doc.get("area") if isinstance(doc, dict) else "") or ""
+        have = ln.load(self.data)
+        note = None
+        if action in ("save", "import"):
+            if action == "import":
+                pack = body.get("pack")
+                if pack is None and body.get("url"):
+                    pack = ln.fetch(str(body["url"]))
+                names, note = ln.unpack(pack, have)
+                area = area or note.get("area") or ""
+            else:
+                names = body.get("names")
+                area = " ".join(str(body.get("area", area) or "").split())[:80]
+            have = ln.save(self.data, names, area)
+            with self.lock:
+                self.__dict__.pop("_agreed", None)
+            threading.Thread(target=lambda: self._agree_quiet(48), daemon=True, name="local-names").start()
+            print(f"{datetime.now():%H:%M:%S} local names: {len(have)} saved" + (f" ({note})" if note else ""), flush=True)
+        nets = sorted({str(n.get("name")) for n in (self.cfg.get("schedule") or []) if n.get("name")})
+        return {"names": have, "area": area, "nets": nets, "imported": note}
+
+    def _agree_quiet(self, hours):
+        try:
+            self.agree_recent(hours=hours)
+        except Exception as e:  # noqa: BLE001
+            print(f"consensus: {type(e).__name__}: {e}", flush=True)
 
     def agree_recent_async(self):
         th = self.__dict__.get("_agree_thread")

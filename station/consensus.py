@@ -813,7 +813,7 @@ def records(views: list[dict], result: dict, fix_text=None) -> dict[str, dict]:
 
 
 def for_session(rows: list[dict], fcc=None, prior=None, home_state=None, roster=(), me="", fix_cfg=None,
-                net_names=(), where=None, qrz=None, reach_km=None) -> tuple[dict, dict]:
+                net_names=(), where=None, qrz=None, reach_km=None, net_name=None) -> tuple[dict, dict]:
     """One net's raw transmissions (as kept in the day log) -> ({tx id: consensus record}, agree() result).
     The one entry point for the station (core.Station.agree_session) and the re-run CLI (tools/consensus.py)."""
     from . import fixups, ics
@@ -822,8 +822,8 @@ def for_session(rows: list[dict], fcc=None, prior=None, home_state=None, roster=
     live = {t["id"]: list(t.get("callsigns") or []) for t in rows if t.get("accurate")}
     res = agree(views, fcc, prior, home_state, roster, me, live, where=where, qrz=qrz, reach_km=reach_km)
     fix = None
-    if (fix_cfg and fix_cfg.get("rules")) or net_names or (fix_cfg or {}).get("net_names"):
-        fix = lambda s: fixups.apply(s, fix_cfg or {}, net_names)
+    if (fix_cfg and (fix_cfg.get("rules") or fix_cfg.get("local"))) or net_names or (fix_cfg or {}).get("net_names"):
+        fix = lambda s: fixups.apply(s, fix_cfg or {}, net_names, net_name)
     return records(views, res, fix), res
 
 

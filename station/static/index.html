@@ -170,6 +170,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}dialog label{display:block;margin:8p
 dialog select{font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);max-width:100%}
 dialog textarea{width:100%;font:13px/1.4 ui-monospace,Consolas,monospace;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:6px}
 dialog h3{margin:0 0 8px}dialog h4{margin:12px 0 4px;font-size:14px;color:var(--muted);text-transform:uppercase}
+.lnent{border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:6px 0}.lnent .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px 8px}.lnent label{margin:2px 0}.lnent textarea{width:100%;font-size:13px}
 .row{margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.chk{display:flex!important;gap:6px;align-items:center;margin:3px 0!important}
 .chk input{display:inline!important;margin:0!important;width:auto}.tolist{max-height:180px;overflow:auto}
 details{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0}summary{cursor:pointer}
@@ -445,6 +446,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <div class="small muted">Laptops run several times slower once the screen goes dark. “During nets and traffic” switches to full speed for a scheduled net, for every transmission (from its first moment) and for 10 minutes after the last one; the rest of the time your own power plan, screen and sleep settings apply, and the radio still listens.</div>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
+  <h4>Local names</h4><div id="lnSet" class="small"></div>
   <h4>Station agent (optional)</h4><div id="agentSet" class="small"></div><div id="keySet" class="small"></div>
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
 </form></dialog>
@@ -1306,7 +1308,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -2111,6 +2113,49 @@ function renderEcho(rid){
 document.addEventListener("click",e=>{
   const a=e.target.closest("[data-agask]");if(a){a.textContent="Thinking…";agPost(`/api/agent/ask/${enc(a.dataset.agask)}`,{});return}
   const r=e.target.closest("[data-agrate]");if(r){agPost(`/api/agent/rate/${enc(r.dataset.agrate)}`,{good:r.dataset.v==="1"});return}});
+// ----- Settings → Local names (station/localnames.py): the area's clubs, repeaters and web sites -----
+let LN=null;
+async function loadLocalNames(){try{LN=await api("/api/local-names")}catch(e){LN={names:[],nets:[],area:"",err:e.message}}renderLocalNames()}
+function lnEntryHtml(e,i){
+  const also=(e.also||[]).map(a=>`${a.heard} = ${a.say}`).join("\n");
+  return `<div class="lnent" data-ln="${i}"><div class="g">
+    <label>Name <input data-f="name" value="${esc(e.name||"")}" maxlength="40" placeholder="SARC" style="text-transform:none"></label>
+    <label>Said <select data-f="said"><option value="word"${e.said!=="letters"?" selected":""}>as a word (“sark”)</option><option value="letters"${e.said==="letters"?" selected":""}>letter by letter</option></select></label>
+    <label>Web site <input data-f="web" value="${esc(e.web||"")}" placeholder="sarconline.com" style="text-transform:none"></label></div>
+   <label>Means <input data-f="meaning" value="${esc(e.meaning||"")}" maxlength="160" placeholder="Springfield Amateur Radio Club" style="text-transform:none;width:100%"></label>
+   <div class="g"><label>Whisper writes it as <input data-f="sounds" value="${esc((e.sounds||[]).join(", "))}" placeholder="sark, sarc" style="text-transform:none"></label>
+    <label>Only on these nets <input data-f="nets" list="lnNets" value="${esc((e.nets||[]).join(", "))}" placeholder="every net" style="text-transform:none"></label></div>
+   <label>Also heard (one per line: heard = say) <textarea data-f="also" rows="2" placeholder="Sarkowitz Repair = SARC Link repeater">${esc(also)}</textarea></label>
+   <button type="button" class="linkish small" data-lnrm="${i}">Remove</button></div>`}
+function lnRead(all){
+  return [...$("lnSet").querySelectorAll("[data-ln]")].map(d=>{const g=f=>(d.querySelector(`[data-f=${f}]`)||{}).value||"";
+    return {name:g("name").trim(),said:g("said"),web:g("web").trim(),meaning:g("meaning").trim(),
+      sounds:g("sounds").split(",").map(x=>x.trim()).filter(Boolean),nets:g("nets").split(",").map(x=>x.trim()).filter(Boolean),
+      also:g("also").split("\n").map(x=>x.trim()).filter(x=>x.includes("="))}}).filter(e=>all||e.name)}
+function renderLocalNames(msg){
+  const box=$("lnSet");if(!box||!LN)return;
+  box.innerHTML=`<p class="muted">Your area's clubs, repeaters and web sites, written the way they should read. Whisper writes a name said as a word as an ordinary word (“the Sark Link repeater”, “SarkNet”, “go to SarkOnline”); the station repairs it in the log, search, the minutes and the Winlink messages (the heard words are kept), and lists the names said on a net under <b>Local terms</b> in the ICS-213. A plain word (“we met at the park”) is changed only when it reads as a name: a capital mid-sentence, or a radio word right beside it.</p>
+   <label>Area <input id="lnArea" value="${esc(LN.area||"")}" maxlength="80" placeholder="Springfield County" style="text-transform:none"></label>
+   <datalist id="lnNets">${(LN.nets||[]).map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
+   <div id="lnList">${(LN.names||[]).map(lnEntryHtml).join("")||'<p class="muted">No local names yet. Add one, or import your area’s pack.</p>'}</div>
+   <div class="row"><button type="button" id="lnAdd">Add a name</button> <button type="button" class="primary" id="lnSave">Save local names</button> <span id="lnMsg" class="${msg&&msg.bad?"bad":"ok"}">${esc((msg&&msg.text)||LN.err||"")}</span></div>
+   <h4 style="margin-top:10px">Share with your area</h4>
+   <p class="muted">An <b>area pack</b> holds these names (no callsigns, nothing about you). Give it to other operators in your area (a club web site, an email) and they import it here, or save it as <code>area-pack.json</code> beside <code>install.cmd</code> before installing (the installer imports it).</p>
+   <div class="row"><a href="/api/local-names/pack" download="area-pack.json"><button type="button">Export area pack</button></a>
+     <input type="file" id="lnFile" accept=".json,application/json"> <input id="lnUrl" placeholder="https://… area pack" style="text-transform:none;min-width:14em"> <button type="button" id="lnImp">Import</button></div>`;
+  box.querySelector("#lnAdd").onclick=()=>{LN.names=lnRead(true);LN.area=$("lnArea").value;LN.names.push({name:"",said:"word"});renderLocalNames();
+    const all=box.querySelectorAll("[data-ln] [data-f=name]");if(all.length)all[all.length-1].focus()};
+  box.querySelectorAll("[data-lnrm]").forEach(b=>b.onclick=()=>{LN.names=lnRead(true);LN.area=$("lnArea").value;
+    LN.names.splice(+b.dataset.lnrm,1);renderLocalNames({text:"Removed. Save to keep it removed."})});
+  box.querySelector("#lnSave").onclick=async()=>{try{LN=await post("/api/local-names",{names:lnRead(),area:$("lnArea").value});
+    renderLocalNames({text:`Saved ${LN.names.length}. Today's and yesterday's nets are re-checked now; new transmissions use them at once.`})}
+    catch(e){renderLocalNames({text:e.message,bad:true})}};
+  box.querySelector("#lnImp").onclick=async()=>{try{const f=$("lnFile").files[0],u=$("lnUrl").value.trim();
+    let body;if(f)body={pack:JSON.parse(await f.text())};else if(u)body={url:u};else{renderLocalNames({text:"Choose a file or paste a web address.",bad:true});return}
+    LN=await post("/api/local-names/import",body);const n=LN.imported||{};
+    renderLocalNames({text:`Imported${n.area?" "+n.area:""}: ${n.added||0} added, ${n.updated||0} updated.`})}
+    catch(e){renderLocalNames({text:e.message,bad:true})}};
+}
 function renderAgentSet(){
   const box=$("agentSet");if(!AG){box.innerHTML="";return}const s=AG.settings||{};
   const opt=(v,l,on)=>`<option value="${esc(v)}"${on?" selected":""}>${esc(l)}</option>`;

@@ -5,6 +5,7 @@ Python packages, four Whisper models, the FCC license database; more with an NVI
 
   install.cmd                              (double-click; elevates and runs this)
   install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz] [-SkipVoice]
+              [-AreaPack <file or https address>]   (else an area-pack.json beside install.cmd is imported)
 #>
 param(
   [string]$InstallDir = 'C:\ham-net-speech-to-text',
@@ -12,7 +13,8 @@ param(
   [switch]$SkipModels,
   [switch]$SkipCallbook,
   [switch]$SkipQrz,
-  [switch]$SkipVoice
+  [switch]$SkipVoice,
+  [string]$AreaPack = ''
 )
 $ErrorActionPreference = 'Stop'
 $Src = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -154,6 +156,25 @@ if (-not $SkipVoice) {
     catch { Remove-Item -Force "$vm.part" -ErrorAction SilentlyContinue
             Write-Host "  could not download it ($($_.Exception.Message)); Who? works without voice suggestions" }
   }
+}
+
+# Local names for the area (station/localnames.py): an area pack someone in the area published. -AreaPack, else an
+# area-pack.json beside install.cmd or in the install folder. Merged: names already on the station are updated, none
+# removed, so re-running the installer is harmless.
+Step "Local names (area pack)"
+$pack = $AreaPack
+if (-not $pack) {
+  foreach ($c in @("$PSScriptRoot\area-pack.json", "$PSScriptRoot\..\..\area-pack.json", "$InstallDir\area-pack.json")) {
+    if (Test-Path $c) { $pack = (Resolve-Path $c).Path; break }
+  }
+}
+if (-not $pack) { Write-Host '  none (Settings > Local names can import one later)' }
+elseif ($pack -match '^https?://' -and -not $online) { Write-Host "  no internet: $pack not imported (Settings > Local names later)" }
+else {
+  Push-Location $InstallDir
+  try { Run { & $vpy -m station.localnames import $pack --data "$InstallDir\data" } }
+  catch { Write-Host "  could not import $pack ($($_.Exception.Message)); Settings > Local names can import it" }
+  finally { Pop-Location }
 }
 
 if (-not $SkipCallbook) {

@@ -58,7 +58,12 @@ def load(config_dir: Path = ROOT / "config", data_dir: Path | None = ROOT / "dat
         for r in _rules_from(obj, src):
             merged[r["heard"].lower()] = r
     names = [str(n) for n in (vocab.get("net_names") or []) + (local.get("net_names") or []) if n]
-    return {"rules": list(merged.values()), "net_names": list(dict.fromkeys(names))}
+    from . import localnames                       # Settings → Local names (data/local_names.json), applied first
+    out = {"rules": list(merged.values()), "net_names": list(dict.fromkeys(names))}
+    local_ = localnames.load(data_dir) if data_dir else []
+    if local_:
+        out["local"] = local_
+    return out
 
 
 def net_names_for(net: dict | None, extra=()) -> list[str]:
@@ -195,11 +200,21 @@ def repair_net_name(text: str, names: list[str], threshold: float = NET_THRESHOL
     return text, changes
 
 
-def apply(text: str, cfg: dict, net_names=()) -> tuple[str, list[dict]]:
-    """Fix-up rules, then the net's own name. -> (text, changes)."""
+def apply(text: str, cfg: dict, net_names=(), net_name: str | None = None) -> tuple[str, list[dict]]:
+    """Local names (station/localnames.py, for the net called `net_name`), fix-up rules, then the net's own name.
+    -> (text, changes)."""
     if not text:
         return text, []
-    t, ch = apply_rules(text, cfg.get("rules") or [])
+    ch = []
+    if cfg.get("local"):
+        from . import localnames
+        key = (id(cfg["local"]), net_name)
+        cache = cfg.setdefault("_local_rules", {})
+        if key not in cache:
+            cache[key] = localnames.rules(cfg["local"], net_name)
+        text, ch = localnames.apply(text, cache[key])
+    t, ch1 = apply_rules(text, cfg.get("rules") or [])
+    ch += ch1
     names = list(dict.fromkeys(list(net_names) + list(cfg.get("net_names") or [])))
     if names:
         t, ch2 = repair_net_name(t, names)

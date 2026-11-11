@@ -18,6 +18,9 @@ second pass and net reports (ICS-309 / ICS-213).
    administrator access.
 3. Type your callsign when asked. The first run downloads about 4 GB (Python packages, Whisper
    models, the FCC license database) and takes 10–20 minutes. Re-run `install.cmd` after every update.
+4. **Your area's local names (optional):** if someone in your area shares an **area pack** (`area-pack.json`: the
+   local clubs, repeaters and web sites, see [Local names](#local-names)), save it beside `install.cmd` before
+   step 2 and the installer imports it, or import it later in **Settings → Local names**.
 
 What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing needs to be installed beforehand:
 - checks the PC first (64-bit Windows 10/11, about 8 GB free, internet for the first install) and says what is missing;
@@ -215,6 +218,20 @@ you chose is remembered. Each column shows:
     press **Accept**: accepted ones go to `data\fixups_learned.yaml` (the `fixups:` format of `config/vocab.yaml`)
     and correct what the station hears from then on; **Ignore** hides a proposal, **Remove** takes one back out.
     The number on the Settings button is how many are waiting.
+  - <a id="local-names"></a>**Local names** (Settings): your area's clubs, repeaters and web sites. A club whose
+    name is said as a word ("SARC", said "sark") comes out of Whisper as an ordinary word: "the Sark Link repeater",
+    "SarkNet", "go to SarkOnline". Each entry has the **name**, what it **means**, whether it is **said** as a word
+    or letter by letter, how **Whisper writes it** (sound-alikes), an optional **web site** (said aloud: "Sark online
+    dot com" → sarconline.com), **also heard** phrases (`Sarkowitz Repair = SARC Link repeater`) and, optionally, the
+    **nets** it belongs to (by name; empty = every net). The station repairs the text in the log, search, the
+    minutes and the Winlink messages (the heard words are kept, like the other fix-ups) and the ICS-213 lists the
+    names said on that net under **Local terms** ("SARC: Springfield Amateur Radio Club (sarconline.com)"), for a
+    reader outside the area. A plain word is changed only when it reads as a name: written with a capital
+    mid-sentence, or with a radio word right beside it ("the sark net"); "we met at the park after the net" stays.
+    Saving re-checks the nets of the last two days; an older day: `python -m tools.consensus <date>` with the
+    station stopped. **Export area pack** saves the list (no callsigns, nothing personal) for other operators in
+    your area; they **Import** it (a file or an https address) or put it beside `install.cmd`
+    (`install.ps1 -AreaPack <file or address>` also works). Kept in `data\local_names.json`.
   - **Accuracy (from your corrections)** (in **Test transcription…**, under the test history): the word error rate
     of the live text, the accurate pass and the consensus text against everything you corrected, per radio, mode
     and net, with how many lines it is based on (under 20 is a rough guide; your eye starts from the text shown).
@@ -556,6 +573,7 @@ The station can read an EOC's situation report on a voice net — from the compa
 | Full speed while transcribing on laptops: your power plan + mode saved, the installer's HamNet Station plan + Best performance + the screen held on during nets and traffic (+10 min; Settings: or the whole time a radio listens / always / never) or while the accurate pass has work, all put back after (and at the next start after a crash; left on the HamNet plan with nothing saved, it goes back to Windows' Balanced plan and your power mode) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
 | Compiled-model cache for the live engine (`data/ov-cache`, shared with the accurate pass) | working; test laptop: turbo on the GPU 36 s → 16 s to load, small.en on the NPU 555 s → 11 s |
 | Over-the-air transcription test with word-error score and history | working |
+| Local names (Settings: name, meaning, said as a word/letters, sound-alikes, web site, also-heard phrases, nets by name) repaired in the agreement pass (joined forms, web sites said aloud, a guard for plain words), Local terms in the ICS-213, area packs (export / import file or https / installer `area-pack.json` or `-AreaPack`) | working (`station/localnames.py`), 2026-11-10 |
 | Tap-to-correct (✎ Fix, log + minutes transcript; Enter/Esc; ▶ while editing; Undo correction): corrected > accurate > live in search, minutes, attendance, ICS-309/213, Winlink; Learned fixes proposed from repeats, applied only on Accept (`data/fixups_learned.yaml`); accuracy against the corrections per radio/mode/net (`/api/accuracy`, `python -m tools.accuracy`) | working (`station/corrections.py`); not yet used on a live net |
 | Who is talking: stated callsign / net control by its words / operator's **Who?** (kept in the log, used by the ICS-309) | working (`station/speaker.py`) |
 | Who? suggests the closest voice earlier in the same net (only a clear match; you confirm) | working (`station/voicehint.py`) |
