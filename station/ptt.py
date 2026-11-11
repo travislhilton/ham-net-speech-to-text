@@ -79,14 +79,88 @@ def clean_tx(tx, name: str, cat_port: str | None = None) -> dict | None:
     return out
 
 
-def hid_devices(hid_mod=None) -> list[dict]:
-    """USB HID interfaces that can key a radio (C-Media first): [{path, desc}]. Empty without hidapi."""
+def usb_token(instance: str) -> str:
+    """The physical USB device a function belongs to, from a Windows instance id: both 'USB\\VID_0D8C&PID_0012&MI_03\\
+    7&1760C262&0&0003' (the HID side's parent) and '{1}.USB\\VID_0D8C&PID_0012&MI_00\\7&1760C262&0&0000' (a sound
+    endpoint's device) -> '7&1760C262'. Empty when it is not a USB function."""
+    parts = re.sub(r"^\{\d+\}\.", "", instance or "").split("\\")
+    if len(parts) < 3 or not parts[0].upper().startswith("USB"):
+        return ""
+    return parts[2].rsplit("&", 2)[0].upper()
+
+
+def _hid_parent(path: str) -> str:
+    """The Windows instance id of a HID path's parent (the USB function): '\\\\?\\HID#VID..&MI_03#8&x&0&0000#{guid}' ->
+    'USB\\VID..&MI_03\\7&y&0&0003'. Empty off Windows or on error."""
+    try:
+        import ctypes
+        cm = ctypes.windll.cfgmgr32
+    except (ImportError, AttributeError, OSError):
+        return ""
+    m = re.match(r"^\\\\\?\\(.+)#\{[^}]+\}$", path or "")
+    if not m:
+        return ""
+    inst, parent = ctypes.c_uint32(), ctypes.c_uint32()
+    if cm.CM_Locate_DevNodeW(ctypes.byref(inst), m.group(1).replace("#", "\\"), 0) != 0:
+        return ""
+    if cm.CM_Get_Parent(ctypes.byref(parent), inst, 0) != 0:
+        return ""
+    buf = ctypes.create_unicode_buffer(400)
+    return buf.value if cm.CM_Get_Device_IDW(parent, buf, 400, 0) == 0 else ""
+
+
+def sound_by_usb() -> dict[str, str]:
+    """{usb token: sound card name} from Windows' sound endpoints (inputs and outputs; the input's name wins)."""
+    try:
+        import winreg
+    except ImportError:
+        return {}
+    from .radios import NAME_PROP
+    out: dict[str, str] = {}
+    for kind in ("Render", "Capture"):                      # Capture last: the radio's input name is the one shown
+        try:
+            root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                  rf"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\{kind}")
+        except OSError:
+            continue
+        i = 0
+        while True:
+            try:
+                guid = winreg.EnumKey(root, i)
+            except OSError:
+                break
+            i += 1
+            try:
+                k = winreg.OpenKey(root, guid)
+                if winreg.QueryValueEx(k, "DeviceState")[0] != 1:
+                    continue
+                props = winreg.OpenKey(k, "Properties")
+                name = winreg.QueryValueEx(props, NAME_PROP)[0]
+            except OSError:
+                continue
+            for v in ("{b3f8fa53-0004-438e-9003-51a46e139bfc},39", "{b3f8fa53-0004-438e-9003-51a46e139bfc},2"):
+                try:
+                    tok = usb_token(winreg.QueryValueEx(props, v)[0])
+                except (OSError, TypeError):
+                    continue
+                if tok:
+                    out[tok] = name
+                    break
+    return out
+
+
+def hid_devices(hid_mod=None, sounds: dict | None = None, parent=None) -> list[dict]:
+    """USB HID interfaces that can key a radio (C-Media first): [{path, desc, sound}] — `sound` is the name of the
+    sound card on the same USB device (three identical Digirig Lites on one PC are told apart by it). Empty without
+    hidapi."""
     try:
         if hid_mod is None:
             import hid as hid_mod                    # hidapi: in the Windows requirements
         found = list(hid_mod.enumerate())
     except Exception:  # noqa: BLE001 - no hidapi (a dev machine)
         return []
+    sounds = sound_by_usb() if sounds is None else sounds
+    parent = parent or _hid_parent
     out, seen = [], set()
     for d in found:
         path = d.get("path") or b""
@@ -96,8 +170,10 @@ def hid_devices(hid_mod=None) -> list[dict]:
         if path in seen or not (vid == CMEDIA or re.search(r"audio|digirig|aioc|cm1\d\d|ra-?board", name, re.I)):
             continue
         seen.add(path)
-        out.append({"path": path, "desc": f"{name} ({vid:04X}:{d.get('product_id') or 0:04X})", "cmedia": vid == CMEDIA})
-    return sorted(out, key=lambda x: (not x["cmedia"], x["desc"]))
+        sound = sounds.get(usb_token(parent(path)), "")
+        desc = f"{name} ({vid:04X}:{d.get('product_id') or 0:04X})"
+        out.append({"path": path, "desc": f"{sound} — {desc}" if sound else desc, "sound": sound, "cmedia": vid == CMEDIA})
+    return sorted(out, key=lambda x: (not x["cmedia"], not x["sound"], x["desc"]))
 
 
 def outputs(devices: list[dict] | None = None, hostapis: list[dict] | None = None) -> list[str]:

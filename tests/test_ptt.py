@@ -96,3 +96,20 @@ def test_the_watchdog_lets_go_at_the_limit():
     with t.key("net", seconds=0.1):
         time.sleep(0.4)
         assert dev.states == [True, False]          # let go inside the block
+
+
+def test_identical_interfaces_are_told_apart_by_their_sound_card():
+    assert ptt.usb_token(r"USB\VID_0D8C&PID_0012&MI_03\7&1760c262&0&0003") == "7&1760C262"
+    assert ptt.usb_token(r"{1}.USB\VID_0D8C&PID_0012&MI_00\7&1760C262&0&0000") == "7&1760C262"
+    assert ptt.usb_token(r"{1}.BTHENUM\{0000111F}\6&1B&0&F4") == ""
+
+    class Hid:
+        @staticmethod
+        def enumerate():
+            return [{"path": b"A", "vendor_id": 0x0D8C, "product_id": 0x12, "product_string": "USB Audio Device"},
+                    {"path": b"B", "vendor_id": 0x0D8C, "product_id": 0x12, "product_string": "USB Audio Device"},
+                    {"path": b"K", "vendor_id": 0x046D, "product_string": "Keyboard"}]
+    parents = {"A": r"USB\VID_0D8C&PID_0012&MI_03\7&AAA&0&0003", "B": r"USB\VID_0D8C&PID_0012&MI_03\7&BBB&0&0003"}
+    got = ptt.hid_devices(Hid, sounds={"7&BBB": "Digirig Lite VHF UHF 2 NET-REC"}, parent=parents.get)
+    assert [(d["path"], d["sound"]) for d in got] == [("B", "Digirig Lite VHF UHF 2 NET-REC"), ("A", "")]
+    assert got[0]["desc"].startswith("Digirig Lite VHF UHF 2 NET-REC — ")

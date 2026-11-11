@@ -869,7 +869,10 @@ function renderRadiosDlg(){
   for(const el of $("radiosBody").querySelectorAll("[data-tx]"))el.onchange=()=>{const r=RD.list[+el.closest(".rad").dataset.i],k=el.dataset.tx;
     r.tx=r.tx||{ptt:"none",pin:3,max_s:60,enabled:false};
     if(k==="enabled"){if(el.checked&&!confirm("Allow the station to key this radio's transmitter? Nothing sends yet (Sidekick only drafts), but once something does, it can transmit on this radio. A control operator must be at the station."))el.checked=false;r.tx.enabled=el.checked;renderRadiosDlg();return}
-    r.tx[k]=k==="pin"||k==="max_s"?+el.value:el.value;if(k==="ptt"){if(el.value==="none")r.tx.enabled=false;renderRadiosDlg()}};
+    r.tx[k]=k==="pin"||k==="max_s"?+el.value:el.value;
+    if(k==="ptt"){if(el.value==="none")r.tx.enabled=false;                 // same box as the radio's sound input: pick it
+      const h=(RD.hids||[]).find(x=>x.sound&&x.sound===r.device);if(el.value==="cm108"&&!r.tx.hid&&h)r.tx.hid=h.path;
+      if(el.value!=="none"&&!r.tx.out&&(RD.outputs||[]).includes(r.device))r.tx.out=r.device;renderRadiosDlg()}};
   for(const b of $("radiosBody").querySelectorAll("[data-rm]"))b.onclick=()=>{const r=RD.list[+b.dataset.rm];
     const nn=(RD.nets[r.id]||[]).length;
     if(confirm(`Remove ${r.name||"this radio"}?${nn?` Its ${nn} net${nn>1?"s stay":" stays"} in the list with no radio: choose another radio for ${nn>1?"them":"it"} in Nets.`:""} Its log and recordings stay on disk.`)){RD.list.splice(+b.dataset.rm,1);renderRadiosDlg()}};
