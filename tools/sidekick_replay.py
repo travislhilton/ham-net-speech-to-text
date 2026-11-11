@@ -1,6 +1,7 @@
 """Replay a day's real traffic through Sidekick (the station agent) and report what it would have said.
 
     python -m tools.sidekick_replay 20261110 --radio net --from 19:30 --to 20:30 [--model rules] [--deep]
+    python -m tools.sidekick_replay --script docs/sidekick/rehearsal.json --deep     (a made-up net: the two speeds)
 
 Runs on a station PC (it reads data/logs/<day>.jsonl, the station's agent settings, local names and xAI key).
 Nothing is transmitted and the live station is not touched: drafts go to data/sidekick_replay/<day>-<radio>.jsonl,
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import tempfile
 import time
@@ -69,8 +71,10 @@ def load_day(path: Path) -> list[dict]:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("day", help="YYYYMMDD")
-    ap.add_argument("--radio", required=True)
+    ap.add_argument("day", nargs="?", default=None, help="YYYYMMDD (or --script)")
+    ap.add_argument("--radio", default="net")
+    ap.add_argument("--script", type=Path, default=None,
+                    help="a made-up net (JSON: net, freq_mhz, rows [{t, who, text}]) instead of a day log")
     ap.add_argument("--from", dest="frm", default="00:00")
     ap.add_argument("--to", default="23:59")
     ap.add_argument("--model", default=None, help="a model id, or 'rules' for the offline rules only")
@@ -86,7 +90,22 @@ def main(argv=None) -> int:
     except (OSError, ValueError, KeyError):
         cfg = {}
     data = a.data
-    rows = [t for t in load_day(data / "logs" / f"{a.day}.jsonl") if t.get("radio") == a.radio]
+    if a.script:
+        doc = json.loads(a.script.read_text(encoding="utf-8"))
+        a.day = a.day or datetime.now().strftime("%Y%m%d")
+        day = f"{a.day[:4]}-{a.day[4:6]}-{a.day[6:]}"
+        net = {"key": "rehearsal@" + day, "id": "rehearsal", "name": doc.get("net") or "Rehearsal Net"}
+        rows = []
+        for i, r in enumerate(doc["rows"]):
+            words = len(r["text"].split())
+            rows.append({"id": f"r{i}", "radio": a.radio, "status": "final", "start": f"{day}T{r['t']}",
+                         "duration_s": round(words * 0.4, 1), "text": r["text"], "speaker": r.get("who"),
+                         "callsigns": [w.strip(".,?") for w in r["text"].split() if re.fullmatch(r"[AKNW][A-Z]?\d[A-Z]{1,3}[.,?]?", w)],
+                         "freq_mhz": doc.get("freq_mhz"), "net": net})
+    else:
+        if not a.day:
+            ap.error("a day (YYYYMMDD) or --script")
+        rows = [t for t in load_day(data / "logs" / f"{a.day}.jsonl") if t.get("radio") == a.radio]
     lo, hi = a.frm.zfill(5), a.to.zfill(5)
     rows = [t for t in rows if lo <= str(t.get("start", ""))[11:16] <= hi]
     if not rows:
@@ -131,6 +150,13 @@ def main(argv=None) -> int:
             continue                                        # live, the next transmission cancels this draft
         st.now = end + timedelta(seconds=agentmod.DEBOUNCE_S)
         d = ag.draft(a.radio, t.get("id"))
+        th = getattr(ag, "_thinking", None)
+        if a.deep and th and th.is_alive():                 # time passes on the net: let the thinking finish
+            th.join(agentmod.DEEP_TIMEOUT_S + 5)
+            p = ag.state.get(a.radio, {}).get("pending") or {}
+            if not a.quiet:
+                print(f"    thinking ({p.get('model')}, {p.get('took_s')}s): {p.get('state')}"
+                      f"{': ' + p.get('answer', '') if p.get('answer') else ''}{' ' + p.get('error', '') if p.get('error') else ''}")
         if d:
             drafts.append(d)
             if d.get("speak") and not a.quiet:

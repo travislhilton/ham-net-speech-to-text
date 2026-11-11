@@ -1,0 +1,15 @@
+{"about": "A made-up net for rehearsing Sidekick's two speeds (python -m tools.sidekick_replay --script docs/sidekick/rehearsal.json --deep). Calls are unassigned in the FCC database; the place is fictional.",
+ "net": "Springfield Evening Net",
+ "freq_mhz": 146.52,
+ "rows": [
+  {"t": "20:00:00", "who": "K7QXN", "text": "Good evening, this is K7QXN, net control for the Springfield Evening Net. We'll now take check-ins from any station, anywhere. Please call now."},
+  {"t": "20:00:20", "who": "W9QXJ", "text": "W9QXJ, Dana in Springfield, no traffic."},
+  {"t": "20:00:30", "who": "K7QXN", "text": "W9QXJ, thanks Dana. Next station, please."},
+  {"t": "20:00:45", "who": "K7QXN", "text": "Any further check-ins? Nothing heard. Moving on to the topic of the evening."},
+  {"t": "20:01:10", "who": "W9QXJ", "text": "Sidekick, this is W9QXJ. Can you tell us which amateur bands a General class licensee may use for voice on HF, and roughly where the phone segments are? Over."},
+  {"t": "20:02:00", "who": "K7QXN", "text": "While that's being looked up, let's talk about antenna maintenance before winter. Check your coax connectors for water."},
+  {"t": "20:03:30", "who": "W9QXJ", "text": "Good point, I found green corrosion on one of mine last spring."},
+  {"t": "20:05:00", "who": "K7QXN", "text": "Any comments or questions for the net before we close?"},
+  {"t": "20:05:20", "who": "K7QXN", "text": "Sidekick, go ahead with your response."},
+  {"t": "20:06:30", "who": "K7QXN", "text": "Thank you. This is K7QXN closing the Springfield Evening Net. 73 to all."}
+ ]}
