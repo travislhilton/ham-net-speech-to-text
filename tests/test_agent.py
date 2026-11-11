@@ -425,3 +425,16 @@ def test_one_timeout_is_a_slow_answer_two_are_an_outage():
     o2 = Online("y")
     o2.failed(urllib.error.URLError("no route to host"))
     assert not o2.should_try()                                # a refused connection: at once
+
+
+def test_a_reply_nobody_asked_for_is_stopped(tmp_path, xai_key):
+    def chatty(key, model, system, user, **kw):
+        return {"speak": True, "kind": "reply", "say": "W9XYZ, Sidekick, an automated assistant, Pat is control "
+                "operator. Thanks for the net, sounds interesting. W9XYZ.", "wait_s": 2, "why": "x", "question": ""}, {}
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", chatty), "anthropic": ("ANTHROPIC_API_KEY", chatty)})
+    _say(st, "This is K7ABC, 73 to you and have a good evening.")
+    d = st.agent.draft("ic", "t0")
+    assert not d["ok"] and "nobody called this station" in str(d["fcc"])
+    _say(st, "W9XYZ, thanks for checking in tonight", calls=["W9XYZ"], minute=5)
+    assert st.agent.draft("ic", "t1")["ok"]

@@ -690,7 +690,7 @@ class Agent:
         addressed = bool(rows) and (call in (lastrow.get("callsigns") or []) or name_in(lastrow.get("text", ""), name))
         ctx = {"call": call, "name": name, "op": op, "first": first, "id_due": id_due, "emergency": emergency,
                "busy": busy, "freq_mhz": r.get("freq_mhz") or lastrow.get("freq_mhz"), "mode": r.get("mode"),
-               "license_class": self.cfg.get("license_class"), "addressed": addressed,
+               "license_class": self.cfg.get("license_class"), "addressed": addressed, "asked": asked,
                "roll_call": bool(rows) and bool(ROLL_CALL.search(lastrow.get("text", ""))),
                "invited": invited}
         main_model = self.cfg.get("model") or DEFAULT_MODEL
@@ -770,10 +770,19 @@ class Agent:
     def _protocol(self, d: dict, p: dict | None, ctx: dict) -> dict:
         """The prepared-answer steps checked in code: no announcing an answer that is not ready, and the answer read
         is the prepared words (with the station's ID), never the quick model's paraphrase."""
-        if not d.get("speak") or d.get("kind") not in ("ready", "answer", "working", "check_in"):
+        if not d.get("speak") or d.get("kind") not in ("ready", "answer", "working", "check_in", "reply", "acknowledge",
+                                                         "say_again", "stand_by"):
             return d
         d = dict(d)
         p = p or {}
+        if d["kind"] in ("reply", "acknowledge", "say_again", "stand_by", "working") and not ctx.get("addressed") \
+                and not ctx.get("asked") and not (d["kind"] == "reply" and p.get("state") == "failed"):
+            # 11-10 replay: after the net closed it volunteered "just checking in after the net closed, thanks for the
+            # experiment". Talking to the frequency unasked is not this station's place.
+            d["fcc"] = d.get("fcc", []) + [{"rule": "protocol", "ok": False,
+                                            "note": "nobody called this station (by call or name)"}]
+            d["ok"] = False
+            return d
         if d["kind"] == "check_in" and not ctx.get("invited", True):
             # 11-10 replay: the quick model checked in twice during a net's roll call of its city stations. A check-in
             # that breaks into a roll call costs more than a late one: it needs net control's general call.
