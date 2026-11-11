@@ -299,7 +299,7 @@ you chose is remembered. Each column shows:
   click a net in the column: the same menu moves it every time or just that date, or opens it in Nets. Above the
   columns, a red line counts the nets that can't be recorded (no radio, or the radio can't hear them).
 - **HF scan** (a radio the station tunes by CAT, with its HF antenna on): **Scan Off / On / Auto** on the radio's
-  card. **On** scans in the gaps between nets; **Auto** also scans while a scheduled net has been quiet for 5
+  card. **On** scans in the gaps between nets; **Auto** also scans while a scheduled net has been quiet for 3
   minutes. A net always comes first (scanning stops 5 minutes before one starts). Each pass picks a band open at this
   hour (night 80/40/160 m, morning 40/80/20, midday 20/17/15/40/12/10, late afternoon 20/40/17/15, evening 40/80/160/20)
   among the bands the antenna works on (**Inverted V…** on the card: its name and bands), tries frequencies
@@ -326,8 +326,8 @@ you chose is remembered. Each column shows:
   first name, your check-in line, license class, model (Grok 4.20 fast by default: measured 0.55 s, against 3–11 s for
   the reasoning models) and up to two models to compare on the same traffic. Drafts are kept in
   `data\agent_drafts.jsonl` (never committed), up to 240 model calls an hour.
-- **Quiet HF nets**: on a radio the station tunes (CAT), when an HF or 6 m net has been silent for 5 minutes (nothing
-  heard in the last 5, also after a net ends early) and another net is scheduled at the same time — a net that lost
+- **Quiet HF nets**: on a radio the station tunes (CAT), when an HF or 6 m net has been silent for 3 minutes (nothing
+  heard in the last 3, also after a net ends early) and another net is scheduled at the same time — a net that lost
   a clash included — the station switches to that one (it goes back only if everything else
   is quiet too). Each net remembers whether it was heard; a net **not heard 3 times in a row** is marked in its
   radio's column and in Nets, with **Remove** and **Keep it** (keeping starts the count again).

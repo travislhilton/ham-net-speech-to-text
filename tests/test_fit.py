@@ -129,9 +129,9 @@ def test_a_net_not_heard_three_times_is_flagged_until_kept(tmp_path):
     assert (tmp_path / "net_heard.json").exists()
 
 
-def test_a_net_silent_for_five_minutes_hands_the_radio_to_the_net_beside_it(tmp_path):
-    """Owner 11-10: "if quiet move to the next scheduled net. Look for 5 minute silence not 10" — counted from the
-    last transmission, so a net that ends early frees the radio too."""
+def test_a_net_silent_for_three_minutes_hands_the_radio_to_the_net_beside_it(tmp_path):
+    """Owner 11-10: "if quiet move to the next scheduled net ... just look for 3m of silence" — counted from the last
+    transmission, so a net that ends early frees the radio too."""
     import copy
     from datetime import timedelta
     from station import engine
@@ -153,8 +153,8 @@ def test_a_net_silent_for_five_minutes_hands_the_radio_to_the_net_beside_it(tmp_
     assert first in ("Local net", "160 m net")
     st.tx.append({"id": "t1", "radio": "ic", "status": "final", "text": "net control here",
                   "start": wed.replace(hour=19, minute=2).isoformat(timespec="seconds")})
-    edge(st, clock, wed.replace(hour=19, minute=6))                  # 4 min since the last transmission: stays
+    edge(st, clock, wed.replace(hour=19, minute=4))                  # 2 min since the last transmission: stays
     assert st.radios["ic"]["listen"]["now"] == first
-    edge(st, clock, wed.replace(hour=19, minute=8))                  # 6 min silent (heard earlier): moves on
+    edge(st, clock, wed.replace(hour=19, minute=6))                  # 4 min silent (heard earlier): moves on
     L = st.radios["ic"]["listen"]
     assert L["now"] != first and L["switched"]["from"] == first

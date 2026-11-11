@@ -139,7 +139,7 @@ def on_radio(n: dict, o: dict) -> str | None:
     return o.get("radio") or n.get("radio")
 
 
-QUIET_MIN = 5           # an HF net on a CAT radio silent this long: try another net scheduled then (owner 11-10: 5, not 10)
+QUIET_MIN = 3           # an HF net on a CAT radio silent this long: try another net scheduled then (owner 11-10: 3)
 QUIET_MAX_MHZ = 54.0    # HF and 6 m (a repeater net is either up or it isn't)
 UNHEARD_RUN = 3         # a net not heard this many times in a row is flagged "Not heard" (Remove / Keep it)
 
