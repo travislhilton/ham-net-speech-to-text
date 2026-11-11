@@ -342,3 +342,23 @@ def test_overrun_keeps_the_radio_listening_and_the_transmissions_in_the_net(tmp_
     clock.t = TUE.replace(hour=21, minute=20); st.nets.tick()                        # quiet for 6 minutes
     assert st.radios["ftm"]["paused"]                                                # paused again, as before
     assert st.schedule_now()["today"] == []
+
+
+def test_an_edit_keeps_what_the_net_form_does_not_send_and_the_nets_reach(tmp_path):
+    """The net form sends neither the repeater offset/tone (CAT) nor the clash settles; an edit kept the settles but
+    dropped offset + tone before 2026-11-10. reach_km: a linked system's or intertie's reach (the agreement's
+    'distant' limit for that net); an emptied field clears it."""
+    st = make(tmp_path)
+    nid = st.nets.add({"name": "Intertie", "radio": "ftm", "freq_mhz": 442.1, "start": "20:00", "duration_min": 60,
+                       "days": ["Tue"], "offset_mhz": 5, "tone_hz": 100.0, "reach_km": "650"})["id"]
+    n = next(x for x in st.cfg["schedule"] if x["id"] == nid)
+    assert n["reach_km"] == 650 and n["offset_mhz"] == 5 and n["tone_hz"] == 100.0
+    st.nets.update(nid, {"name": "Intertie", "radio": "ftm", "freq_mhz": 442.1, "start": "20:30", "duration_min": 60,
+                         "days": ["Tue"]})
+    n = next(x for x in st.cfg["schedule"] if x["id"] == nid)
+    assert n["start"] == "20:30" and n["offset_mhz"] == 5 and n["tone_hz"] == 100.0 and n["reach_km"] == 650
+    st.nets.update(nid, {"name": "Intertie", "radio": "ftm", "start": "20:30", "duration_min": 60, "days": ["Tue"],
+                         "reach_km": ""})
+    assert "reach_km" not in next(x for x in st.cfg["schedule"] if x["id"] == nid)
+    with pytest.raises(ValueError):
+        st.nets.update(nid, {"name": "Intertie", "radio": "ftm", "start": "20:30", "days": ["Tue"], "reach_km": 5})

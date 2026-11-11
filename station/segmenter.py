@@ -64,7 +64,7 @@ class Segmenter:
     def __init__(self, gate, sample_rate=16000, frame_ms=32, min_speech_ms=400, hangover_ms=900,
                  max_tx_s=180, preroll_ms=500, partial_every_s=1.0, clock=time.time,
                  split_pause_ms=0, min_split_s=2.0, merge_gap_ms=0, merge_max_s=3.0, dip_split_ms=96,
-                 pause_ratio=0.35):
+                 pause_ratio=0.35, squelch_db=None, squelch_back_ms=2500):
         self.gate, self.sr, self.frame_ms, self.clock = gate, sample_rate, frame_ms, clock
         fr = lambda ms: max(1, int(ms) // frame_ms)
         self.min_frames = fr(min_speech_ms)
@@ -72,6 +72,12 @@ class Segmenter:
         self.max_frames = int(max_tx_s * 1000 // frame_ms)
         self.partial_frames = fr(partial_every_s * 1000)
         self.pre = collections.deque(maxlen=fr(preroll_ms))
+        # Squelched audio (a handheld's speaker/data jack behind its own squelch) is digital silence until the
+        # squelch opens. The VAD can fire a second or more into the transmission (W9 net 2026-11-10: 60% of the
+        # roll-call clips began mid-word, "7XYZ" for a KG7XYZ). So the pre-roll goes back to where the silence ended,
+        # up to `squelch_back_ms`; with no silence in that window (HF, an open squelch) the fixed pre-roll is used.
+        self.squelch_db = squelch_db
+        self.back = (collections.deque(maxlen=fr(squelch_back_ms)) if squelch_db is not None else None)
         self.merge_frames = int(merge_gap_ms) // frame_ms          # 0 = off
         self.merge_max_frames = int(merge_max_s * 1000 // frame_ms)
         self.active, self.buf, self.silent, self.t0, self.n_pre = False, [], 0, None, 0
@@ -127,14 +133,25 @@ class Segmenter:
         if not self.active:
             if on:
                 self.active, self.silent = True, 0
-                self.n_pre = len(self.pre)
-                self.buf = list(self.pre) + [frame]
+                pre = list(self.pre)
+                if self.back:
+                    lv = [d for _, d in self.back]
+                    last = max((i for i, d in enumerate(lv) if d < self.squelch_db), default=None)
+                    if last is not None and len(lv) - last > len(pre):     # the squelch opened before the pre-roll
+                        pre = [f for f, _ in list(self.back)[last:]]       # from the last silent frame on
+                self.n_pre = len(pre)
+                self.buf = pre + [frame]
                 self._reset_piece()
                 self.vflags = [None] * self.n_pre + [None if q is None else not q]
                 self.oflags = [False] * self.n_pre + [True]
                 self.on_frames = 1
                 self.t0 = self.clock() - len(self.buf) * self.frame_ms / 1000
                 yield ("start", self.t0)
+                if self.back is not None:
+                    self.back.clear()
+            else:
+                if self.back is not None:
+                    self.back.append((frame, self.level_db))
             self.pre.append(frame)
             return
         self.buf.append(frame)

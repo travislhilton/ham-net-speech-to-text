@@ -377,6 +377,7 @@ GEO_LICENCES = [  # call, status, first, state, zip
     ("AD7QN", "A", "Ed", "IL", "00001"), ("AE7QN", "A", "Flo", "IL", "00004"),
     ("KD7QQB", "A", "Gus", "IL", "00001"), ("KD7QQP", "A", "Hal", "IL", "00003"),
     ("KD7QQZ", "A", "Ivy", "IL", "00006"),
+    ("WX7RRW", "A", "Joe", "IL", "00006"),                 # far, and no licence near the station rhymes with it
 ]
 
 
@@ -422,7 +423,7 @@ def test_on_vhf_a_licence_in_range_scores_by_its_distance(geolic):
 
 def test_on_vhf_a_far_licence_nothing_backs_is_not_counted(geolic):
     from station import ics
-    CALLS = {"KD7QQB", "KD7QQP", "KD7QQZ"}
+    CALLS = {"KD7QQB", "KD7QQP", "KD7QQZ", "WX7RRW"}
     def run(texts, f=146.94, live=None, **kw):
         views = [{"id": str(i), "text": t, "freq_mhz": f,
                   "callsigns": [w.strip(".,") for w in t.split() if w.strip(".,") in CALLS]}
@@ -440,12 +441,41 @@ def test_on_vhf_a_far_licence_nothing_backs_is_not_counted(geolic):
     # a roll call hears most stations once: 170 km (a linked repeater's reach) is counted
     assert run(["KD7QQP.", "Thank you."])[1]["calls"]["KD7QQP"]["status"] == "verified"
     # both passes read it alike, or said in two transmissions, or its name / a prior check-in: counted
-    assert run(["KD7QQZ.", "Thank you."], live={"0": ["KD7QQZ"]})[1]["calls"]["KD7QQZ"]["status"] == "verified"
-    assert run(["KD7QQZ.", "KD7QQZ, thank you."])[1]["calls"]["KD7QQZ"]["status"] == "verified"
+    assert run(["WX7RRW.", "Thank you."], live={"0": ["WX7RRW"]})[1]["calls"]["WX7RRW"]["status"] == "verified"
+    assert run(["WX7RRW.", "WX7RRW, thank you."])[1]["calls"]["WX7RRW"]["status"] == "verified"
+    # ... unless it is one rhyming letter from a licence by the station (2026-11-10: a call 944 km away, read alike by
+    # both passes, for the licence one rhyme from it 8 km away): the same audio misheard the same way. Not counted, the near one offered;
+    # never moved (a visitor on a link is possible)
+    views, r = run(["KD7QQZ.", "Thank you."], live={"0": ["KD7QQZ"]})
+    e = r["calls"]["KD7QQZ"]
+    assert e["status"] == "distant" and e["call"] == "KD7QQZ" and e["near"] == [{"call": "KD7QQB", "km": 14}]
+    assert r["tx"]["0"] == [] and K.records(views, r)["0"]["distant"] == [
+        {"call": "KD7QQZ", "km": 645, "near": [{"call": "KD7QQB", "km": 14}]}]
+    assert run(["KD7QQZ.", "KD7QQZ, thank you."])[1]["calls"]["KD7QQZ"]["status"] == "distant"
     assert run(["KD7QQZ, Ivy.", "Thank you."])[1]["calls"]["KD7QQZ"]["status"] == "verified"
     assert run(["KD7QQZ.", "Thank you."], prior={"KD7QQZ": 1})[1]["calls"]["KD7QQZ"]["status"] == "verified"
     # on HF distance says nothing
     assert run(["KD7QQZ.", "Thank you."], f=3.985)[1]["calls"]["KD7QQZ"]["status"] == "verified"
+    # a linked system's own reach (the net's reach_km): 645 km is inside it
+    assert run(["WX7RRW.", "Thank you."], reach_km=800)[1]["calls"]["WX7RRW"]["status"] == "verified"
+
+
+def test_a_po_box_zip_is_placed_by_its_region_but_only_to_say_far(tmp_path):
+    """A PO-box ZIP has no centre (2026-11-10: a call 'verified' on a 2-m net from 795 km away). Its 3-digit
+    region's centre says FAR; near, the region is too coarse, so it stays unknown."""
+    from hamkit.zipgeo import ZipGeo
+    rows = {"00601": (39.90, -89.65), "00602": (39.92, -89.65),        # region 006: near the station
+            "64001": (34.00, -89.65), "64002": (34.10, -89.65)}        # region 640: ~650 km south
+    c = fcc.connect(tmp_path / "po.sqlite")
+    for usi, (call, z) in enumerate((("WX7RRW", "64099"), ("WX7RRX", "00699"), ("WX7RRY", "99999")), 1):
+        c.execute("INSERT INTO hd VALUES (?,?,?,?,?,?)", (usi, call, "A", "2020-01-01", "2030-01-01", None))
+        c.execute("INSERT INTO en (usi, call, first, city, state, zip) VALUES (?,?,?,?,?,?)",
+                  (usi, call, "X", "SOMEWHERE", "IL", z))
+    c.commit()
+    lic = K.Licences(c, geo=ZipGeo(rows=rows))
+    assert 600 < lic.km("WX7RRW", HOME) < 700          # PO box in a far region: far
+    assert lic.km("WX7RRX", HOME) is None               # PO box in the station's own region: unknown, never "near"
+    assert lic.km("WX7RRY", HOME) is None               # no region at all
 
 
 def test_grid_squares_and_distances():

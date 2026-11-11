@@ -179,7 +179,8 @@ def main(argv=None) -> int:
                     {c for t in rows for c in (t.get("callsigns") or [])}
             answers = consensus.qrz_answers(heard, qrz, lic, allow_network=bool(qrz and qrz.creds), budget=200)
             recs, res = consensus.for_session(rows, lic, prior, state, roster, me, fx, names, where=where,
-                                              qrz=answers, reach_km=reach, net_name=(entry or {}).get("name"))
+                                              qrz=answers, reach_km=(entry or {}).get("reach_km") or reach,
+                                              net_name=(entry or {}).get("name"))
             print(f"{rid} {rows[0]['start']} .. {rows[-1]['start']}  {net.get('name') or ''}  ({len(rows)} transmissions)")
             print(describe(rows, recs, res))
             for t in rows:

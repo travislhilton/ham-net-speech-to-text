@@ -73,6 +73,7 @@ REACH_KM = 300         # ... and beyond this a linked system rarely reaches: the
                        # ran to 294 km; past 400 km only 5 of 59 licences were read alike by both passes (misreadings)
 W_ALIAS = 3.0           # QRZ.com: the heard call is an earlier call of this operator
 NEAR_KM = 50            # ... and this close, the clearly nearest licence completes a clipped call on its own
+REGION_SLACK_KM = 200   # a PO-box ZIP placed by its 3-digit region: counts as far only beyond REACH_KM + this
 MAX_PREFIX = 2          # leading characters a clipped call may be missing ("7QF" -> AD7QF)
 
 
@@ -209,13 +210,20 @@ class Licences:
 
 
     def km(self, call: str, where) -> float | None:
-        """How far the licence's mailing ZIP centre is from `where` (lat, lon); None when unknown."""
+        """How far the licence's mailing ZIP centre is from `where` (lat, lon); None when unknown. A PO-box ZIP has no
+        centre: its 3-digit region's centre is used, but only to say FAR (beyond REACH_KM + 200 km of slack it is
+        returned; nearer it stays unknown), so it never makes a licence local (a PO box 795 km away, read as
+        'verified' on a 2-m net, 2026-11-10)."""
         inf = self._info.get(call) if call in self._info else (self.info([call]).get(call))
-        p = self.geo.where((inf or {}).get("zip")) if (self.geo and where) else None
-        if p is None:
+        if not (self.geo and where and inf):
             return None
         from hamkit.zipgeo import km
-        return km(where, p)
+        p = self.geo.where(inf.get("zip"))
+        if p is not None:
+            return km(where, p)
+        r = self.geo.region(inf.get("zip")) if hasattr(self.geo, "region") else None
+        d = km(where, r) if r is not None else None
+        return d if d is not None and d > REACH_KM + REGION_SLACK_KM else None
 
     def tails_near(self, tails, where, radius_km: float) -> dict[str, list[str]]:
         """{"7QF": [Active calls ending in 7QF whose ZIP is within radius_km of `where`, any state]} — on VHF/UHF the
@@ -593,6 +601,17 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
         far = dist(h) if status == "verified" and not o["strong"] and active(h) else None
         if far is not None and far > reach and in_tx[h] <= 1 and h not in alike:
             status = "distant"      # VHF/UHF: far out of reach, and neither a second hearing nor the other pass backs it
+        rhyme = []
+        if far is not None and far > reach:
+            # Out of reach, yet ONE rhyming letter from an active licence near the station (2026-11-10: a call 944 km away,
+            # read alike by both passes — the same audio, the same mishearing — for the licence one rhyme from it 8 km away). Not moved:
+            # visitors do check in over links, and a busy call district is dense (a second one-rhyme licence sat 56 km away). Left out
+            # of the counts, with the one-rhyme licences in range offered, nearest first.
+            km_of = lambda c: dist(c) if dist(c) is not None else 1e9
+            loc = sorted((c for c, d in near.get(h, {}).items() if d <= 0.5 and active(c) and km_of(c) <= LOCAL_KM
+                          and not (at_tx.get(h, set()) & at_tx.get(c, set()))), key=lambda c: (km_of(c), c))
+            if loc and km_of(loc[0]) <= NEAR_KM:
+                status, rhyme = "distant", loc[:3]
         others = [x["call"] for x in scored if x["call"] != h and x["score"] >= MIN_SCORE
                   and o["score"] - x["score"] < MARGIN][:3]
         e = {"call": h, "status": status, "conf": _conf(o["score"] - max([x["score"] for x in scored
@@ -600,6 +619,9 @@ def agree(views: list[dict], fcc=None, prior: dict | None = None, home_state: st
              "why": "; ".join(o["why"]), "score": o["score"]}
         if status == "distant":
             e["km"] = round(far)
+        if rhyme:
+            e["near"] = [{"call": c, "km": round(dist(c))} for c in rhyme]
+            e["why"] += "; one letter from " + ", ".join(f"{c} ({dist(c):.0f} km)" for c in rhyme)
         if others:
             e["candidates"] = others
         tops = [x for x in scored if x["call"] != h and best["score"] - x["score"] < MARGIN]
@@ -786,8 +808,9 @@ def records(views: list[dict], result: dict, fix_text=None) -> dict[str, dict]:
                 moved.append({"heard": h, "call": e["call"], "conf": e["conf"], "why": e["why"]})
         unverified = [c for c in (v.get("callsigns") or []) if (result["calls"].get(c) or {}).get("status")
                       in ("unverified", "lapsed")]
-        distant = [{"call": c, "km": result["calls"][c].get("km")} for c in (v.get("callsigns") or [])
-                   if (result["calls"].get(c) or {}).get("status") == "distant"]
+        distant = [{"call": c, "km": result["calls"][c].get("km")}
+                   | ({"near": result["calls"][c]["near"]} if result["calls"][c].get("near") else {})
+                   for c in (v.get("callsigns") or []) if (result["calls"].get(c) or {}).get("status") == "distant"]
         rec = {"src": src_hash(text), "callsigns": calls}
         conf = {e["call"]: e for e in result["calls"].values()}
         unconf = [{"call": c, "why": conf[c].get("unconfirmed") or ""} for c in calls

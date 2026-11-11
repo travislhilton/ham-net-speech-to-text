@@ -912,7 +912,10 @@ class Station:
         "carrier": {"preroll_ms": 500, "hangover_ms": 900, "split_pause_ms": 800, "dip_split_ms": 96,
                     "merge_gap_ms": 0, "merge_max_s": 3.0, "min_split_s": 2.0, "pause_ratio": 0.35},
         "voice": {"preroll_ms": 600, "hangover_ms": 900, "split_pause_ms": 0, "dip_split_ms": 0,
-                  "merge_gap_ms": 600, "merge_max_s": 3.0, "min_split_s": 2.0, "pause_ratio": 0.35},
+                  "merge_gap_ms": 600, "merge_max_s": 3.0, "min_split_s": 2.0, "pause_ratio": 0.35,
+                  # squelched FM: the pre-roll reaches back to where the squelch opened (the digital silence
+                  # ended), up to 2.5 s; HF audio is never that silent, so it keeps the fixed 600 ms
+                  "squelch_db": -70.0, "squelch_back_ms": 2500},
     }
 
     def segmenter(self, r) -> Segmenter:
@@ -1211,7 +1214,8 @@ class Station:
                 print(f"consensus: QRZ: {type(e).__name__}: {e}", flush=True)
         recs, res = consensus.for_session(rows, lic, prior, callfix.home_state(self), self.roster,
                                           self.me, fx, fixups.net_names_for(self._sched_entry(net_id)),
-                                          where=self.where(), qrz=answers, reach_km=self.reach_km(),
+                                          where=self.where(), qrz=answers,
+                                          reach_km=(self._sched_entry(net_id) or {}).get("reach_km") or self.reach_km(),
                                           net_name=(self._sched_entry(net_id) or {}).get("name"))
         changed = []
         unconf = self.__dict__.setdefault("unconfirmed", {})

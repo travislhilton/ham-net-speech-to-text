@@ -439,7 +439,18 @@ you chose is remembered. Each column shows:
   clean roll-call check-ins ran to 294 km on the linked system; past 400 km only 5 of 59 licences were read alike
   by both passes, against 58% of local stations). Being said once is not held against a call: a roll call hears
   most stations once. It stays in the text, shown faded and struck through, and is left out of the station
-  counts, Stations heard, attendance and the Winlink messages. ✎ Fix puts it back if it was really there. A licence never heard needs a name, a town or a history
+  counts, Stations heard, attendance and the Winlink messages. ✎ Fix puts it back if it was really there.
+  **A far call one letter from a near one** is set aside the same way even when both passes read it alike or it was
+  said twice (the same audio is misheard the same way: 2026-11-10, "W7XBD", 944 km, for W7XCD 8 km away), when a
+  licence within 50 km is one rhyming letter from it; the one-rhyme licences within 150 km are offered next to it,
+  nearest first ("W7XBD? W7XCD W7XGD W7XZD"), one click to look each up. It is never moved on its own: a visitor
+  on a link can be one letter from a local call (2.2% of far calls are, measured), so you choose. A name, town,
+  earlier check-in or roster entry for the far call still counts it.
+  **A net's own reach:** an intertie or linked system carries stations far past one repeater (a statewide intertie,
+  11-10: check-ins from two neighbouring states, 440-590 km). Set **Reach (km)** on that net (Schedule → edit the net); it
+  replaces the station's VHF/UHF reach for that net only. A PO-box ZIP (2% of licences) has no centre of its own:
+  its 3-digit postal region places it, but only to say *far* (beyond the reach + 200 km); nearer it stays unknown.
+  A licence never heard needs a name, a town or a history
   behind it, and a call nothing supports stays as heard, marked *unverified*.
   **Confirmed or not.** Every call is marked: *confirmed* by an Active FCC licence, a current QRZ.com record or the
   roster, or *can't be confirmed* (a dashed chip with a "?", the reason in its tooltip and on its Stations heard
@@ -534,6 +545,8 @@ The station can read an EOC's situation report on a voice net — from the compa
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |
 | Repeaters / carrier that stays up between speakers: split at speech pauses (>= 0.8 s) and carrier dips, cut in the middle of the pause, a fragment ("Over.", the end of a call sign) kept with its neighbour, a voiceless repeater tail never its own transmission | working (`split_pause_ms`, `dip_split_ms`, carrier-gate radios; see "Segmenting"); 2026-11-03 FM net replayed: 140 → 105 transmissions, blank ones 31 → 3, words lost in dropped pieces 79 → 0 |
+| Voice gate on squelched FM: the pre-roll reaches back to where the squelch opened (up to 2.5 s; the 11-10 roll call lost the first letters of 60% of its calls to a late VAD) | built + unit-tested (`squelch_db`), 2026-11-10; measured on the next squelched-FM net |
+| Far call one rhyming letter from a licence within 50 km: not counted, the near ones offered (never moved); a net's own **Reach (km)**; PO-box ZIPs placed by region (far only); a net edit keeps its repeater offset/tone | working (`station/consensus.py`, `hamkit/zipgeo.py`), 2026-11-10 |
 | HF / voice gate: 600 ms pre-roll; a short piece waits 0.6 s after the hangover for its continuation (a call sign spelled with gaps, a kerchunk before the words) | built + unit-tested (`merge_gap_ms`, `merge_max_s`, `preroll_ms`); not yet measured on a live HF net |
 | Sub-audible tone + mains hum removed before Whisper (high-pass 300 Hz on FM data-jack radios) | working (`highpass_hz`) |
 | Whisper's noise phrases ("So.", "We'll be right back.") shown greyed as probable noise, left out of the ICS-309 | working |
@@ -587,6 +600,7 @@ How the station turns a radio's audio into transmissions (`station/segmenter.py`
 | Setting | FM carrier gate | HF voice gate | What it does |
 |---|---|---|---|
 | `preroll_ms` | 500 | 600 | audio kept from before the gate opened; on HF the voice gate hears a first syllable late |
+| `squelch_db`, `squelch_back_ms` | off | -70 dB, 2500 | squelched audio (a handheld behind its own squelch) is digital silence until the squelch opens: the pre-roll reaches back to where that silence ended, up to 2.5 s. The voice gate fired 0.6-1.5 s into a call sign on a squelched FM roll call (2026-11-10: 60% of the clips began mid-word, "7XYZ" for a KG7XYZ). HF audio is never that silent, so it keeps the fixed pre-roll |
 | `hangover_ms` | 900 | 900 | the gate must stay closed this long before a transmission ends |
 | `min_speech_ms` | 400 | 400 | less speech than this is a kerchunk and dropped (unless merged, below) |
 | `split_pause_ms` | 800 | 0 (off) | a carrier that stays up (repeater hang time) is split where the voice pauses this long |

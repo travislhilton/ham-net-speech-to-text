@@ -71,6 +71,20 @@ class ZipGeo:
     def where(self, zipcode: str | None) -> tuple[float, float] | None:
         return self.z.get((zipcode or "").strip()[:5]) if zipcode else None
 
+    def region(self, zipcode: str | None) -> tuple[float, float] | None:
+        """The centre of the ZIP's 3-digit region, for a ZIP with no centre of its own: a PO-box ZIP (2.1% of active
+        licences, 2026-11-10; 97% have a region). Up to ~200 km out in the West, so it can only tell FAR."""
+        z3 = (zipcode or "").strip()[:3]
+        if len(z3) != 3:
+            return None
+        if not hasattr(self, "_z3"):
+            acc: dict[str, list] = {}
+            for z, (la, lo) in self.z.items():
+                a = acc.setdefault(z[:3], [0.0, 0.0, 0])
+                a[0] += la; a[1] += lo; a[2] += 1
+            self._z3 = {k: (a[0] / a[2], a[1] / a[2]) for k, a in acc.items()}
+        return self._z3.get(z3)
+
 
 def parse(text: str) -> dict[str, tuple[float, float]]:
     out = {}

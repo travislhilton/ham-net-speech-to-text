@@ -71,6 +71,36 @@ def test_preroll_keeps_the_syllable_a_late_gate_missed():
         assert (lead > 0.1) is kept                                   # 600 ms: the onset is inside, after a lead-in
 
 
+def test_squelched_audio_keeps_everything_since_the_squelch_opened():
+    """A handheld behind its own squelch: digital silence, then the transmission. The VAD fired 1.2 s in (the
+    2026-11-10 roll call lost the first letters of most calls this way): the pre-roll reaches back to where the silence ended."""
+    audio = np.concatenate([np.zeros(int(SR * 2.0)), speech(2.0), np.zeros(int(SR * 1.0))])
+    onset = int(2.0 * SR / N)
+    late = [False] * (onset + 38) + [True] * 25                         # 38 frames = 1.2 s late
+    old = Segmenter(Script(late), SR, 32, preroll_ms=600, hangover_ms=320, clock=lambda: 0)
+    (e,) = ends(feed(old, audio))
+    assert abs(np.abs(e[1][:N]).max()) > 0.1                            # fixed pre-roll: starts mid-word
+    new = Segmenter(Script(late), SR, 32, preroll_ms=600, hangover_ms=320, clock=lambda: 0, squelch_db=-70)
+    (e,) = ends(feed(new, audio))
+    assert 0 < first_loud(e[1]) <= 0.07                                 # one silent frame, then the first word
+
+
+def test_squelch_reach_back_is_bounded_and_off_without_silence():
+    """No digital silence (HF, an open squelch): the fixed pre-roll. Silence longer ago than the bound: the bound
+    is not stretched to reach it."""
+    late = lambda onset: [False] * (onset + 38) + [True] * 25
+    hf = np.concatenate([quiet(2.0), speech(2.0), quiet(1.0)])
+    seg = Segmenter(Script(late(int(2.0 * SR / N))), SR, 32, preroll_ms=600, hangover_ms=320, clock=lambda: 0,
+                    squelch_db=-70)
+    (e,) = ends(feed(seg, hf))
+    assert e[2]["duration_s"] < 2.0                                     # 0.6 s pre-roll + what the gate heard
+    far = np.concatenate([np.zeros(int(SR * 1.0)), quiet(3.0), speech(2.0), quiet(1.0)])
+    seg = Segmenter(Script(late(int(4.0 * SR / N))), SR, 32, preroll_ms=600, hangover_ms=320, clock=lambda: 0,
+                    squelch_db=-70, squelch_back_ms=2500)
+    (e,) = ends(feed(seg, far))
+    assert e[2]["duration_s"] < 2.0
+
+
 def test_split_cuts_in_the_middle_of_the_pause():
     """Neither piece starts or ends on a word: half of a 1.2 s pause stays on each side."""
     audio = np.concatenate([quiet(6), speech(4), quiet(1.2), speech(3), quiet(1.2), speech(3), quiet(0.3)])
@@ -176,5 +206,6 @@ def test_station_segmenter_defaults_per_gate(tmp_path):
     st._gate = lambda r: Always()                                   # the voice gate needs torch; not here
     hf = st.segmenter({"id": "hf", "gate": "voice"})
     assert hf.pre.maxlen == 600 // 32 and hf.pauses is None and hf.merge_frames == 600 // 32
+    assert hf.squelch_db == -70 and hf.back.maxlen == 2500 // 32 and fm.back is None
     tuned = st.segmenter({"id": "hf", "gate": "voice", "merge_gap_ms": 0, "preroll_ms": 300})
     assert tuned.merge_frames == 0 and tuned.pre.maxlen == 300 // 32

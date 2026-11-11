@@ -542,7 +542,8 @@ function txHtml(t0){
   const calls=(t.callsigns||[]).filter(c=>c!==sp).map(c=>{const f=fx[c],u=unc[c];
     const tip="mentioned"+(f?` · heard "${f.heard}", corrected: ${f.why}`:"")+(u!==undefined?` · can't be confirmed: ${u}. Still counted.`:byq.has(c)?" · confirmed on QRZ.com":"");
     return `<span class="call${f?" fixed":""}${u!==undefined?" unc":""}" data-call="${esc(c)}" title="${esc(tip)}">${esc(c)}</span>`}).join("")+
-    ((k&&!c&&k.distant)||[]).map(d=>`<span class="call far" data-call="${esc(d.call)}" title="${d.km} km away, beyond VHF/UHF reach, and nothing backs it: the two transcription passes did not read it alike, it was not heard again, and no name, town or earlier check-in goes with it. Probably misheard; not counted as a station. Use ✎ Fix if it was really there.">${esc(d.call)}</span>`).join("")+
+    ((k&&!c&&k.distant)||[]).map(d=>(d.near||[]).length?`<span class="maybe" title="${esc(d.call)} is licensed ${d.km} km away, beyond VHF/UHF reach, and is one letter from ${esc(d.near.map(n=>n.call+" ("+n.km+" km)").join(", "))}. Probably one of those misheard (a visitor on a link is possible); not counted until you choose. Click a call to look it up; ✎ Fix to set it."><span class="call far" data-call="${esc(d.call)}">${esc(d.call)}</span>? ${d.near.map(n=>`<span class="call" data-call="${esc(n.call)}">${esc(n.call)}</span>`).join("")}</span>`:
+      `<span class="call far" data-call="${esc(d.call)}" title="${d.km} km away, beyond VHF/UHF reach, and nothing backs it: the two transcription passes did not read it alike, it was not heard again, and no name, town or earlier check-in goes with it. Probably misheard; not counted as a station. Use ✎ Fix if it was really there.">${esc(d.call)}</span>`).join("")+
     (t.maybe||[]).map(m=>`<span class="maybe" title="Heard &quot;${esc(m.heard)}&quot;; could be ${esc(m.candidates.join(" or "))}. Click one to look it up; use Who? to set the speaker.">${esc(m.heard)}? ${m.candidates.map(c=>`<span class="call" data-call="${esc(c)}">${esc(c)}</span>`).join("")}</span>`).join("");
   const who=t.status!=="final"?"":(w?whoHtml(w,fx[sp]):"")+`<button class="whob" data-who="${esc(t0.id)}" title="Say who was talking (always wins; kept in the log and the ICS-309)">Who?</button>`+
     (editing||c?"":`<button class="fixb" data-fix="${esc(t0.id)}" title="Correct the words: your text is used for the minutes, search and the Winlink messages, and the station learns from it">✎ Fix</button>`);
@@ -1586,6 +1587,7 @@ function netForm(n){
    <label>Frequency (MHz) <input name="freq_mhz" inputmode="decimal" placeholder="146.940" value="${esc(n.freq_mhz??"")}"></label>
    <label>Mode <select name="mode"><option value="">the radio's</option>${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===n.mode?" selected":""}>${m}</option>`).join("")}</select></label>
    <label>Net control (callsign) <input name="ncs" maxlength="11" value="${esc(n.ncs||"")}" class="up" placeholder="optional"></label>
+   <label>Reach (km) <input name="reach_km" type="number" min="50" max="5000" step="10" value="${esc(n.reach_km??"")}" placeholder="the station's"><span class="hint">a linked system or intertie: how far its stations can be (a call licensed farther is set aside as probably misheard)</span></label>
    <label>Alert, minutes before <input name="alert_min" type="number" min="0" max="120" value="${esc(n.alert_min??5)}"><span class="hint">0 = no alert</span></label>
    <label class="chk wide"><input type="checkbox" name="emergency"${n.emergency?" checked":""}> Emergency or priority net: keep an Urgent board for it</label>
    <fieldset class="wide rep"><legend>Repeats</legend>
@@ -1615,7 +1617,8 @@ function collectNet(f,saved){
   if(f.starts.value)rule.starts=f.starts.value;
   if(freq!=="once"){if(f.ends.value==="on")rule.until=f.until.value;if(f.ends.value==="after")rule.count=f.count.value}
   const b={name:f.name.value,radio:f.radio.value,start:f.start.value,duration_min:f.duration_min.value,freq_mhz:f.freq_mhz.value,
-    mode:f.mode.value,ncs:f.ncs.value,alert_min:f.alert_min.value,emergency:f.emergency.checked,repeat:rule};
+    mode:f.mode.value,ncs:f.ncs.value,alert_min:f.alert_min.value,emergency:f.emergency.checked,repeat:rule,
+    reach_km:f.reach_km.value};
   if(saved&&saved.exceptions)b.exceptions=saved.exceptions;
   return b}
 function showFor(f){
