@@ -83,6 +83,32 @@ def keyterms_for(call: str, local_entries, net_name=None) -> list[str]:
     return keep[:KEYTERMS_MAX]
 
 
+_NUMW = {"zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6",
+         "seven": "7", "eight": "8", "nine": "9", "niner": "9"}
+_SPELL_TOK = r"(?:[A-Za-z]|\d|zero|one|two|three|four|five|six|seven|eight|nine|niner)"
+_SPELLED = re.compile(r"(?<![\w'])(" + _SPELL_TOK + r"(?:[\s,-]+" + _SPELL_TOK + r"){3,6})(?![\w'])", re.I)
+_CALL = re.compile(r"^[AKNW][A-Z]?\d[A-Z]{1,3}$")
+
+
+def join_spelled(text: str) -> str:
+    """Grok writes a call letter by letter ("K I 5 F U N", "N seven T D I"): joined when the run is a US call shape
+    (the station's engine writes them joined, and the callsign reader expects that)."""
+    def rep(m):
+        toks = [t for t in re.split(r"[\s,-]+", m.group(1)) if t]
+        sym = [_NUMW.get(t.lower(), t.upper()) for t in toks]
+        if any(len(x) != 1 for x in sym):
+            return m.group(0)
+        for i in range(len(sym)):                        # the longest call shape inside the run
+            for j in range(len(sym), i + 3, -1):
+                c = "".join(sym[i:j])
+                if _CALL.match(c):
+                    pre = " ".join(toks[:i])
+                    post = " ".join(toks[j:])
+                    return " ".join(x for x in (pre, c, post) if x)
+        return m.group(0)
+    return _SPELLED.sub(rep, text or "")
+
+
 def best_reference(t: dict) -> tuple[str | None, str]:
     """(text, source): the operator's correction, else the accurate pass, else none."""
     c = t.get("corrected")
@@ -272,14 +298,8 @@ class GrokSTT:
             return rec
         self.online.ok()
         text = str(out.get("text") or "").strip()
-        calls = []
-        try:
-            from hamkit.callsigns import normalize
-            validate = self.st.callbook.validate if getattr(self.st, "callbook", None) else None
-            text_n, calls = normalize(text, roster=getattr(self.st, "roster", set()), validate=validate)
-            rec["text_normalized"] = text_n
-        except Exception:  # noqa: BLE001
-            pass
+        text_n, calls = self._calls(text)
+        rec["text_normalized"] = text_n
         words = [{k: w[k] for k in ("text", "start", "end", "confidence") if k in w} for w in out.get("words") or []]
         rec.update(took_s=round(time.monotonic() - t0, 2), text=text, callsigns=calls,
                    language=out.get("language"), audio_s=out.get("duration"), words=words, keyterms=len(terms))
@@ -298,6 +318,16 @@ class GrokSTT:
             self.st.bus.publish("grokstt", {"result": self.last})
         except Exception:  # noqa: BLE001
             pass
+
+    def _calls(self, text: str) -> tuple[str, list[str]]:
+        """Grok's text as the station reads calls: spelled runs joined, then the station's own callsign reader."""
+        joined = join_spelled(text)
+        try:
+            from hamkit.callsigns import normalize
+            validate = self.st.callbook.validate if getattr(self.st, "callbook", None) else None
+            return normalize(joined, roster=getattr(self.st, "roster", set()), validate=validate)
+        except Exception:  # noqa: BLE001
+            return joined, []
 
     def results(self, day: str) -> list[dict]:
         p = self.dir / f"{day}.jsonl"
@@ -353,7 +383,7 @@ class GrokSTT:
             it = {"id": t["id"], "radio": t.get("radio"), "start": t.get("start"), "duration_s": t.get("duration_s"),
                   "live": t.get("text"), "grok": g.get("text"), "ref": ref, "ref_from": src,
                   "live_s": t.get("took_s"), "grok_s": g.get("took_s"), "noise": bool(t.get("noise")),
-                  "live_calls": t.get("callsigns") or [], "grok_calls": g.get("callsigns") or [],
+                  "live_calls": t.get("callsigns") or [], "grok_calls": self._calls(g.get("text") or "")[1],
                   "ref_calls": ((t.get("corrected") or t.get("accurate") or {}).get("callsigns") or [])}
             if ref:
                 it["live_wer"] = wer(ref, t.get("text") or "", me)

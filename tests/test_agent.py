@@ -66,7 +66,7 @@ def test_a_draft_runs_the_model_checks_it_and_never_transmits(tmp_path):
     st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path, clock=Clock(T.replace(hour=20, minute=5)))
     seen = {}
 
-    def fake(key, model, system, user):
+    def fake(key, model, system, user, **kw):
         seen["system"], seen["user"] = system, user
         return {"speak": True, "kind": "check_in", "say": "W9XYZ, Echo, automated assistant, Pat is control operator.",
                 "wait_s": 2.0, "why": "check-ins called"}, {}
@@ -181,7 +181,7 @@ def test_the_offline_rules_check_in_acknowledge_and_otherwise_stay_silent():
 def test_offline_the_rules_answer_at_once_and_the_model_waits_out_a_back_off(tmp_path, xai_key):
     tried = []
 
-    def down(key, model, system, user):
+    def down(key, model, system, user, **kw):
         tried.append(model)
         raise urllib.error.URLError("no route to host")
     st = _station(tmp_path)
@@ -197,7 +197,7 @@ def test_offline_the_rules_answer_at_once_and_the_model_waits_out_a_back_off(tmp
 
 
 def test_an_http_error_is_not_offline_and_no_key_uses_the_rules(tmp_path, xai_key):
-    def refused(key, model, system, user):
+    def refused(key, model, system, user, **kw):
         raise urllib.error.HTTPError("u", 401, "no", {}, None)
     st = _station(tmp_path)
     _on(st, {"xai": ("XAI_API_KEY", refused), "anthropic": ("ANTHROPIC_API_KEY", refused)})
@@ -217,7 +217,7 @@ def test_an_http_error_is_not_offline_and_no_key_uses_the_rules(tmp_path, xai_ke
 def test_a_restart_mid_net_does_not_check_in_twice(tmp_path, xai_key):
     net = {"key": "n1@2026-11-10", "id": "n1", "name": "Springfield Net"}
 
-    def checkin(key, model, system, user):
+    def checkin(key, model, system, user, **kw):
         return {"speak": True, "kind": "check_in", "say": "W9XYZ, Sidekick, automated assistant, Pat is control "
                 "operator, checking in.", "wait_s": 2, "why": "called"}, {}
     st = _station(tmp_path)
@@ -230,14 +230,16 @@ def test_a_restart_mid_net_does_not_check_in_twice(tmp_path, xai_key):
 
     seen = {}
 
-    def look(key, model, system, user):
+    def look(key, model, system, user, **kw):
         seen["user"] = user
         return {"speak": False, "kind": "none", "say": "", "wait_s": 2, "why": "done"}, {}
     st2 = _station(tmp_path)                                  # the station restarted
     st2.cfg["schedule"] = []
     st2.agent.providers = {"xai": ("XAI_API_KEY", look), "anthropic": ("ANTHROPIC_API_KEY", look)}
     _say(st2, "Any more check-ins?", net=net)
-    st2.agent.draft("ic", "t0")
+    quiet = st2.agent.draft("ic", "t0")
+    assert quiet["model"] == "station" and "already checked in" in quiet["why"] and "user" not in seen  # no model
+    st2.agent.draft("ic", "t0", asked=True)                   # the operator asks: the model sees the memory
     assert "W9XYZ has already checked in" in seen["user"] and "first transmission in this contact: no" in seen["user"]
     assert "Net: Springfield Net" in seen["user"]             # the net from the transmission when none is scheduled
 
@@ -252,7 +254,7 @@ def _two_speed(answer="W9XYZ... K7ABC, sixty meters is five channels, upper side
                 return deep(user)
             return {"answer": answer, "confident": True, "why": "band plan"}, {}
         calls["quick"].append(user)
-        last = user.strip().splitlines()[-2]
+        last = [x for x in user.splitlines() if x.startswith("[")][-1]
         none = {"speak": False, "kind": "none", "say": "", "wait_s": 2, "why": "-", "question": ""}
         if "what is the band plan" in last and "Your prepared answer" not in user:
             return {"speak": True, "kind": "working", "say": "W9XYZ, Sidekick, an automated assistant, Pat is "
@@ -311,7 +313,11 @@ def test_ready_or_answer_without_a_prepared_answer_is_refused(tmp_path, xai_key)
     _on(st, {"xai": ("XAI_API_KEY", quick), "anthropic": ("ANTHROPIC_API_KEY", quick)})
     _say(st, "Any comments for the net?")
     d = st.agent.draft("ic", "t0")
-    assert not d["ok"] and any(c["rule"] == "protocol" and not c["ok"] for c in d["fcc"])
+    assert d["model"] == "station" and not d["speak"]          # nothing ready: not offered, the model is not asked
+    ctx = CTX_R | {"addressed": True}                        # and the code check behind it
+    for kind in ("ready", "answer"):
+        x = st.agent._protocol({"speak": True, "kind": kind, "say": "W9XYZ ready", "ok": True, "fcc": []}, None, ctx)
+        assert not x["ok"] and x["fcc"][-1]["rule"] == "protocol"
 
 
 def test_offline_the_rules_still_announce_and_read_a_prepared_answer(tmp_path, xai_key):
@@ -367,13 +373,13 @@ def test_local_names_reach_the_model_repaired_and_explained(tmp_path, xai_key):
                                 "sounds": ["sark"], "web": "sarconline.org"}])
     seen = {}
 
-    def look(key, model, system, user):
+    def look(key, model, system, user, **kw):
         seen["user"] = user
         return {"speak": False, "kind": "none", "say": "", "wait_s": 2, "why": "x"}, {}
     st = _station(tmp_path)
     _on(st, {"xai": ("XAI_API_KEY", look), "anthropic": ("ANTHROPIC_API_KEY", look)})
     _say(st, "Welcome to the SarkNet, check the Sark webpage")
-    st.agent.draft("ic", "t0")
+    st.agent.draft("ic", "t0", asked=True)
     assert "SARC Net" in seen["user"] and "SARC = Springfield Amateur Radio Club (sarconline.org)" in seen["user"]
     assert "Local time: Tuesday 20:05" in seen["user"] and "UTC" in seen["user"]
 
@@ -405,11 +411,15 @@ def test_a_check_in_during_a_roll_call_of_places_is_stopped(tmp_path, xai_key):
     _on(st, {"xai": ("XAI_API_KEY", eager), "anthropic": ("ANTHROPIC_API_KEY", eager)})
     _say(st, "Got you, Riverside. Now calling Springfield, log in as well.")
     d = st.agent.draft("ic", "t0")
-    assert not d["ok"] and any(c["rule"] == "protocol" for c in d["fcc"] if not c["ok"])
+    assert d["model"] == "station" and not d["speak"]          # a roll call: check-in is not offered
     _say(st, "Strong signal as well. Thank you. Riverside City.", minute=5)        # a place, no "now calling"
-    assert not st.agent.draft("ic", "t1")["ok"]
+    assert not st.agent.draft("ic", "t1")["speak"]
+    x = st.agent._protocol({"speak": True, "kind": "check_in", "say": "W9XYZ checking in", "ok": True, "fcc": []},
+                           None, CTX_R | {"invited": False, "roll_call": True})
+    assert not x["ok"] and "roll call" in x["fcc"][-1]["note"]          # the code check behind the gate
     _say(st, "We'll now take check-ins from any station, anywhere.", minute=6)
-    assert st.agent.draft("ic", "t2")["ok"]
+    d2 = st.agent.draft("ic", "t2")
+    assert d2["ok"] and d2["kind"] == "check_in" and d2["model"] != "station"
     _say(st, "Any visitors? Come now, please.", minute=7)
     st.agent.state["ic"].pop("checked_in", None)
     assert st.agent.draft("ic", "t3")["ok"]
@@ -435,6 +445,9 @@ def test_a_reply_nobody_asked_for_is_stopped(tmp_path, xai_key):
     _on(st, {"xai": ("XAI_API_KEY", chatty), "anthropic": ("ANTHROPIC_API_KEY", chatty)})
     _say(st, "This is K7ABC, 73 to you and have a good evening.")
     d = st.agent.draft("ic", "t0")
-    assert not d["ok"] and "nobody called this station" in str(d["fcc"])
+    assert d["model"] == "station" and not d["speak"] and "not called" in d["why"]
+    x = st.agent._protocol({"speak": True, "kind": "reply", "say": "W9XYZ thanks", "ok": True, "fcc": []}, None,
+                           CTX_R)
+    assert not x["ok"] and "nobody called this station" in x["fcc"][-1]["note"]
     _say(st, "W9XYZ, thanks for checking in tonight", calls=["W9XYZ"], minute=5)
     assert st.agent.draft("ic", "t1")["ok"]

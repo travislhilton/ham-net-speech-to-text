@@ -337,8 +337,13 @@ you chose is remembered. Each column shows:
   wait, shown at the top of that radio's column; **What would you say now?** asks on demand, 👍/👎 rates a draft,
   **▶ Hear it** plays the draft in Sidekick's voice in your browser. **It never transmits**: there is no transmit
   mode, and the CAT code still refuses PTT.
-  - **Two speeds.** The **model** (Grok 4.20 fast by default: measured 0.55 s) decides every turn: check-ins,
-    acknowledgements, short answers. A question that needs thinking gets a short "copy your question, working on
+  - **Its turn, read by the station.** Like an operator on a net, Sidekick has a turn only when net control opens
+    check-ins to a station like yours, when someone calls it by call or name, or when it holds an answer and the floor
+    opens. Outside those the station drafts "silent" itself, at once, without asking a model; when it asks, the model
+    is offered only the moves that turn allows (replays of four real nets: the quick model, offered every move, tried
+    to check in on 29 turns of one roll call).
+  - **Two speeds.** The **model** (Grok 4.20 fast by default: measured 1.0 s median on real nets) decides the turn:
+    check-ins, acknowledgements, short answers. A question that needs thinking gets a short "copy your question, working on
     it, I'll report back" and goes to the **thinking model** (Grok 4.5 by default) while the net carries on. When the
     answer is ready Sidekick waits for its place: when net control next asks for comments, questions or further
     business it says "This is W9XYZ Sidekick, I have a response ready for the earlier inquiry from K7ABC"; told to go

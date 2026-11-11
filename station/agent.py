@@ -403,6 +403,35 @@ def rules_draft(rows: list[dict], ctx: dict, checked_in: bool, pending: dict | N
     return silent | {"why": "not called and no call for check-ins"}
 
 
+def allowed_kinds(ctx: dict, checked_in: bool, pending: dict | None, text: str) -> tuple[list[str], str]:
+    """The moves open to the station after this transmission, read by the station itself (owner 11-10: Sidekick fits
+    the net's protocol). Only these are offered to the model; none = the station stays silent without asking it.
+    11-10 replays of four real nets: offered every move, the quick model tried to check in on 29 turns of one roll
+    call although told check-ins were not open."""
+    if ctx.get("asked"):
+        return list(KINDS), "asked by the operator"
+    p = pending or {}
+    if ctx.get("emergency") and not ctx.get("addressed"):
+        return ["none"], "emergency or priority traffic"
+    out = []
+    if ctx.get("invited") and not checked_in:
+        out.append("check_in")
+    if ctx.get("addressed"):
+        out += ["reply", "acknowledge", "say_again", "stand_by"]
+        if p.get("state") not in ("working", "ready", "announced"):
+            out.append("working")
+    if p.get("state") == "ready":
+        out.append("ready")
+    if p.get("state") in ("ready", "announced") and (ctx.get("addressed") or GO_AHEAD.search(text or "")):
+        out.append("answer")
+    if p.get("state") == "failed" and (ctx.get("addressed") or INPUT_CALL.search(text or "")):
+        out.append("reply")
+    if not out:
+        return ["none"], ("already checked in; " if checked_in else "") + \
+            "not called, no check-ins open to this station, no answer waiting"
+    return list(dict.fromkeys(out + ["none"])), ""
+
+
 # ---------------------------------------------------------------- providers --------------------------------------
 def call_xai(key, model, system, user, timeout=MODEL_TIMEOUT_S, schema=SCHEMA, max_tokens=300, name="draft"):
     body = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "system", "content": system},
@@ -638,7 +667,6 @@ class Agent:
         rows = self._context(rid, now)
         if not rows and not asked:
             return None
-        rate_ok = asked or self._rate_ok()
         r = self.st.radios.get(rid) or {}
         net = self._net(rid, now, rows)
         call, name = self.st.me or "N0CALL", self.name
@@ -696,21 +724,32 @@ class Agent:
         main_model = self.cfg.get("model") or DEFAULT_MODEL
         models = [main_model] + list(self.cfg.get("compare") or [])
         results = {}
-        if rate_ok:
+        allowed, gate_why = allowed_kinds(ctx, st.get("checked_in") == contact, st.get("pending"), lastrow.get("text", ""))
+        if allowed == ["none"]:
+            # not this station's turn (not called, no check-ins open to it, no answer waiting): silent at once, no model
+            models, rate_ok = [], False
+            main = self._finish({"speak": False, "kind": "none", "say": "", "wait_s": 2.0, "why": gate_why}, ctx,
+                                "station", 0.0, addressed)
+        else:
+            rate_ok = asked or self._rate_ok()
+            schema = dict(SCHEMA, properties=dict(SCHEMA["properties"], kind={"type": "string", "enum": allowed}))
+            user += "\nYour possible moves now: " + ", ".join(allowed) + "."
+        if models and rate_ok:
             def run(m):
-                results[m] = self._ask(m, system, user, ctx, addressed)
+                results[m] = self._ask(m, system, user, ctx, addressed, schema)
             threads = [threading.Thread(target=run, args=(m,), daemon=True) for m in models]
             for th in threads:
                 th.start()
             for th in threads:
                 th.join(MODEL_TIMEOUT_S + 2)
-        main = results.get(main_model) or {"model": main_model, "error": "over the hourly model limit"
-                                          if not rate_ok else "no answer"}
+        if models:
+            main = results.get(main_model) or {"model": main_model, "error": "over the hourly model limit"
+                                              if not rate_ok else "no answer"}
         if main.get("error"):                              # offline, no key, over the limit: the rules answer now
-            why = main["error"]
+            fb = main["error"]
             main = self._finish(rules_draft(rows, ctx, st.get("checked_in") == contact, st.get("pending")), ctx, RULES,
                                 0.0, addressed)
-            main["fallback"] = why
+            main["fallback"] = fb
         main = self._protocol(main, st.get("pending"), ctx)
         d = {"id": uuid.uuid4().hex[:10], "radio": rid, "at": now.isoformat(timespec="seconds"), "after": after,
              "heard": lines[-1] if lines else "", "net": net.get("name"), "addressed": bool(addressed),
@@ -909,7 +948,7 @@ class Agent:
             if not (t and t.is_alive()):
                 self._later(rid, 0.2, None, why="answer ready" if p["state"] == "ready" else "answer failed")
 
-    def _ask(self, model, system, user, ctx, addressed) -> dict:
+    def _ask(self, model, system, user, ctx, addressed, schema=SCHEMA) -> dict:
         prov = MODELS[model]["provider"]
         keyname, fn = self.providers[prov]
         key = secrets.read(self.st.root, keyname)
@@ -921,7 +960,7 @@ class Agent:
                                              f"{on.view()['retry_in_s']} s"}
         t = time.monotonic()
         try:
-            out, usage = fn(key, model, system, user)
+            out, usage = fn(key, model, system, user, schema=schema)
         except Exception as e:  # noqa: BLE001
             lat = round(time.monotonic() - t, 2)
             if is_network_error(e):

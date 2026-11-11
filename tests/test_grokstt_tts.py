@@ -142,3 +142,9 @@ def test_offline_only_clips_already_made_play(st):
         st.tts.audition("eve")
     with pytest.raises(LookupError):                                     # inside the back-off: not even tried
         st.tts.audition("ara")
+
+
+def test_a_call_grok_spells_letter_by_letter_is_joined():
+    assert grokstt.join_spelled("Welcome, K I 5 Q X N. K I five Q X N.") == "Welcome, KI5QXN. KI5QXN."
+    assert grokstt.join_spelled("Good evening N seven Q X J, over") == "Good evening N7QXJ, over"
+    assert grokstt.join_spelled("I am a big fan of A B C D") == "I am a big fan of A B C D"   # no call shape
