@@ -395,3 +395,28 @@ def test_check_in_calls_as_net_control_really_says_them():
     assert checkin_invited(seq) == (True, "net control asked for the next station during open check-ins")
     assert not checkin_invited(rows("Good evening. Next station, please."))[0]   # no open check-ins: a roll call
     assert not checkin_invited(rows("Any maritime mobile stations for check-in?"))[0]
+
+
+def test_a_check_in_during_a_roll_call_of_places_is_stopped(tmp_path, xai_key):
+    def eager(key, model, system, user, **kw):
+        return {"speak": True, "kind": "check_in", "say": "W9XYZ, Sidekick, an automated assistant for Pat, Pat is "
+                "control operator. Checking in, no traffic.", "wait_s": 2, "why": "x", "question": ""}, {}
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", eager), "anthropic": ("ANTHROPIC_API_KEY", eager)})
+    _say(st, "Got you, Riverside. Now calling Springfield, log in as well.")
+    d = st.agent.draft("ic", "t0")
+    assert not d["ok"] and any(c["rule"] == "protocol" for c in d["fcc"] if not c["ok"])
+    _say(st, "We'll now take check-ins from any station, anywhere. Now calling for check-ins.", minute=5)
+    assert st.agent.draft("ic", "t1")["ok"]
+
+
+def test_one_timeout_is_a_slow_answer_two_are_an_outage():
+    from station.online import Online
+    o = Online("x")
+    o.failed(TimeoutError("slow"))
+    assert o.should_try() and o.online is not False
+    o.failed(urllib.error.URLError(TimeoutError("slow")))
+    assert not o.should_try() and o.online is False
+    o2 = Online("y")
+    o2.failed(urllib.error.URLError("no route to host"))
+    assert not o2.should_try()                                # a refused connection: at once

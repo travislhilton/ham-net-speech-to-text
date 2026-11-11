@@ -3,8 +3,10 @@ speech-to-text), so a station that loses its internet keeps working at once inst
 
 Nothing is queued while offline (owner 2026-11-10: "The conversation must be interactive and not queued"): a call
 made while the service is down is simply not made. After a network failure the service is not tried again for a
-back-off (30 s, doubling to 5 minutes); the first success clears it. An answer from the service that is an error
-(401, 400) is NOT "offline": the service is reachable, the request was wrong.
+back-off (30 s, doubling to 5 minutes); the first success clears it. A TIMEOUT alone is a slow answer, not an
+outage (11-10 replay: one 8 s answer in 133 put the model offline for the next 27 drafts): only two timeouts in a row
+count. An answer from the service that is an error (401, 400) is NOT "offline": the service is reachable, the request
+was wrong.
 """
 from __future__ import annotations
 
@@ -14,6 +16,12 @@ import time
 import urllib.error
 
 BACKOFF_S = (30, 60, 120, 300)
+
+
+def is_timeout(e: BaseException) -> bool:
+    if isinstance(e, urllib.error.URLError) and isinstance(getattr(e, "reason", None), BaseException):
+        e = e.reason
+    return isinstance(e, (socket.timeout, TimeoutError)) or type(e).__name__ in ("APITimeoutError", "ReadTimeout")
 
 
 def is_network_error(e: BaseException) -> bool:
@@ -35,6 +43,7 @@ class Online:
         self.retry_at = 0.0
         self.since: float | None = None           # wall time of the last change
         self.last_error = ""
+        self.timeouts = 0                         # timeouts in a row (one is a slow answer, two an outage)
 
     def should_try(self) -> bool:
         with self.lock:
@@ -44,10 +53,14 @@ class Online:
         with self.lock:
             if self.online is not True:
                 self.since = self.wall()
-            self.online, self.fails, self.last_error = True, 0, ""
+            self.online, self.fails, self.last_error, self.timeouts = True, 0, "", 0
 
     def failed(self, e: BaseException | str):
         with self.lock:
+            if not isinstance(e, str) and is_timeout(e) and self.timeouts < 1 and self.online is not False:
+                self.timeouts += 1                # a slow answer: keep trying
+                self.last_error = f"{type(e).__name__}: {str(e)[:120]}"
+                return
             if self.online is not False:
                 self.since = self.wall()
             self.online = False

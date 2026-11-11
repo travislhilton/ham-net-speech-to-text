@@ -163,8 +163,11 @@ courteous ham operator would on voice.
 
 Speak ONLY when:
 - net control, in the latest transmission, explicitly calls for check-ins ("any check-ins", "stations wishing to check
-  in, call now", "any further check-ins") of a kind that fits this station, and {call} has not checked in yet this
-  net: check in briefly, adapting the check-in line if one is given. Some nets are only for certain stations
+  in, call now", "any further check-ins", "next station, please" while open check-ins are running) of a kind that
+  fits this station, and {call} has not checked in yet this net: check in briefly. A roll call of places, groups or
+  named stations ("now calling Springfield", "Riverside, log in as well", "next city", "moving on to the county EOC")
+  is NOT this station's turn, even when it says "check in": many nets call their city stations, EOCs or members first
+  and open to everyone later; wait for the general call. Some nets are only for certain stations
   (maritime mobile and its relays, a club's members, a served agency, stations with traffic, a roll call by name):
   if the net's purpose does not include an ordinary home station like this one, stay silent. Operators talking to
   each other, handing over net control or asking someone else to make calls are NOT a call for check-ins. When net
@@ -179,7 +182,10 @@ Otherwise stay silent (speak false, kind none). Never break into another convers
 just to fill silence. During emergency or priority traffic stay silent unless net control asks this station directly.
 
 First transmission in a contact, shaped like: "{call}, {name}, an automated assistant, {op} is control operator, \
-<the rest>" (say the call once at the start; repeat it at the end only when identification is due).
+<the rest>" (say the call once at the start; repeat it at the end only when identification is due). A check-in: \
+"{call}, {name}, an automated assistant for {op}, {op} is control operator. Checking in, no traffic." The \
+operator's check-in line gives facts about the station (a name, a place) to use in your own words; never say it as \
+if you were {op}, and never repeat the call inside one transmission except as the closing ID.
 
 Voice protocol: use the other station's call when answering; "over" only on HF when turn-taking is unclear; standard \
 phonetics for calls and spelled words; plain language, no Q-codes except common ones (QSL, QRZ, QTH) used naturally; \
@@ -307,6 +313,9 @@ CHECKIN_CALL = re.compile(
 # during open check-ins, net control hands the frequency on with "next station, please"
 NEXT_STATION = re.compile(r"\b(next|first|another) station,? (please|go ahead)\b|\bnext (check[- ]?in|one),? please\b",
                           re.I)
+# net control working through a list of places or named stations (not this station's turn)
+ROLL_CALL = re.compile(r"\b(now calling|calling (for )?the|log(ged)? in as well|(next|now) (city|county|town|eoc|"
+                       r"station on the list)|moving (on )?to|let'?s go (now )?to|now going to|we'?ll go to)\b", re.I)
 OPEN_TO_ALL = re.compile(r"\b(any station,? any ?where|any and all|all stations|any station)\b", re.I)
 # kinds of station a fixed home station is not (said in the sentence that calls for check-ins)
 RESTRICTED = re.compile(
@@ -674,7 +683,8 @@ class Agent:
         addressed = bool(rows) and (call in (lastrow.get("callsigns") or []) or name_in(lastrow.get("text", ""), name))
         ctx = {"call": call, "name": name, "op": op, "first": first, "id_due": id_due, "emergency": emergency,
                "busy": busy, "freq_mhz": r.get("freq_mhz") or lastrow.get("freq_mhz"), "mode": r.get("mode"),
-               "license_class": self.cfg.get("license_class"), "addressed": addressed}
+               "license_class": self.cfg.get("license_class"), "addressed": addressed,
+               "roll_call": bool(rows) and bool(ROLL_CALL.search(lastrow.get("text", ""))) and not checkin_invited(rows)[0]}
         main_model = self.cfg.get("model") or DEFAULT_MODEL
         models = [main_model] + list(self.cfg.get("compare") or [])
         results = {}
@@ -752,10 +762,15 @@ class Agent:
     def _protocol(self, d: dict, p: dict | None, ctx: dict) -> dict:
         """The prepared-answer steps checked in code: no announcing an answer that is not ready, and the answer read
         is the prepared words (with the station's ID), never the quick model's paraphrase."""
-        if not d.get("speak") or d.get("kind") not in ("ready", "answer", "working"):
+        if not d.get("speak") or d.get("kind") not in ("ready", "answer", "working", "check_in"):
             return d
         d = dict(d)
         p = p or {}
+        if d["kind"] == "check_in" and ctx.get("roll_call"):
+            d["fcc"] = d.get("fcc", []) + [{"rule": "protocol", "ok": False, "note":
+                                            "a roll call of places or named stations, no general call for check-ins"}]
+            d["ok"] = False
+            return d
         if d["kind"] == "working":
             if p.get("state") in ("working", "ready", "announced"):
                 d["fcc"] = d.get("fcc", []) + [{"rule": "protocol", "ok": False, "note":
