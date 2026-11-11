@@ -652,6 +652,7 @@ class Agent:
                                                                   " ".join(t.get("text", "") for t in rows[-3:]), re.I))
         busy = bool(r.get("carrier"))                      # a signal on the frequency right now
         ln, entries, lrules = self._local_names(net.get("name"))
+        invited, inv_why = checkin_invited(rows)
         lines = []
         for t in rows:
             who = t.get("speaker") or (t.get("callsigns") or ["?"])[0]
@@ -671,8 +672,12 @@ class Agent:
             f"Net: {net.get('name') or 'none scheduled now'}" + (f", net control {net['ncs']}" if net.get("ncs") else ""),
             *([f"Local names heard: " + "; ".join(f"{e['name']} = {e['meaning'] or e['name']}" +
                                                   (f" ({e['web']})" if e["web"] else "") for e in named)] if named else []),
-            f"Check-in line (the operator's own words, adapt them for yourself): {self.cfg.get('checkin') or '(none)'}",
+            f"The operator's own check-in line, for FACTS ONLY (never say it, never speak as {op}): "
+            f"{self.cfg.get('checkin') or '(none)'}",
             f"{call} has {'already' if st.get('checked_in') == contact else 'not yet'} checked in to this net.",
+            f"Check-ins open to {call} right now (the station's reading of net control): "
+            + ("YES - " + inv_why if invited else "NO" + (f" - {inv_why}" if inv_why else
+               " - no general call for check-ins heard") + ". Do not check in."),
             f"Your first transmission in this contact: {'yes - disclose' if first else 'no'}.",
             f"Minutes since {call} last identified: {'never' if not last_id else int((now - last_id).total_seconds() // 60)}.",
             *self._pending_lines(st.get("pending"), why, rows, now),
@@ -687,7 +692,7 @@ class Agent:
                "busy": busy, "freq_mhz": r.get("freq_mhz") or lastrow.get("freq_mhz"), "mode": r.get("mode"),
                "license_class": self.cfg.get("license_class"), "addressed": addressed,
                "roll_call": bool(rows) and bool(ROLL_CALL.search(lastrow.get("text", ""))),
-               "invited": checkin_invited(rows)[0]}
+               "invited": invited}
         main_model = self.cfg.get("model") or DEFAULT_MODEL
         models = [main_model] + list(self.cfg.get("compare") or [])
         results = {}
