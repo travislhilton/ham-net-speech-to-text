@@ -233,6 +233,8 @@ class Station:
         if listen:
             for r in self.cfg["radios"]:
                 threading.Thread(target=self._listen, args=(r,), daemon=True, name=f"radio-{r['id']}").start()
+        from .ptt import Transmitter                  # PTT: refuses unless the radio's Transmit switch is on
+        self.ptt = Transmitter(self)
         from .cat import CatControl                   # CAT: read and tune radios that have a CI-V port
         self.cat = CatControl(self, getattr(self, "_cat_factory", None))
         if self.cat.cfg:
@@ -530,7 +532,9 @@ class Station:
         for n in self.cfg.get("schedule", []):
             if n.get("radio"):
                 nets.setdefault(n["radio"], []).append(n.get("name"))
+        from . import ptt
         return {"radios": cur, "inputs": rmod.fresh_inputs() or rmod.inputs(), "nets": nets, "ports": rmod.serial_ports(),
+                "outputs": ptt.outputs(), "hids": ptt.hid_devices(),
                 "from": "dashboard" if (self.data / "radios.json").exists() else "station.yaml",
                 "restart": os.name == "nt"}
 

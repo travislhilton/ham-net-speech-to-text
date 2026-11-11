@@ -300,6 +300,7 @@ input.up,.dbody input.up{text-transform:uppercase}
 .urg .uh{display:flex;gap:8px;align-items:baseline;color:var(--bad);flex-wrap:wrap}.urg .uh button{margin-left:auto}
 .urg ul{list-style:none;margin:4px 0 0;padding:0}.urg li{border-top:1px solid color-mix(in srgb,var(--bad) 30%,transparent);padding:5px 0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
 .urg .ut{font-weight:600;flex:1 1 55%;min-width:0}.urg .ub{margin-left:auto;display:flex;gap:4px}
+.txset{margin:6px 0}.txset summary{cursor:pointer;font-size:13px}.txsw{font-weight:600}
 .cat{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:4px;background:var(--bad);color:#fff}
 /* big dialogs: the Nets area and Search */
 dialog.big{max-width:min(980px,96vw);height:min(88dvh,920px);padding:0;flex-direction:column}dialog.big[open]{display:flex}
@@ -827,6 +828,20 @@ function catOpt(cur){
   const ps=RD.ports||[],have=ps.some(p=>p.port===cur);
   return `<option value="">— none —</option>${cur&&!have?`<option selected value="${esc(cur)}">${esc(cur)} (not found now)</option>`:""}${ps.map(p=>`<option value="${esc(p.port)}"${p.port===cur?" selected":""}>${esc(p.port)}${p.desc&&p.desc!==p.port?" · "+esc(p.desc):""}</option>`).join("")}`;
 }
+// Transmit (PTT) per radio (station/ptt.py): set up now, switched OFF by default; nothing keys a radio until it is on
+const PTTL={none:"— none (listen only) —",cm108:"Sound card GPIO — VARA's \"RA-Board\" (Digirig Lite, AIOC, CM108)",rts:"Serial RTS (Digirig Mobile, cables)",dtr:"Serial DTR"};
+function txBlock(r){const t=r.tx||{ptt:"none"},p=t.ptt||"none";
+  const hs=RD.hids||[],hv=hs.some(h=>h.path===t.hid),os=RD.outputs||[];
+  const sel=(k,cur,opts)=>`<select data-tx="${k}">${opts}</select>`;
+  return `<details class="txset"${p!=="none"?" open":""}><summary>Transmit (PTT)${p==="none"?" · listen only":t.enabled?" · <b class=\"bad\">ON</b>":" · set up, switched off"}</summary><div class="grid">
+   <label title="How the station would key this radio's transmitter. VARA FM's RA-Board option = the sound card's GPIO pin.">Keys the radio by ${sel("ptt",p,Object.entries(PTTL).map(([k,v])=>`<option value="${k}"${k===p?" selected":""}>${esc(v)}</option>`).join(""))}</label>
+   ${p==="cm108"?`<label title="The interface's USB HID side (C-Media first). Same box as its sound input.">Interface ${sel("hid",t.hid,`<option value="">— choose —</option>${t.hid&&!hv?`<option selected value="${esc(t.hid)}">saved (not found now)</option>`:""}${hs.map(h=>`<option value="${esc(h.path)}"${h.path===t.hid?" selected":""}>${esc(h.desc)}</option>`).join("")}`)}</label>
+     <label title="The CM108 GPIO wired to PTT: 3 on a Digirig Lite and an AIOC (VARA's RA-Board default).">GPIO pin <input data-tx="pin" value="${esc(t.pin||3)}" inputmode="numeric" style="width:3em"></label>`:""}
+   ${p==="rts"||p==="dtr"?`<label title="Its own COM port, never the CAT port.">PTT port ${sel("port",t.port,catOpt(t.port))}</label>`:""}
+   ${p!=="none"?`<label title="Where the transmitted audio goes: the interface's output (speaker) side.">Audio out ${sel("out",t.out,`<option value="">— choose —</option>${t.out&&!os.includes(t.out)?`<option selected>${esc(t.out)}</option>`:""}${os.map(o=>`<option${o===t.out?" selected":""}>${esc(o)}</option>`).join("")}`)}</label>
+     <label title="The transmitter is let go after this long, whatever happens.">Time limit, s <input data-tx="max_s" value="${esc(t.max_s||60)}" inputmode="numeric" style="width:4em"></label>
+     <label class="txsw" title="Off by default. While off, nothing can key this radio. Sidekick still only drafts; this switch is what a future 'send' will need."><input type="checkbox" data-tx="enabled"${t.enabled?" checked":""}> Allow transmitting on this radio</label>`:""}
+   </div>${p!=="none"?`<p class="small muted">Off by default: with the switch off nothing can key this radio. Sidekick still only drafts. A voice transmission needs a control operator at the station (FCC 97.109) and your call sign (97.119).</p>`:""}</details>`}
 function renderRadiosDlg(){
   const ins=RD.inputs||[],used=new Set(RD.list.map(r=>r.device));
   const opt=(cur)=>{const have=ins.includes(cur);
@@ -839,6 +854,7 @@ function renderRadiosDlg(){
      <label>Frequency, MHz <input data-k="freq_mhz" value="${r.freq_mhz??""}" inputmode="decimal" placeholder="146.940" style="width:8em"></label>
      <label title="Icom CI-V (CAT): the station reads the radio's frequency and tunes it for this radio's nets, any band. On Wi-Fi: Icom Remote Utility's virtual COM port; on USB: the radio's first COM port. It never transmits.">CAT port (Icom CI-V) <select data-cat="port">${catOpt(r.cat&&r.cat.port)}</select></label>
      ${r.cat&&r.cat.port?`<label title="The radio's CI-V address (MENU → SET → Connectors → CI-V → CI-V Address). IC-705: A4.">CI-V address <input data-cat="civ" value="${esc((r.cat&&r.cat.civ)||"A4")}" maxlength="2" style="width:4em"></label>`:""}</div>
+     ${txBlock(r)}
      <div class="row small">${r.state?`<span class="muted">now: ${esc(r.state)}${r.error?" · "+esc(r.error):""}</span>`:'<span class="muted">new</span>'}
      ${(RD.nets[r.id]||[]).length?`<span class="muted">nets: ${esc(RD.nets[r.id].join(", "))}</span>`:""}
      <button class="linkish" data-rm="${i}">Remove</button></div></div>`).join("");
@@ -850,6 +866,10 @@ function renderRadiosDlg(){
   for(const el of $("radiosBody").querySelectorAll("[data-k]"))el.onchange=el.oninput=()=>{RD.list[+el.closest(".rad").dataset.i][el.dataset.k]=el.value};
   for(const el of $("radiosBody").querySelectorAll("[data-cat]"))el.onchange=()=>{const r=RD.list[+el.closest(".rad").dataset.i];
     if(el.dataset.cat==="port"){r.cat=el.value?{...(r.cat||{civ:"A4"}),port:el.value}:null;renderRadiosDlg()}else if(r.cat)r.cat.civ=el.value.trim().toUpperCase()};
+  for(const el of $("radiosBody").querySelectorAll("[data-tx]"))el.onchange=()=>{const r=RD.list[+el.closest(".rad").dataset.i],k=el.dataset.tx;
+    r.tx=r.tx||{ptt:"none",pin:3,max_s:60,enabled:false};
+    if(k==="enabled"){if(el.checked&&!confirm("Allow the station to key this radio's transmitter? Nothing sends yet (Sidekick only drafts), but once something does, it can transmit on this radio. A control operator must be at the station."))el.checked=false;r.tx.enabled=el.checked;renderRadiosDlg();return}
+    r.tx[k]=k==="pin"||k==="max_s"?+el.value:el.value;if(k==="ptt"){if(el.value==="none")r.tx.enabled=false;renderRadiosDlg()}};
   for(const b of $("radiosBody").querySelectorAll("[data-rm]"))b.onclick=()=>{const r=RD.list[+b.dataset.rm];
     const nn=(RD.nets[r.id]||[]).length;
     if(confirm(`Remove ${r.name||"this radio"}?${nn?` Its ${nn} net${nn>1?"s stay":" stays"} in the list with no radio: choose another radio for ${nn>1?"them":"it"} in Nets.`:""} Its log and recordings stay on disk.`)){RD.list.splice(+b.dataset.rm,1);renderRadiosDlg()}};

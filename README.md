@@ -103,6 +103,15 @@ a radio whose input is gone says what Windows did with it and offers **Choose it
 nets cannot be removed until its nets move to another radio. Inputs are matched exact name first, so a radio on
 "Digirig Lite" never opens "Digirig Lite NET-REC". Then use **Set level…** on its card.
 
+**Transmit (PTT), set up but switched off.** Each radio in **Radios…** has a **Transmit (PTT)** section: how the
+station would key the radio — **Sound card GPIO** (what VARA FM calls *RA-Board*: Digirig Lite, AIOC, CM108/CM119
+interfaces, pin 3), or a serial **RTS / DTR** line on its own COM port (never the CAT port) — the **Audio out** the
+transmitted voice goes to, and a **time limit** (5-180 s, default 60) after which the transmitter is let go whatever
+happens. **Allow transmitting on this radio** is OFF by default; while it is off nothing can key the radio. Nothing in
+the station transmits yet (Sidekick only drafts): this is the setup a future *send* will use. A voice transmission
+needs a control operator at the station (FCC 97.109) and your call sign (97.119). The GPIO is reached through
+`hidapi` (installed with the station).
+
 | Radio | Interface | Notes |
 |---|---|---|
 | A handheld (Baofeng, Wouxun KG-UV9PX+, …) | speaker/earphone jack → Digirig Lite or Mobile (USB) | Audio from: *speaker / earphone jack* (voice gate). The jack is very loud: Set level… step 1 finds the cleanest volume knob position. On all day: run it from a charger or battery eliminator — a flat battery shows as **the radio seems to be OFF** on its card. |
@@ -336,7 +345,8 @@ you chose is remembered. Each column shows:
   1.2 s) it decides whether your station should speak and drafts exactly what it would say and how long it would
   wait, shown at the top of that radio's column; **What would you say now?** asks on demand, 👍/👎 rates a draft,
   **▶ Hear it** plays the draft in Sidekick's voice in your browser. **It never transmits**: there is no transmit
-  mode, and the CAT code still refuses PTT.
+  mode yet, and the CAT code still refuses PTT. (Each radio's Transmit (PTT) setup in Radios… is ready for it and
+  switched off.)
   - **Its turn, read by the station.** Like an operator on a net, Sidekick has a turn only when net control opens
     check-ins to a station like yours, when someone calls it by call or name, or when it holds an answer and the floor
     opens. Outside those the station drafts "silent" itself, at once, without asking a model; when it asks, the model
@@ -598,6 +608,7 @@ The station can read an EOC's situation report on a voice net — from the compa
 | Sub-audible tone + mains hum removed before Whisper (high-pass 300 Hz on FM data-jack radios) | working (`highpass_hz`) |
 | Whisper's noise phrases ("So.", "We'll be right back.") shown greyed as probable noise, left out of the ICS-309 | working |
 | Icom IC-705 via Icom Remote Utility (voice gate) | working on the test PC |
+| **Transmit (PTT) setup** per radio (Radios… → Transmit; `tx: {ptt: cm108, hid, pin: 3, out, max_s, enabled: false}`): sound-card GPIO (VARA's RA-Board) or serial RTS/DTR, audio out, time limit with a watchdog; refused unless **Allow transmitting** is on (off by default); nothing calls it yet (`station/ptt.py`) | built + tested with simulated interfaces; no key-up on a radio yet |
 | **CAT control (Icom CI-V)** per radio (`cat: {port: COM11, civ: A4}`, or Radios… → CAT port): the frequency and mode are read from the radio every 5 s (card + every transmission); **Change** tunes the radio; a scheduled net on that radio — VHF/UHF or HF — tunes it at the net's start (frequency, mode, tone squelch off; the net's repeater offset and tone when it gives them) and puts back what it was on when the net ends, unless the operator retuned during the net (kept across a restart). Never transmits: only reads and these settings can be sent (`station/cat.py`) | built + tested on a simulated IC-705 (CI-V echo, HF/VHF/UHF, restart mid-net, missing port); first test on the radio pending |
 | Live transcription on the PC (engine picked per PC; W9XYZ-5: turbo on Intel graphics, final text 2.4 s after unkey for an 8.5 s transmission) | working |
 | Words while someone is still talking (base.en, updated each second, replaced by the final text) | working |

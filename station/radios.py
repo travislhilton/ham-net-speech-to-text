@@ -16,7 +16,7 @@ import json
 import re
 from pathlib import Path
 
-EDITABLE = ("id", "name", "device", "gate", "mode", "freq_mhz", "cat")   # cat: CI-V port (station/cat.py)
+EDITABLE = ("id", "name", "device", "gate", "mode", "freq_mhz", "cat", "tx")   # cat: CI-V (station/cat.py); tx: PTT (station/ptt.py)
 GATES = ("carrier", "voice")
 MODES = ("FM", "USB", "LSB", "AM", "CW", "DIG")
 SKIP = ("stereo mix", "primary sound capture", "microsoft sound mapper")
@@ -151,9 +151,11 @@ def clean(radios: list[dict]) -> list[dict]:
                 raise ValueError(f"{name}: CI-V address must be 01-DF (hex)")
             cat = {"port": port.upper() if port.upper().startswith("COM") else port, "civ": f"{civ:02X}",
                    "baud": int(cat.get("baud") or 19200), "model": str(cat.get("model") or "IC-705")}
+        from .ptt import clean_tx
+        tx = clean_tx(r.get("tx"), name, cat and cat["port"])
         ids.add(rid); devs.add(dev.lower())
         out.append({"id": rid, "name": name, "device": dev, "gate": gate, "mode": mode,
-                    "freq_mhz": None if f in (None, "") else f} | ({"cat": cat} if cat else {}))
+                    "freq_mhz": None if f in (None, "") else f} | ({"cat": cat} if cat else {}) | ({"tx": tx} if tx else {}))
     return out
 
 

@@ -11,6 +11,7 @@ torch>=2.2                # CPU wheel; silero-vad gate for HF/SSB radios (no car
 silero-vad>=5.1
 faster-whisper>=1.0       # previous offline fallback; kept until the OpenVINO engine replaces it
 pyserial>=3.5
+hidapi>=0.14         # PTT through a sound card's GPIO (CM108 / VARA's "RA-Board"); off until switched on
 keyring>=25           # QRZ password in Windows Credential Manager
 segno>=1.6           # QR codes for "Open on a phone" (pure Python, works offline)
 anthropic>=2.8           # station agent: Claude as an optional comparison model (Draft mode)
