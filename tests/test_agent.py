@@ -401,6 +401,10 @@ def test_check_in_calls_as_net_control_really_says_them():
     assert checkin_invited(seq) == (True, "net control asked for the next station during open check-ins")
     assert not checkin_invited(rows("Good evening. Next station, please."))[0]   # no open check-ins: a roll call
     assert not checkin_invited(rows("Any maritime mobile stations for check-in?"))[0]
+    assert not checkin_invited(rows("This is net control. Are there any stations with emergency, medical, or "
+                                    "priority traffic? Over."))[0]               # a traffic call, not check-ins
+    assert not checkin_invited(rows("Any relays for emergency or priority traffic?"))[0]
+    assert checkin_invited(rows("Any stations wishing to check in, call now."))[0]
 
 
 def test_a_check_in_during_a_roll_call_of_places_is_stopped(tmp_path, xai_key):

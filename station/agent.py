@@ -305,8 +305,8 @@ def fcc_check(d: dict, ctx: dict) -> list[dict]:
 
 # ---------------------------------------------------------------- the offline rules --------------------------------
 CHECKIN_CALL = re.compile(
-    r"\b(any (more |further |other |additional |late |final |new )?(check[- ]?ins?|stations? (for|to check|wishing|"
-    r"wanting|with)|takers)|(stations?|anyone|anybody|centers?)\b[^.?!]{0,60}\b(wishing|wanting|who would like|"
+    r"\b(any (more |further |other |additional |late |final |new )?(check[- ]?ins?|stations? (for (the )?(net|check)|"
+    r"to check|wishing|wanting)|takers)|(stations?|anyone|anybody|centers?)\b[^.?!]{0,60}\b(wishing|wanting|who would like|"
     r"that would like|would like|desiring) to check[- ]?in|(taking|take|open(ing)? (the net )?for|calling for|"
     r"now for|accepting) (any )?check[- ]?ins?|check[- ]?ins?,? (please|go ahead|call now|are open|now)|"
     r"please call now|call now with your call|any (visitors|visiting stations|late or missed|missed or late)|"
@@ -323,6 +323,7 @@ OPEN_TO_ALL = re.compile(r"\b(any station,? any ?where|any and all|all stations|
 RESTRICTED = re.compile(
     r"\b(maritime|mobiles?( only)?|members? only|(only )?stations? with (formal |listed )?traffic|traffic only|"
     r"liaison|emergency (stations?|traffic) only|priority (stations?|traffic) only|short[- ]?time|"
+    r"(emergency|medical|priority|formal|health|welfare|listed)[^.?!]{0,30}\btraffic|relays?\b|"
     r"(city|county|state|agency|hospital|shelter|school) stations?|(emergency )?operations? cent(er|re)s?|eocs?|"
     r"from the (state|city|county)|in (the )?(county|state|section) of)\b", re.I)
 
