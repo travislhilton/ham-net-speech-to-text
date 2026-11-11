@@ -363,8 +363,9 @@ you chose is remembered. Each column shows:
   summary (stations heard, traffic and relays, and the net's minutes) for that net only, addressed to every callsign that took part
   (callsigns no callbook confirms start unticked; **Uncheck all / Check all / Only callbook-confirmed**, and add
   any callsign). Edit, then **Put in Winlink Express Outbox**; Winlink Express sends them the next time you
-  connect. Close Winlink Express first; the station refuses while it is open and backs up Winlink's message
-  list before each write.
+  connect. Close Winlink Express first: while it is open the dialog says so and the button stays off (checked
+  every 2 seconds; it turns on as soon as Express is closed), and a refused write is logged. The station backs up
+  Winlink's message list before each write.
 - **The end of a net** (`station/netclose.py`). **Net control closes it:** when net control says so on the air
   ("hearing none, we'll go ahead and close the net", "this net is now closed", "closing the net", "secure the net",
   "this concludes tonight's net", "returning the repeater to normal amateur use"; "QRT" and "N7XYZ clear" only from

@@ -498,7 +498,12 @@ class Station:
             msgs.append(winlink.build(d["form"], t, d.get("values") or {}, account, to, grid=op.get("grid")))
         if not msgs:
             raise ValueError("no forms selected")
-        res = winlink.put_in_outbox(install, account, msgs)
+        try:
+            res = winlink.put_in_outbox(install, account, msgs)
+        except Exception as e:  # noqa: BLE001 — logged (a refusal once went unnoticed, 11-10), then shown to the operator
+            print(f"{datetime.now():%H:%M:%S} winlink: NOT written ({len(msgs)} message(s) to {', '.join(to)}): {e}",
+                  flush=True)
+            raise
         if body.get("radio") and body.get("start"):
             try:
                 self.history.note_winlink(body["radio"], body["start"], [d.get("form") for d in body.get("drafts", [])], to)

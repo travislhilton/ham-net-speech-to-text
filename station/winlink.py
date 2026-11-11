@@ -88,7 +88,8 @@ def express_running() -> bool:
         return False
     try:
         out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq RMS Express.exe", "/NH"], capture_output=True,
-                             text=True, timeout=10).stdout
+                             text=True, timeout=10,   # no console window flashing on the desktop (owner 11-10)
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
         return "RMS Express.exe" in out
     except (OSError, subprocess.SubprocessError):
         return False
@@ -221,7 +222,8 @@ def registry_line(msg: dict, sender: str) -> str:
 
 def put_in_outbox(install: str, account: str, messages: list[dict], check_running=None) -> dict:
     if (check_running or express_running)():
-        raise RuntimeError("Winlink Express is open. Close it, then try again (it would overwrite the Outbox list).")
+        raise RuntimeError("Winlink Express is open, so nothing was written. Close Winlink Express, then press the "
+                           "button again (Express keeps its Outbox list in memory and would overwrite it).")
     acc = Path(install) / account
     if not (acc / "Messages").is_dir() or not (acc / "Data").is_dir():
         raise FileNotFoundError(f"{acc} is not a Winlink Express callsign folder")

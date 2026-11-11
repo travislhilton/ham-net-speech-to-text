@@ -3,6 +3,7 @@ import base64
 import copy
 import email
 import time
+from pathlib import Path
 from datetime import datetime, timezone
 from email import policy
 
@@ -207,3 +208,41 @@ def test_lapsed_licence_is_not_confirmed():
              "K7ABC": {"card": {"name": "Pat", "sources": ["FCC"], "license_valid": True}}}
     p = {x["call"]: x for x in participants([{"callsigns": ["KA7XT", "K7ABC"]}], {"W9XYZ"}, heard)}
     assert not p["KA7XT"]["confirmed"] and p["KA7XT"]["lapsed"] == "Expired" and p["K7ABC"]["confirmed"]
+
+
+def test_an_open_winlink_express_is_refused_loudly_and_logged(tmp_path, install, monkeypatch, capsys):
+    """11-10: the refusal was a small red line and nothing in the log; the operator saw only console flashes."""
+    monkeypatch.setattr(winlink, "DEFAULT_DIR", install)
+    cfg = {"callsign": "W9XYZ", "radios": [{"id": "a", "name": "FTM", "device": "x", "gate": "carrier", "freq_mhz": 145.9}],
+           "schedule": [], "port": 0, "bind": "127.0.0.1", "qrz_online": False}
+    st = Station(copy.deepcopy(cfg), lambda: engine.FakeEngine(), data_dir=tmp_path / "d")
+    monkeypatch.setattr(winlink, "express_running", lambda: True)
+    draft = {"form": "ics213", "values": {"Subjectline": "Test", "Message": "Test message"}}
+    reg = Path(install) / "W9XYZ-5" / "Data" / "Registry.txt"
+    before = reg.read_bytes() if reg.exists() else b""
+    with pytest.raises(RuntimeError, match="Winlink Express is open, so nothing was written"):
+        st.winlink_send({"to": ["K7ABC"], "drafts": [draft]})
+    assert "winlink: NOT written (1 message(s) to K7ABC): Winlink Express is open" in capsys.readouterr().out
+    assert (reg.read_bytes() if reg.exists() else b"") == before
+
+
+def test_the_dialog_can_ask_whether_winlink_express_is_open(tmp_path, monkeypatch):
+    """The send button stays off while Express is open and turns on when it closes (the page asks every 2 s)."""
+    import json as _json
+    import threading
+    import urllib.request
+    from station.server import serve
+    cfg = {"callsign": "W9XYZ", "radios": [{"id": "a", "name": "FTM", "device": "x", "gate": "carrier", "freq_mhz": 145.9}],
+           "schedule": [], "port": 0, "bind": "127.0.0.1", "qrz_online": False}
+    st = Station(copy.deepcopy(cfg), lambda: engine.FakeEngine(), data_dir=tmp_path / "d")
+    srv = serve(st, "127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}/api/winlink/express"
+    try:
+        for running in (True, False):
+            monkeypatch.setattr(winlink, "express_running", lambda r=running: r)
+            assert _json.loads(urllib.request.urlopen(url).read()) == {"running": running}
+    finally:
+        srv.shutdown()
+    page = (Path(winlink.__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+    assert 'id="wlExp"' in page and "b.disabled=off" in page and '"/api/winlink/express"' in page

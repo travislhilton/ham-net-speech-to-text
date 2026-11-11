@@ -96,6 +96,9 @@ def make_handler(station):
                 return self._json({"text": test_text(station.cfg.get("callsign")), "history": station.test_history()})
             if u.path == "/api/settings":
                 return self._json(station.operator())
+            if u.path == "/api/winlink/express":                # the Winlink dialog: is Winlink Express open?
+                from . import winlink
+                return self._json({"running": winlink.express_running()})
             if u.path in ("/readout", "/readout.html"):         # the read-out: approve, then the large-type card
                 return self._send(200, (STATIC / "readout.html").read_bytes(), "text/html; charset=utf-8")
             if u.path == "/api/readout":
