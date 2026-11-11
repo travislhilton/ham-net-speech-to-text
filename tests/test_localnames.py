@@ -33,6 +33,8 @@ def fix(text, entries=(PARC,), net=None):
      "As announced on the net, the PARC Net, the roll call has a link."),
     ("You can go to ParkOnline under nets.", "You can go to parconline.org under nets."),
     ("Look it up at park online dot org tonight.", "Look it up at parconline.org tonight."),
+    ("Find information online at parkonline.com, and check it.", "Find information online at parconline.org, and check it."),
+    ("Go to PARC online under licensing.", "Go to parconline.org under licensing."),
     ("the park net starts at nine", "the PARC net starts at nine"),
     ("P A R C members, welcome.", "PARC members, welcome."),
 ])

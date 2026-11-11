@@ -144,14 +144,17 @@ def rules(entries, net_name=None) -> list[dict]:
         if e["web"]:
             host = e["web"]
             base, tld = host.rsplit(".", 1)
-            spoken_tld = r"(?:\s*(?:dot|\.)\s*" + re.escape(tld) + r")?"
+            # whatever ending was said or written goes with it ("Sarkonline.org" when the list says .com would
+            # otherwise read "sarconline.com.org"); the list's address is the one written
+            spoken_tld = r"(?:\s*(?:dot|\.)\s*(?:" + re.escape(tld) + r"|com|org|net|us|info|club))?"
             if sounds and base.lower().startswith(name.lower()) and len(base) > len(name):
                 rest = base[len(name):]
                 out.append({"re": re.compile(r"(?<![\w.-])(?:" + _alt(sounds + [name]) + r")[\s-]?" + re.escape(rest)
                                              + spoken_tld + r"(?![\w-])", re.I),
                             "say": host, "kind": "web", "name": name})
-            out.append({"re": re.compile(r"(?<![\w.-])" + re.escape(base) + r"\s*(?:dot|\.)\s*" + re.escape(tld)
-                                         + r"(?![\w-])", re.I), "say": host, "kind": "web", "name": name})
+            out.append({"re": re.compile(r"(?<![\w.-])" + re.escape(base) + r"\s*(?:dot|\.)\s*(?:" + re.escape(tld)
+                                         + r"|com|org|net|us|info|club)(?![\w-])", re.I), "say": host, "kind": "web",
+                        "name": name})
         if sounds:
             alt = _alt(sounds)
             out.append({"re": re.compile(r"(?<![\w-])(?i:" + alt + r")(?P<tail>[A-Z][a-z]{1,14})(?![\w-])"),
