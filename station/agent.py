@@ -404,6 +404,18 @@ def rules_draft(rows: list[dict], ctx: dict, checked_in: bool, pending: dict | N
     return silent | {"why": "not called and no call for check-ins"}
 
 
+def facts() -> list[str]:
+    """What the station knows for certain, given to the thinking model as authoritative (11-11 rehearsal: asked for
+    General phone privileges it said 40 m phone starts at 7.200; it is 7.175)."""
+    out = ["Authoritative facts from the station (use these over your memory):",
+           "US amateur phone (voice) privileges, MHz (47 CFR 97.301/97.305): " + "; ".join(
+               f"{c.title()}: " + ", ".join(f"{a:g}-{b:g}" for a, b in PHONE[c]) for c in ("technician", "general",
+                                                                                         "advanced", "extra")),
+           "60 m: five channels, USB only, General and above, 100 W ERP (dial 5.3305, 5.3465, 5.3570, 5.3715, "
+           "5.4035 MHz). 30 m (10.1 MHz) has no phone for anyone."]
+    return out
+
+
 def allowed_kinds(ctx: dict, checked_in: bool, pending: dict | None, text: str) -> tuple[list[str], str]:
     """The moves open to the station after this transmission, read by the station itself (owner 11-10: Sidekick fits
     the net's protocol). Only these are offered to the model; none = the station stays silent without asking it.
@@ -421,7 +433,11 @@ def allowed_kinds(ctx: dict, checked_in: bool, pending: dict | None, text: str) 
         out += ["reply", "acknowledge", "say_again", "stand_by"]
         if p.get("state") not in ("working", "ready", "announced"):
             out.append("working")
-    if p.get("state") == "ready":
+    # 11-11 rehearsal: offered whenever ready, the quick model announced it right after net control moved on to a
+    # topic. Its place: net control asking for input, someone calling this station, or (outside a net) an open
+    # frequency after the answer became ready.
+    if p.get("state") == "ready" and (INPUT_CALL.search(text or "") or ctx.get("addressed")
+                                      or (not ctx.get("in_net") and ctx.get("trigger") == "answer ready")):
         out.append("ready")
     if p.get("state") in ("ready", "announced") and (ctx.get("addressed") or GO_AHEAD.search(text or "")):
         out.append("answer")
@@ -720,6 +736,7 @@ class Agent:
         ctx = {"call": call, "name": name, "op": op, "first": first, "id_due": id_due, "emergency": emergency,
                "busy": busy, "freq_mhz": r.get("freq_mhz") or lastrow.get("freq_mhz"), "mode": r.get("mode"),
                "license_class": self.cfg.get("license_class"), "addressed": addressed, "asked": asked,
+               "in_net": bool(net.get("name")), "trigger": why,
                "roll_call": bool(rows) and bool(ROLL_CALL.search(lastrow.get("text", ""))),
                "invited": invited}
         main_model = self.cfg.get("model") or DEFAULT_MODEL
@@ -897,7 +914,8 @@ class Agent:
         system = DEEP_SYSTEM.format(name=ctx["name"], call=ctx["call"], op=ctx["op"], asker=p["asker"],
                                     question=p["question"], words=ANSWER_WORDS - 5)
         r = self.st.radios.get(rid) or {}
-        user = "\n".join([f"Station: {self.cfg.get('station') or 'a fixed home station'}; frequency "
+        user = "\n".join([*facts(),
+                          f"Station: {self.cfg.get('station') or 'a fixed home station'}; frequency "
                           f"{r.get('freq_mhz') or ctx.get('freq_mhz') or '?'} MHz; local time "
                           f"{self.st.clock():%A %Y-%m-%d %H:%M}.",
                           "What was said before the question (speech recognition, may contain errors):", *lines[-16:],

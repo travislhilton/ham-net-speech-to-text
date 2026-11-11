@@ -455,3 +455,19 @@ def test_a_reply_nobody_asked_for_is_stopped(tmp_path, xai_key):
     assert not x["ok"] and "nobody called this station" in x["fcc"][-1]["note"]
     _say(st, "W9XYZ, thanks for checking in tonight", calls=["W9XYZ"], minute=5)
     assert st.agent.draft("ic", "t1")["ok"]
+
+
+def test_a_ready_answer_waits_for_its_place():
+    from station.agent import allowed_kinds
+    p = {"state": "ready", "question": "q", "asker": "W9QXJ"}
+    net = CTX_R | {"in_net": True}
+    assert "ready" not in allowed_kinds(net, True, p, "Let's talk about antennas before winter.")[0]
+    assert "ready" in allowed_kinds(net, True, p, "Any comments or questions for the net?")[0]
+    assert "ready" in allowed_kinds(net | {"addressed": True}, True, p, "Sidekick, do you have that?")[0]
+    assert "ready" in allowed_kinds(CTX_R | {"in_net": False, "trigger": "answer ready"}, True, p, "73")[0]
+
+
+def test_the_thinking_model_gets_the_privileges_from_the_code():
+    from station.agent import facts
+    f = " ".join(facts())
+    assert "General: 1.8-2, 3.8-4, 7.175-7.3, 14.225-14.35" in f and "30 m (10.1 MHz) has no phone" in f
