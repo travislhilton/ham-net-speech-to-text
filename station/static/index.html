@@ -212,6 +212,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 .echo .rate button{all:unset;cursor:pointer;padding:0 5px;border-radius:5px}.echo .rate button.on{background:var(--chip)}
 .echo .alt{border-top:1px dashed var(--line);margin-top:4px;padding-top:3px;font-size:12.5px}
 .agentform{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;margin:6px 0}.agentform input,.agentform select{width:100%;text-transform:none!important}
+.vcgrid{display:flex;flex-wrap:wrap;gap:4px 12px}.vcgrid .vc.on{font-weight:600}
 .agentform input[type=checkbox]{width:auto;margin:0 6px 0 0;vertical-align:middle}.agentform .cmp label{display:block;font-weight:400}
 .echo .say{font-family:inherit;white-space:normal}
 @media (max-width:560px){.agentform{grid-template-columns:1fr}}
@@ -448,6 +449,8 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <h4>Local names</h4><div id="lnSet" class="small"></div>
   <h4>Station agent (optional)</h4><div id="agentSet" class="small"></div><div id="keySet" class="small"></div>
+  <h4>Sidekick's voice</h4><div id="voiceSet" class="small"></div>
+  <h4>Grok speech-to-text (compared)</h4><div id="grokSet" class="small"></div>
   <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
@@ -1309,7 +1312,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();loadVoice();loadGrok();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -1459,7 +1462,9 @@ function connect(){
   es.onerror=()=>{$("conn").textContent="● reconnecting…";$("conn").className="bad"};
   es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HamNet Station";renderEngine(d.engines);all()});
   es.addEventListener("tx",e=>upsertTx(JSON.parse(e.data)));
-  es.addEventListener("agent",e=>{const d=JSON.parse(e.data).draft;if(!AG||!d)return;AG.drafts=[...(AG.drafts||[]).filter(x=>x.id!==d.id),d].slice(-60);renderEcho(d.radio)});
+  es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
+    if(m.pending){const p=m.pending;AG.pending=AG.pending||{};if(p.state==="none")delete AG.pending[p.radio];else AG.pending[p.radio]=p;renderEcho(p.radio);return}
+    const d=m.draft;if(!d)return;AG.drafts=[...(AG.drafts||[]).filter(x=>x.id!==d.id),d].slice(-60);renderEcho(d.radio)});
   loadAgent();
   es.addEventListener("tx_drop",e=>{const id=JSON.parse(e.data).id;S.tx=S.tx.filter(t=>t.id!==id);const el=$("tx-"+id);if(el)el.remove()});
   es.addEventListener("hints",e=>{S.hints=JSON.parse(e.data);renderHints()});
@@ -2091,16 +2096,17 @@ async function openScan(rid,v){
   if(!$("scanDlg").open)$("scanDlg").showModal()}
 // ---------- the station agent (Draft mode; station/agent.py) ----------
 let AG=null;
-const agName=()=>((AG||{}).settings||{}).name||"Echo";
+const agName=()=>((AG||{}).settings||{}).name||(AG||{}).default_name||"Sidekick";
 const agMode=rid=>(((AG||{}).settings||{}).radios||{})[rid]||"off";
 async function loadAgent(){try{AG=await api("/api/agent");renderRadios()}catch(e){}}
 async function agPost(url,body){try{AG=await post(url,body);renderRadios();if($("settings").open)renderAgentSet()}catch(err){alert(err.message)}}
-const KINDL={check_in:"check-in",reply:"reply",acknowledge:"acknowledgement",stand_by:"stand by",say_again:"say again",sign_off:"sign-off",none:"silent"};
+const KINDL={check_in:"check-in",reply:"reply",acknowledge:"acknowledgement",stand_by:"stand by",say_again:"say again",working:"working on it",ready:"answer ready",answer:"the prepared answer",sign_off:"sign-off",none:"silent"};
 function draftHtml(d,alt){
   if(d.error)return `<div class="meta">${esc(d.model||"")}: <span class="bad">${esc(d.error)}</span></div>`;
   const fails=(d.fcc||[]).filter(c=>!c.ok),lab=(MODELN[d.model]||d.model||"");
   const who=d.speak?`<div class="say${d.ok?"":" no"}">“${esc(d.say)}”</div>`:`<div class="say muted">(stays silent)</div>`;
-  return `${who}<div class="meta">${esc(KINDL[d.kind]||d.kind)}${d.speak?` · after ${d.silence_s}s of quiet`:""} · ${esc(lab)} ${d.latency_s}s${d.why?" · "+esc(d.why):""}</div>`
+  const src=d.model==="rules"?`offline rules${d.fallback?` (${esc(d.fallback)})`:""}`:`${esc(lab)} ${d.latency_s}s`;
+  return `${who}<div class="meta">${esc(KINDL[d.kind]||d.kind)}${d.speak?` · after ${d.silence_s}s of quiet`:""} · ${src}${d.why?" · "+esc(d.why):""}${d.speak&&d.say&&d.id&&!alt?` <button class="quiet" data-tts="${esc(d.id)}" title="Plays here only, in this browser. Never on the radio.">▶ Hear it</button>`:""}</div>`
     +(d.speak?`<div class="fcc">${fails.length?`<span class="x">Would not send</span>: `+fails.map(c=>`<span title="${esc(c.note)}">${esc(c.rule)}: ${esc(c.note)}</span>`).join("; "):`<span class="ok" title="${esc((d.fcc||[]).map(c=>c.rule+": "+c.note).join("\n"))}">✓ FCC Part 97 checks pass (${(d.fcc||[]).length})</span>`}</div>`:"")}
 let MODELN={};
 function renderEcho(rid){
@@ -2109,13 +2115,60 @@ function renderEcho(rid){
   MODELN=Object.fromEntries((AG.models||[]).map(m=>[m.id,m.label]));
   const L=(AG.drafts||[]).filter(d=>d.radio===rid),d=L[L.length-1];
   box.hidden=false;
-  box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span><span class="sp"></span><button data-agask="${esc(rid)}">What would you say now?</button></div>`
+  const pd=((AG||{}).pending||{})[rid],PS={working:"working on",ready:"answer ready for",announced:"announced the answer for",failed:"could not answer"};
+  const pend=pd?`<div class="meta">📝 ${esc(PS[pd.state]||pd.state)}: “${esc(pd.question||"")}” (${esc(pd.asker||"")}, ${esc((pd.at||"").slice(11,16))}${pd.took_s?`, ${pd.took_s}s ${esc(MODELN[pd.model]||pd.model||"")}`:""})${pd.answer?`<div class="say">“${esc(pd.answer)}”</div>`:""}${pd.error?` <span class="bad">${esc(pd.error)}</span>`:""}</div>`:"";
+  box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span><span class="sp"></span><button data-agask="${esc(rid)}">What would you say now?</button></div>`+pend
     +(d?`<div class="meta">After: ${esc(d.heard||"")}</div>${draftHtml(d)}
       <div class="rate meta">Good draft? <button data-agrate="${esc(d.id)}" data-v="1" class="${(d.rating||{}).good===true?"on":""}">👍</button><button data-agrate="${esc(d.id)}" data-v="0" class="${(d.rating||{}).good===false?"on":""}">👎</button> · ${L.length} draft${L.length>1?"s":""} so far</div>`
       +(d.alts||[]).map(a=>`<div class="alt">${draftHtml(a,true)}</div>`).join(""):`<div class="meta">Listening. A draft appears after each transmission (when ${esc(agName())} would speak, and when it would stay silent).</div>`)}
 document.addEventListener("click",e=>{
   const a=e.target.closest("[data-agask]");if(a){a.textContent="Thinking…";agPost(`/api/agent/ask/${enc(a.dataset.agask)}`,{});return}
-  const r=e.target.closest("[data-agrate]");if(r){agPost(`/api/agent/rate/${enc(r.dataset.agrate)}`,{good:r.dataset.v==="1"});return}});
+  const r=e.target.closest("[data-agrate]");if(r){agPost(`/api/agent/rate/${enc(r.dataset.agrate)}`,{good:r.dataset.v==="1"});return}
+  const h=e.target.closest("[data-tts]");if(h){playClip(`/api/tts/draft/${enc(h.dataset.tts)}.mp3`,h);return}
+  const v=e.target.closest("[data-aud]");if(v){playClip(`/api/tts/audition/${enc(v.dataset.aud)}.mp3`,v);return}});
+// ----- Sidekick's voice (station/tts.py): heard here only, in this browser; never on a radio -----
+let TTS=null,VCLIP=null;
+async function playClip(url,btn){const was=btn.textContent;btn.textContent="…";
+  try{const r=await fetch(url);if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"not available")}
+    const b=await r.blob();if(VCLIP)VCLIP.pause();VCLIP=new Audio(URL.createObjectURL(b));btn.textContent="■";
+    VCLIP.onended=()=>{btn.textContent=was};await VCLIP.play();if(TTS&&btn.dataset.aud){TTS.auditioned[btn.dataset.aud]=true}}
+  catch(e){btn.textContent=was;alert(e.message)}}
+async function loadVoice(){try{TTS=await api("/api/tts")}catch(e){TTS=null}renderVoice()}
+function renderVoice(msg){
+  const box=$("voiceSet");if(!box)return;if(!TTS){box.innerHTML='<span class="muted">Not available.</span>';return}
+  const cur=TTS.voice||"";
+  box.innerHTML=`<p class="muted">How ${esc(agName())} sounds when you press ▶ (a voice audition, or “Hear it” on a draft). It plays <b>here only, in this browser</b>, never on a radio. Each clip is made once by xAI (from your xAI key, billed by the characters) and kept on this PC; offline, only clips already made can play.${TTS.key_set?"":" <b>Set the xAI key above first.</b>"}</p>
+   <div class="row"><label>Voice <select id="vcSel"><option value=""${cur?"":" selected"}>(not chosen: ${esc(TTS.default)})</option>${TTS.voices.map(v=>`<option value="${esc(v.voice_id)}"${v.voice_id===cur?" selected":""}>${esc(v.name||v.voice_id)}</option>`).join("")}</select></label>
+    <label>Speed <input id="vcSpd" type="number" min="0.7" max="1.5" step="0.05" value="${esc(TTS.speed||1)}" style="width:5em"></label>
+    <button type="button" id="vcSave">Save voice</button> <span class="${msg&&msg.bad?"bad":"ok"}">${esc((msg&&msg.text)||"")}</span></div>
+   <p class="muted" style="margin:6px 0 2px">Audition: each voice reads the same lines (a check-in, “working on it”, “I have a response ready”, the answer). ✓ = already made (plays free).</p>
+   <div class="vcgrid">${TTS.voices.map(v=>`<span class="vc${v.voice_id===cur?" on":""}"><button type="button" class="quiet" data-aud="${esc(v.voice_id)}">▶</button> ${esc(v.name||v.voice_id)}${TTS.auditioned[v.voice_id]?" ✓":""} <button type="button" class="linkish small" data-vcpick="${esc(v.voice_id)}">use</button></span>`).join("")}</div>`;
+  const save=async(voice)=>{try{AG=await post("/api/agent/settings",{voice,speed:+$("vcSpd").value||1});TTS=await api("/api/tts");renderVoice({text:`Saved: ${voice||"not chosen"}.`})}catch(e){renderVoice({text:e.message,bad:true})}};
+  box.querySelector("#vcSave").onclick=()=>save($("vcSel").value);
+  box.querySelectorAll("[data-vcpick]").forEach(b=>b.onclick=()=>save(b.dataset.vcpick));
+}
+// ----- Grok speech-to-text, compared with this station's engine (station/grokstt.py) -----
+let GK=null;
+async function loadGrok(){try{GK=await api("/api/grokstt")}catch(e){GK=null}renderGrok()}
+function renderGrok(msg){
+  const box=$("grokSet");if(!box)return;if(!GK){box.innerHTML='<span class="muted">Not available.</span>';return}
+  const s=GK.settings||{},t=GK.today||{},on=GK.online||{},sk=Object.entries(t.skipped||{}).map(([k,v])=>`${v} ${k}`).join(", ");
+  box.innerHTML=`<p class="muted">On the radios you tick, each transmission's recording is <b>also</b> sent to xAI's speech-to-text as it is heard (your xAI key), and kept beside this station's own text to see which is better. This station's engine stays the transcriber. The recordings leave this PC. Nothing is ever queued: a transmission heard while offline, while two are already out, or past the day's minutes is skipped.${GK.key_set?"":" <b>Set the xAI key above first.</b>"}</p>
+   <div class="row">${(S.radios||[]).filter(r=>r.role!=="winlink").map(r=>`<label class="chk"><input type="checkbox" data-gkr="${esc(r.id)}"${(s.radios||{})[r.id]?" checked":""}> ${esc(r.name)}</label>`).join(" ")}</div>
+   <div class="row"><label>Minutes a day <input id="gkMin" type="number" min="0" max="1440" value="${esc(s.minutes_per_day??60)}" style="width:5em"></label>
+    <label class="chk"><input type="checkbox" id="gkTerms"${s.keyterms!==false?" checked":""}> Hint the call, local names and the net's name</label>
+    <button type="button" id="gkSave">Save</button> <button type="button" id="gkCmp">Compare today</button> <span class="${msg&&msg.bad?"bad":"ok"}">${esc((msg&&msg.text)||"")}</span></div>
+   <div class="muted">Today: ${t.sent||0} sent, ${t.minutes||0} of ${s.minutes_per_day??60} minutes${sk?`; skipped ${esc(sk)}`:""}. xAI: ${on.online===false?`<span class="bad">offline</span> (${esc(on.last_error||"")}; next try in ${on.retry_in_s}s)`:on.online?'<span class="ok">online</span>':"not tried yet"}.</div>
+   <div id="gkOut"></div>`;
+  box.querySelector("#gkSave").onclick=async()=>{const radios={};box.querySelectorAll("[data-gkr]").forEach(c=>{if(c.checked)radios[c.dataset.gkr]=true});
+    try{GK=await post("/api/grokstt/settings",{radios,minutes_per_day:+$("gkMin").value,keyterms:$("gkTerms").checked});renderGrok({text:"Saved."})}catch(e){renderGrok({text:e.message,bad:true})}};
+  box.querySelector("#gkCmp").onclick=async()=>{const out=$("gkOut");out.textContent="Comparing…";
+    try{const c=await api("/api/grokstt/compare"),pc=x=>x==null?"–":Math.round(x*100)+"%";
+      const rows=Object.entries(c.summary).filter(([k])=>k!=="all").map(([k,v])=>`<tr><td>${k==="corrected"?"your corrections (human)":k==="accurate"?"the accurate pass":"no reference"}</td><td>${v.n}</td><td>${pc(v.live_wer)}</td><td>${pc(v.grok_wer)}</td><td>${pc(v.live_call_recall)}</td><td>${pc(v.grok_call_recall)}</td><td>${v.grok_s_p50??"–"}s</td></tr>`).join("");
+      out.innerHTML=c.items.length?`<table class="small"><tr><th>against</th><th>n</th><th>word errors: this station</th><th>Grok</th><th>calls found: this station</th><th>Grok</th><th>Grok time</th></tr>${rows}</table><p class="muted">${esc(c.note)}</p>`
+        +c.items.slice(-40).reverse().map(i=>`<div class="meta">${esc((i.start||"").slice(11,19))} ${esc(i.radio)}${i.live_wer?` · this station ${pc(i.live_wer.wer)} · Grok ${pc(i.grok_wer.wer)}`:""}<br>station: ${esc(i.live||"")}<br>Grok: ${esc(i.grok||"")}${i.ref?`<br>${i.ref_from}: ${esc(i.ref)}`:""}</div>`).join(""):'<p class="muted">Nothing compared today yet.</p>'}
+    catch(e){out.textContent=e.message}};
+}
 // ----- Settings → Local names (station/localnames.py): the area's clubs, repeaters and web sites -----
 let LN=null;
 async function loadLocalNames(){try{LN=await api("/api/local-names")}catch(e){LN={names:[],nets:[],area:"",err:e.message}}renderLocalNames()}
@@ -2162,18 +2215,19 @@ function renderLocalNames(msg){
 function renderAgentSet(){
   const box=$("agentSet");if(!AG){box.innerHTML="";return}const s=AG.settings||{};
   const opt=(v,l,on)=>`<option value="${esc(v)}"${on?" selected":""}>${esc(l)}</option>`;
-  box.innerHTML=`<p class="muted">The station agent listens and <b>drafts</b> what it would say on each radio where you switch it to Draft (on the radio's card). It never transmits. Every draft is checked against FCC Part 97 in the station's own code (identification every 10 minutes and at the end of a contact, saying it is automated, no business, music, codes or relayed messages, emergency traffic first, your license privileges); a draft that breaks one is marked <b>Would not send</b>.</p>
-  <label style="display:block;margin:6px 0"><input type="checkbox" id="agOn"${s.enabled?" checked":""} style="width:auto"> <b>Enable the station agent</b> <span class="muted">(off by default; when on, each radio's card gets an ${esc(s.name||"Echo")} Off / Draft switch, also off until you choose Draft)</span></label>
+  box.innerHTML=`<p class="muted">The station agent listens and <b>drafts</b> what it would say on each radio where you switch it to Draft (on the radio's card). It never transmits. Two speeds: the <b>model</b> decides each turn in under a second (check-ins, acknowledgements, short answers); a question that needs thinking gets “working on it” and goes to the <b>thinking model</b> while the net carries on, and when net control next asks for comments it says it has a response ready, then reads it when told to go ahead. Offline, fixed rules keep the same steps (check in, acknowledge, announce and read an answer already made). Every draft is checked against FCC Part 97 in the station's own code (identification every 10 minutes and at the end of a contact, saying it is automated, no business, music, codes or relayed messages, emergency traffic first, your license privileges); a draft that breaks one is marked <b>Would not send</b>.</p>
+  <label style="display:block;margin:6px 0"><input type="checkbox" id="agOn"${s.enabled?" checked":""} style="width:auto"> <b>Enable the station agent</b> <span class="muted">(off by default; when on, each radio's card gets a ${esc(agName())} Off / Draft switch, also off until you choose Draft)</span></label>
   <div class="agentform">
-    <label for="agName">On-air name</label><input id="agName" value="${esc(s.name||"")}" maxlength="24" placeholder="Echo">
+    <label for="agName">On-air name</label><span><input id="agName" value="${esc(s.name||"")}" maxlength="24" placeholder="${esc(AG.default_name||"Sidekick")}"><br><span class="muted">Your choice; it is said right after the call (“${esc(AG.call||"N0CALL")} ${esc(agName())}”), so a phonetic-alphabet word (Echo, Victor…), a number or a procedure word (Portable, Mobile, Break, Over) is refused: listeners would hear it as part of the call.</span></span>
     <label for="agOp">Your first name</label><input id="agOp" value="${esc(s.operator||"")}" maxlength="24" placeholder="(said as control operator)">
     <label for="agCheck">Your check-in line</label><input id="agCheck" value="${esc(s.checkin||"")}" maxlength="120" placeholder="This is ${esc(AG.call||"N0CALL")}, …">
     <label for="agSta">This station is</label><input id="agSta" value="${esc(s.station||"")}" maxlength="120" placeholder="a fixed home station on land (not mobile, not maritime), no traffic">
     <label for="agClass">License class</label><select id="agClass">${opt("","(not set: privileges not checked)",!s.license_class)}${(AG.classes||[]).map(c=>opt(c,c[0].toUpperCase()+c.slice(1),s.license_class===c)).join("")}</select>
     <label for="agModel">Model</label><select id="agModel">${(AG.models||[]).map(m=>opt(m.id,m.label+(m.ready?"":" (no key)"),s.model===m.id)).join("")}</select>
+    <label for="agDeep">Thinking model</label><select id="agDeep">${(AG.models||[]).map(m=>opt(m.id,m.label+(m.ready?"":" (no key)"),(s.deep_model||"grok-4.5")===m.id)).join("")}</select>
     <span>Compare with</span><span class="cmp">${(AG.models||[]).filter(m=>m.id!==s.model).map(m=>`<label><input type="checkbox" data-agcmp="${esc(m.id)}"${(s.compare||[]).includes(m.id)?" checked":""}${m.ready?"":" disabled"}> ${esc(m.label)}${m.ready?"":" (no key)"}</label>`).join("")}</span>
   </div><button type="button" id="agSave">Save agent settings</button> <span class="muted">Spoken ID: ${esc(AG.call||"")} (${esc(AG.phonetic||"")})</span>`;
-  $("agSave").onclick=()=>agPost("/api/agent/settings",{enabled:$("agOn").checked,name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,license_class:$("agClass").value,model:$("agModel").value,
+  $("agSave").onclick=()=>agPost("/api/agent/settings",{enabled:$("agOn").checked,name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,license_class:$("agClass").value,model:$("agModel").value,deep_model:$("agDeep").value,
     compare:[...box.querySelectorAll("[data-agcmp]:checked")].map(x=>x.dataset.agcmp)})}
 async function renderKeys(msg){
   const box=$("keySet");let d;try{d=await api("/api/secrets")}catch(e){box.textContent=e.message;return}

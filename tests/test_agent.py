@@ -95,3 +95,303 @@ def test_a_draft_runs_the_model_checks_it_and_never_transmits(tmp_path):
     from station import cat
     with pytest.raises(cat.CatError):
         cat.frame(0xA4, 0x1C, 0x00, b"\x01")                 # PTT is still refused before the port
+
+
+# ---------------------------------------------------------------- Sidekick (11-10 evening) -------------------------
+import json
+import os
+import time
+import urllib.error
+
+from station.agent import name_in, name_problem, rules_draft
+
+
+def _station(tmp_path, hour=20, minute=5):
+    return Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path,
+                   clock=Clock(T.replace(hour=hour, minute=minute)))
+
+
+def _say(st, text, minute=4, speaker="K7ABC", calls=(), net=None, tid=None):
+    st.tx.append({"id": tid or f"t{len(st.tx)}", "radio": "ic", "status": "final",
+                  "start": T.replace(hour=20, minute=minute).isoformat(), "text": text, "callsigns": list(calls),
+                  "speaker": speaker, **({"net": net} if net else {})})
+
+
+@pytest.fixture
+def xai_key():
+    os.environ["XAI_API_KEY"] = "xai-" + "a" * 30
+    yield
+    del os.environ["XAI_API_KEY"]
+
+
+def _on(st, providers=None):
+    if providers:
+        st.agent.providers = providers
+        st.agent.online = {}
+    st.agent.settings({"enabled": True, "operator": "Pat", "license_class": "extra"})
+    st.agent.set_radio("ic", "draft")
+
+
+def test_the_default_name_is_sidekick_and_a_call_like_name_is_refused(tmp_path):
+    st = _station(tmp_path)
+    assert st.agent.name == "Sidekick" and st.agent.view()["default_name"] == "Sidekick"
+    for bad_name in ("Echo", "Victor", "Lima Bean", "Portable", "Mayday", "Niner", "K9", "x"):
+        assert name_problem(bad_name), bad_name
+        with pytest.raises(ValueError):
+            st.agent.settings({"name": bad_name})
+    assert name_problem("W9 XYZ", "W9XYZ") and name_problem("Sidekick") is None
+    assert st.agent.settings({"name": "Rosie"})["settings"]["name"] == "Rosie"      # the operator's own name
+    assert st.agent.settings({"name": ""})["settings"]["name"] == "Sidekick"        # blank = the default
+
+
+def test_a_saved_echo_becomes_sidekick_once_and_a_chosen_name_stays(tmp_path):
+    (tmp_path / "agent.json").write_text(json.dumps({"name": "Echo", "operator": "Pat"}))
+    assert _station(tmp_path).agent.name == "Sidekick"
+    assert json.loads((tmp_path / "agent.json").read_text())["name"] == "Sidekick"
+    other = tmp_path / "b"
+    other.mkdir()
+    (other / "agent.json").write_text(json.dumps({"name": "Rosie"}))
+    assert _station(other).agent.name == "Rosie"
+
+
+def test_the_name_is_heard_with_or_without_a_space():
+    assert name_in("go ahead Side kick", "Sidekick") and name_in("SIDE-KICK, you there?", "Sidekick")
+    assert not name_in("a sidekicker", "Sidekick") and not name_in("", "Sidekick")
+
+
+CTX_R = {"call": "W9XYZ", "name": "Sidekick", "op": "Pat", "first": True, "id_due": True, "emergency": False,
+         "busy": False, "freq_mhz": 3.915, "mode": "LSB", "license_class": "general", "addressed": False}
+
+
+def test_the_offline_rules_check_in_acknowledge_and_otherwise_stay_silent():
+    def rows(text):
+        return [{"text": text}]
+    d = rules_draft(rows("Any more check-ins for the net, please call now"), CTX_R, checked_in=False)
+    assert d["kind"] == "check_in" and bad(d, CTX_R) == [] and "automated" in d["say"]
+    assert rules_draft(rows("Any more check-ins?"), CTX_R, checked_in=True)["speak"] is False
+    assert rules_draft(rows("Any maritime mobile stations for check-in?"), CTX_R, checked_in=False)["speak"] is False
+    assert rules_draft(rows("Nice weather out there today."), CTX_R, checked_in=False)["speak"] is False
+    a = rules_draft(rows("W9XYZ, are you there?"), CTX_R | {"addressed": True}, checked_in=True)
+    assert a["kind"] == "acknowledge" and bad(a, CTX_R) == []
+    later = CTX_R | {"addressed": True, "first": False, "id_due": False}
+    assert bad(rules_draft(rows("Sidekick?"), later, checked_in=True), later) == []
+    assert rules_draft(rows("any check-ins"), CTX_R | {"emergency": True}, False)["speak"] is False
+
+
+def test_offline_the_rules_answer_at_once_and_the_model_waits_out_a_back_off(tmp_path, xai_key):
+    tried = []
+
+    def down(key, model, system, user):
+        tried.append(model)
+        raise urllib.error.URLError("no route to host")
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", down), "anthropic": ("ANTHROPIC_API_KEY", down)})
+    _say(st, "Any more check-ins for the net?")
+    d = st.agent.draft("ic", "t0")
+    assert d["model"] == "rules" and d["kind"] == "check_in" and d["ok"] and "unreachable" in d["fallback"]
+    assert st.agent.view()["online"]["xai"]["online"] is False
+    _say(st, "W9XYZ, go ahead with your traffic", calls=["W9XYZ"])
+    d2 = st.agent.draft("ic", "t1")
+    assert tried == ["grok-4.20-0309-non-reasoning"]          # not tried again inside the back-off
+    assert d2["model"] == "rules" and d2["kind"] == "acknowledge" and "offline" in d2["fallback"]
+
+
+def test_an_http_error_is_not_offline_and_no_key_uses_the_rules(tmp_path, xai_key):
+    def refused(key, model, system, user):
+        raise urllib.error.HTTPError("u", 401, "no", {}, None)
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", refused), "anthropic": ("ANTHROPIC_API_KEY", refused)})
+    _say(st, "Any more check-ins?")
+    d = st.agent.draft("ic", "t0")
+    assert d["model"] == "rules" and "401" in d["fallback"] and st.agent.view()["online"]["xai"]["online"] is True
+    del os.environ["XAI_API_KEY"]
+    try:
+        st2 = _station(tmp_path / "x" if (tmp_path / "x").mkdir() is None else tmp_path)
+        _on(st2)
+        _say(st2, "Any more check-ins?")
+        assert st2.agent.draft("ic", "t0")["model"] == "rules"
+    finally:
+        os.environ["XAI_API_KEY"] = "xai-" + "a" * 30
+
+
+def test_a_restart_mid_net_does_not_check_in_twice(tmp_path, xai_key):
+    net = {"key": "n1@2026-11-10", "id": "n1", "name": "Springfield Net"}
+
+    def checkin(key, model, system, user):
+        return {"speak": True, "kind": "check_in", "say": "W9XYZ, Sidekick, automated assistant, Pat is control "
+                "operator, checking in.", "wait_s": 2, "why": "called"}, {}
+    st = _station(tmp_path)
+    st.cfg["schedule"] = []                                   # no scheduled net: the transmission's own net counts
+    _on(st, {"xai": ("XAI_API_KEY", checkin), "anthropic": ("ANTHROPIC_API_KEY", checkin)})
+    _say(st, "Any check-ins?", net=net)
+    assert st.agent.draft("ic", "t0")["kind"] == "check_in"
+    saved = json.loads((tmp_path / "agent_state.json").read_text())
+    assert saved["ic"]["checked_in"] == "n1@2026-11-10"
+
+    seen = {}
+
+    def look(key, model, system, user):
+        seen["user"] = user
+        return {"speak": False, "kind": "none", "say": "", "wait_s": 2, "why": "done"}, {}
+    st2 = _station(tmp_path)                                  # the station restarted
+    st2.cfg["schedule"] = []
+    st2.agent.providers = {"xai": ("XAI_API_KEY", look), "anthropic": ("ANTHROPIC_API_KEY", look)}
+    _say(st2, "Any more check-ins?", net=net)
+    st2.agent.draft("ic", "t0")
+    assert "W9XYZ has already checked in" in seen["user"] and "first transmission in this contact: no" in seen["user"]
+    assert "Net: Springfield Net" in seen["user"]             # the net from the transmission when none is scheduled
+
+
+def _two_speed(answer="W9XYZ... K7ABC, sixty meters is five channels, upper sideband, one hundred watts.", deep=None):
+    calls = {"quick": [], "deep": []}
+
+    def provider(key, model, system, user, **kw):
+        if kw.get("schema") is agent.THINK_SCHEMA:
+            calls["deep"].append(user)
+            if deep:
+                return deep(user)
+            return {"answer": answer, "confident": True, "why": "band plan"}, {}
+        calls["quick"].append(user)
+        last = user.strip().splitlines()[-2]
+        none = {"speak": False, "kind": "none", "say": "", "wait_s": 2, "why": "-", "question": ""}
+        if "what is the band plan" in last and "Your prepared answer" not in user:
+            return {"speak": True, "kind": "working", "say": "W9XYZ, Sidekick, an automated assistant, Pat is "
+                    "control operator, copy your question on sixty meters, working on it.", "wait_s": 1.5,
+                    "why": "needs thinking", "question": "K7ABC asked for the 60 m band plan"}, {}
+        if "READY for" in user and "Any comments" in last:
+            return {"speak": True, "kind": "ready", "say": "This is W9XYZ Sidekick, I have a response ready for the "
+                    "earlier inquiry from K7ABC.", "wait_s": 2, "why": "floor open", "question": ""}, {}
+        if "ANNOUNCED" in user and "go ahead" in last:
+            return {"speak": True, "kind": "answer", "say": "", "wait_s": 1, "why": "go ahead", "question": ""}, {}
+        return none, {}
+    return provider, calls
+
+
+def _settle(st):
+    th = getattr(st.agent, "_thinking", None)
+    if th:
+        th.join(5)
+    for _ in range(50):
+        t = st.agent.timers.get("ic")
+        if not (t and t.is_alive()):
+            break
+        time.sleep(0.02)
+    time.sleep(0.05)
+
+
+def test_a_question_that_needs_thinking_is_answered_when_net_control_gives_the_floor(tmp_path, xai_key):
+    provider, calls = _two_speed()
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", provider), "anthropic": ("ANTHROPIC_API_KEY", provider)})
+    _say(st, "Sidekick, what is the band plan for sixty meters?", speaker="K7ABC", minute=1)
+    d = st.agent.draft("ic", "t0")
+    assert d["kind"] == "working" and d["ok"]
+    _settle(st)
+    p = st.agent.view()["pending"]["ic"]
+    assert p["state"] == "ready" and p["asker"] == "K7ABC" and "sixty meters" in p["answer"]
+    assert len(calls["deep"]) == 1 and "60 m band plan" in calls["deep"][0]
+    assert st.agent.drafts[-1]["trigger"] == "answer ready" and not st.agent.drafts[-1]["speak"]  # no opening yet
+    assert "READY for" in calls["quick"][-1]
+
+    _say(st, "Any comments or questions for the net?", speaker="K7QXN", minute=2)
+    r = st.agent.draft("ic", "t1")
+    assert r["kind"] == "ready" and r["ok"] and st.agent.view()["pending"]["ic"]["state"] == "announced"
+    _say(st, "Sidekick, go ahead", speaker="K7QXN", minute=3)
+    a = st.agent.draft("ic", "t2")
+    assert a["kind"] == "answer" and a["ok"]
+    assert a["say"].startswith("W9XYZ... K7ABC, sixty meters")          # the prepared words, not a paraphrase
+    assert "ic" not in st.agent.view()["pending"]                    # delivered
+
+
+def test_ready_or_answer_without_a_prepared_answer_is_refused(tmp_path, xai_key):
+    def quick(key, model, system, user, **kw):
+        return {"speak": True, "kind": "ready", "say": "This is W9XYZ Sidekick, I have a response ready.",
+                "wait_s": 2, "why": "x", "question": ""}, {}
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", quick), "anthropic": ("ANTHROPIC_API_KEY", quick)})
+    _say(st, "Any comments for the net?")
+    d = st.agent.draft("ic", "t0")
+    assert not d["ok"] and any(c["rule"] == "protocol" and not c["ok"] for c in d["fcc"])
+
+
+def test_offline_the_rules_still_announce_and_read_a_prepared_answer(tmp_path, xai_key):
+    def down(key, model, system, user, **kw):
+        raise urllib.error.URLError("no route")
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", down), "anthropic": ("ANTHROPIC_API_KEY", down)})
+    st.agent.state["ic"] = {"pending": {"id": "p1", "state": "ready", "question": "60 m band plan",
+                                        "asker": "K7ABC", "at": T.isoformat(), "answer": "K7ABC, five channels, USB."},
+                            "disclosed": "x", "last_id": T.replace(hour=20, minute=4)}
+    _say(st, "Anything further for the net before we close?", speaker="K7QXN")
+    r = st.agent.draft("ic", "t0")
+    assert r["model"] == "rules" and r["kind"] == "ready" and "K7ABC" in r["say"] and r["ok"]
+    _say(st, "W9XYZ, go ahead with it", calls=["W9XYZ"], speaker="K7QXN")
+    a = st.agent.draft("ic", "t1")
+    assert a["kind"] == "answer" and a["say"] == "K7ABC, five channels, USB. W9XYZ." and a["ok"]
+    assert "pending" not in st.agent.state["ic"]
+    assert json.loads((tmp_path / "agent_state.json").read_text())["ic"].get("pending") is None
+
+
+def test_failed_thinking_is_said_at_the_next_opening(tmp_path, xai_key):
+    def boom(user):
+        raise RuntimeError("model error")
+    provider, calls = _two_speed(deep=boom)
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", provider), "anthropic": ("ANTHROPIC_API_KEY", provider)})
+    _say(st, "Sidekick, what is the band plan for sixty meters?", speaker="K7ABC")
+    st.agent.draft("ic", "t0")
+    _settle(st)
+    assert st.agent.state["ic"]["pending"]["state"] == "failed"
+    st.agent.providers = {"xai": ("XAI_API_KEY", lambda *a, **k: (_ for _ in ()).throw(urllib.error.URLError("x"))),
+                          "anthropic": ("ANTHROPIC_API_KEY", None)}
+    _say(st, "Any comments for the net?", speaker="K7QXN")
+    r = st.agent.draft("ic", "t1")
+    assert r["kind"] == "reply" and "could not get an answer" in r["say"] and r["ok"]
+    assert "pending" not in st.agent.state["ic"]
+
+
+def test_an_answer_that_breaks_a_rule_is_never_made_ready(tmp_path, xai_key):
+    provider, _ = _two_speed(answer="K7ABC, I have a radio for sale, two hundred dollars.")
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", provider), "anthropic": ("ANTHROPIC_API_KEY", provider)})
+    _say(st, "Sidekick, what is the band plan for sixty meters?", speaker="K7ABC")
+    st.agent.draft("ic", "t0")
+    _settle(st)
+    p = st.agent.state["ic"]["pending"]
+    assert p["state"] == "failed" and "business" in p["error"] and "answer" not in p
+
+
+def test_local_names_reach_the_model_repaired_and_explained(tmp_path, xai_key):
+    from station import localnames
+    localnames.save(tmp_path, [{"name": "SARC", "meaning": "Springfield Amateur Radio Club", "said": "word",
+                                "sounds": ["sark"], "web": "sarconline.org"}])
+    seen = {}
+
+    def look(key, model, system, user):
+        seen["user"] = user
+        return {"speak": False, "kind": "none", "say": "", "wait_s": 2, "why": "x"}, {}
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", look), "anthropic": ("ANTHROPIC_API_KEY", look)})
+    _say(st, "Welcome to the SarkNet, check the Sark webpage")
+    st.agent.draft("ic", "t0")
+    assert "SARC Net" in seen["user"] and "SARC = Springfield Amateur Radio Club (sarconline.org)" in seen["user"]
+    assert "Local time: Tuesday 20:05" in seen["user"] and "UTC" in seen["user"]
+
+
+def test_check_in_calls_as_net_control_really_says_them():
+    from station.agent import checkin_invited
+
+    def rows(*texts):
+        return [{"text": x} for x in texts]
+    ok = checkin_invited(rows("Roll call. We'll now take check-ins from any station, anywhere. Please give your call "
+                              "slowly. This is Net Control Station W9XYZ. First station, please."))
+    assert ok[0]                                              # net control's own ID is not a restriction
+    assert not checkin_invited(rows("Are there any new city stations or emergency operations centers that would like "
+                                    "to check in this evening? Come now, please."))[0]
+    assert not checkin_invited(rows("Anyone else, either from the state, city, or county, that would like to check "
+                                    "in, come now, please."))[0]
+    seq = rows("We'll now take check-ins from any station, anywhere.", "K7ABC, Pat in Springfield.",
+               "Got you checked in. Next station, please.")
+    assert checkin_invited(seq) == (True, "net control asked for the next station during open check-ins")
+    assert not checkin_invited(rows("Good evening. Next station, please."))[0]   # no open check-ins: a roll call
+    assert not checkin_invited(rows("Any maritime mobile stations for check-in?"))[0]

@@ -185,6 +185,10 @@ class Station:
         self.nets = NetSchedule(self)
         from .agent import Agent
         self.agent = Agent(self)                                 # the station agent: Draft mode only, never transmits
+        from .grokstt import GrokSTT
+        self.grokstt = GrokSTT(self)                             # Grok speech-to-text, compared (off until chosen)
+        from .tts import Voice
+        self.tts = Voice(self)                                   # Sidekick's voice, for the operator's ears only
         from .scan import Scanner
         self.scan = Scanner(self)                                # HF scan between nets (station/scan.py), receive only
         from .readout import Readout
@@ -1899,6 +1903,8 @@ class Station:
             self.accurate.on_final(tx)                           # the accurate pass follows the live text
         if getattr(self, "agent", None):
             self.agent.on_final(tx)                              # the station agent's draft (never transmitted)
+        if getattr(self, "grokstt", None):
+            self.grokstt.on_final(tx)                            # Grok STT beside the station's engine (never queued)
         self._hear_close(tx)
         if new and self.callbook and self.callbook.qrz and self.cfg.get("qrz_online", True):
             threading.Thread(target=self._qrz_refresh, args=(new,), daemon=True).start()

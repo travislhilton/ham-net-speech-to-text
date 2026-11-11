@@ -105,6 +105,25 @@ def make_handler(station):
                 return self._json(station.readout.view())
             if u.path == "/api/scan":                            # HF scan: each radio's mode + antenna, remembered spots
                 return self._json(station.scan.view())
+            if u.path == "/api/tts":                             # Sidekick's voice: the list, the choice, auditions
+                return self._json(station.tts.view())
+            tt = re.fullmatch(r"/api/tts/(audition|draft)/([\w-]+)\.mp3", u.path)   # played in the browser only
+            if tt:
+                try:
+                    audio = (station.tts.audition if tt.group(1) == "audition" else station.tts.draft)(tt.group(2))
+                except LookupError as e:                         # offline / no key: nothing waits
+                    return self._json({"error": str(e)}, 503)
+                except ValueError as e:
+                    return self._json({"error": str(e)}, 400)
+                return self._send(200, audio, "audio/mpeg")
+            if u.path == "/api/grokstt":                         # Grok speech-to-text (compared): settings + today
+                return self._json(station.grokstt.view())
+            if u.path == "/api/grokstt/compare":                 # Grok vs the station's own text, one day
+                q = {k: v[0] for k, v in parse_qs(u.query).items()}
+                day = q.get("day") or None
+                if day and not re.fullmatch(r"\d{8}", day):
+                    return self._json({"error": "day: YYYYMMDD"}, 400)
+                return self._json(station.grokstt.compare(day, radio=q.get("radio") or None))
             if u.path == "/api/agent":                           # the station agent: settings + drafts
                 return self._json(station.agent.view())
             if u.path == "/api/secrets":                         # Settings: which keys are set (never the keys)
@@ -187,8 +206,9 @@ def make_handler(station):
             agent = re.fullmatch(r"/api/agent/(settings|radio|ask|rate)(/[\w-]+)?", u.path)               # station agent
             scan = re.fullmatch(r"/api/scan/[\w-]+(/antenna)?", u.path)                                   # HF scan
             rdo = re.fullmatch(r"/api/readout/(fetch|load|approve|read|url)", u.path)                      # read-out
+            grk = re.fullmatch(r"/api/grokstt/(settings|run)", u.path)                                     # Grok STT
             # JSON only: a plain cross-site form cannot send it, so another web page cannot act for us
-            if not (m or sched or who or fix or alert or item or close or sec or agent or scan or rdo or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
+            if not (m or sched or who or fix or alert or item or close or sec or agent or scan or rdo or grk or u.path in routes) or not self.headers.get("Content-Type", "").startswith("application/json"):
                 self.close_connection = True                   # its body is unread: never reuse the connection
                 return self._json({"error": "not found"}, 404)
             try:
@@ -196,6 +216,10 @@ def make_handler(station):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if agent:
                     return self._json(station.agent.post(u.path, body))
+                if grk:
+                    if grk.group(1) == "settings":
+                        return self._json(station.grokstt.settings(body))
+                    return self._json(station.grokstt.run_past(body.get("ids") or []))
                 if scan:
                     return self._json(station.scan.post(u.path, body))
                 if rdo:

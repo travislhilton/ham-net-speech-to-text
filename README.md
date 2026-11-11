@@ -78,7 +78,7 @@ final text at 0.07x real time anyway. Set once on the laptop itself:
 Everything personal is kept in files the repository never contains (they are git-ignored and the installer
 never overwrites them): your callsign, name and grid and the radios in `config\station.yaml`; your area, repeaters
 and roster in `config\local.yaml`; the accurate-pass server's address in `station.yaml` (`accurate: urls:`) and its
-key in `config\secrets.env`; your own **xAI API key** for the station agent (optional: **Settings → Station agent**,
+key in `config\secrets.env`; your own **xAI API key** for Sidekick, its voice and Grok speech-to-text (optional: **Settings → Station agent**,
 paste it and **Save key**; **Test** asks xAI whether it works; the page only ever shows "set …abcd"; it is kept in
 `config\secrets.env` as `XAI_API_KEY=…`, readable only by the station's user, SYSTEM and Administrators — create one at
 console.x.ai → API Keys after adding a little credit under Billing; optionally an **Anthropic API key** the same way,
@@ -327,22 +327,61 @@ you chose is remembered. Each column shows:
   quiet). Frequencies with conversations are **remembered** (hours, days, count, calls heard; Pin or Hide them) in
   `data\scan_spots.json`. Turning the dial yourself pauses the scan for 30 minutes; when it stops, the radio goes
   back to where it was. Receive only: the only CAT commands are frequency, mode and the S-meter read.
-- **Station agent (Draft mode)**: an optional AI operator's assistant with an on-air name of your choosing (default
-  "Echo"). **Off by default**: the operator turns it on in **Settings → Station agent → Enable the station agent**;
-  then each radio's card has an Off / Draft switch, also Off until chosen. Switch it to **Draft** on a radio's card: after each transmission (once the frequency has been quiet 1.2 s)
-  it decides whether your station should speak and drafts exactly what it would say and how long it would wait,
-  shown at the top of that radio's column; **What would you say now?** asks on demand, 👍/👎 rates a draft. **It
-  never transmits**: there is no transmit mode, and the CAT code still refuses PTT. Every draft is checked in code
-  against FCC Part 97 (the model cannot talk its way past them): your call at the end of each exchange and every
-  10 minutes, spoken in English or phonetics, never an SSID (97.119); on its first transmission in a contact it says
-  it is an automated assistant and names you as control operator, and it never claims to be a person (97.113(a)(4));
-  no music, indecent language or codes (97.113(a)(4)); no business (97.113(a)(2),(3)); no relayed messages
-  (97.115); silent during emergency or priority traffic unless net control calls it, and while anyone transmits
-  (97.101); under about 30 seconds; inside your license class's phone privileges (97.301/97.305). A draft that fails
-  any check is shown struck through, **Would not send**, with the rule. Settings → Station agent holds the name, your
-  first name, your check-in line, license class, model (Grok 4.20 fast by default: measured 0.55 s, against 3–11 s for
-  the reasoning models) and up to two models to compare on the same traffic. Drafts are kept in
-  `data\agent_drafts.jsonl` (never committed), up to 240 model calls an hour.
+- **Sidekick, the station agent (Draft mode)**: an optional AI operator's assistant. Its on-air name is yours to
+  choose (**Settings → Station agent → On-air name**, default **Sidekick**); a name that is a phonetic-alphabet word
+  (Echo, Victor…), a number or a procedure word (Portable, Mobile, Break, Over) is refused, because it is said right
+  after the call and listeners would hear it as part of the call. **Off by default**: the operator turns it on in
+  **Settings → Station agent → Enable the station agent**; then each radio's card has an Off / Draft switch, also Off
+  until chosen. Switch it to **Draft** on a radio's card: after each transmission (once the frequency has been quiet
+  1.2 s) it decides whether your station should speak and drafts exactly what it would say and how long it would
+  wait, shown at the top of that radio's column; **What would you say now?** asks on demand, 👍/👎 rates a draft,
+  **▶ Hear it** plays the draft in Sidekick's voice in your browser. **It never transmits**: there is no transmit
+  mode, and the CAT code still refuses PTT.
+  - **Two speeds.** The **model** (Grok 4.20 fast by default: measured 0.55 s) decides every turn: check-ins,
+    acknowledgements, short answers. A question that needs thinking gets a short "copy your question, working on
+    it, I'll report back" and goes to the **thinking model** (Grok 4.5 by default) while the net carries on. When the
+    answer is ready Sidekick waits for its place: when net control next asks for comments, questions or further
+    business it says "This is W9XYZ Sidekick, I have a response ready for the earlier inquiry from K7ABC"; told to go
+    ahead, it reads the prepared answer word for word (the code puts the prepared words in; at most 70 words, checked
+    against the FCC rules before it is ever offered). Outside a net it offers the answer once the frequency is open
+    after the station that asked. One prepared answer at a time; if the thinking fails it says so at the next opening
+    and that you will follow up. The card shows the answer's state (working, ready, announced, failed).
+  - **Offline it keeps working, nothing waits.** When the model cannot be reached (no internet, a timeout of 8 s)
+    fixed rules write the draft at once: check in when net control opens check-ins to a station like yours (also at
+    "next station, please" during open check-ins; not when the call is for maritime, mobile, city or county stations,
+    EOCs or members), acknowledge when called by call or name ("your control operator will answer"), and announce
+    and read an answer already prepared. The model is not tried again for 30 s to 5 minutes. Past 240 model calls an
+    hour the rules draft too.
+  - It remembers per radio, across a restart (`data\agent_state.json`), when it last identified, whether it has
+    disclosed itself and checked in to the current net, and a prepared answer, so a restart mid-net never checks in
+    twice. Local names (Settings → Local names) reach it repaired and explained, with the local and UTC time.
+  - Every draft is checked in code against FCC Part 97 (the model cannot talk its way past them): your call at the
+    end of each exchange and every 10 minutes, spoken in English or phonetics, never an SSID (97.119); on its first
+    transmission in a contact it says it is an automated assistant and names you as control operator, and it never
+    claims to be a person (97.113(a)(4)); no music, indecent language or codes (97.113(a)(4)); no business
+    (97.113(a)(2),(3)); no relayed messages (97.115); silent during emergency or priority traffic unless net control
+    calls it, and while anyone transmits (97.101); under about 30 seconds; inside your license class's phone
+    privileges (97.301/97.305); and the answer steps (no "response ready" without one, the prepared words only). A
+    draft that fails any check is shown struck through, **Would not send**, with the rule. Settings → Station agent
+    holds the name, your first name, your check-in line, license class, the model, the thinking model and up to two
+    models to compare on the same traffic. Drafts are kept in `data\agent_drafts.jsonl` (never committed).
+  - **Replay a real net**: `python -m tools.sidekick_replay 20261110 --radio net --from 19:30 --to 20:30` (on the
+    station; `--model rules` = the offline rules only; `--deep` also runs the thinking model) prints every draft it
+    would have sent after the transmission it followed, every draft the checks stopped, and the model's latency.
+- **Sidekick's voice** (Settings → Sidekick's voice): xAI text-to-speech, **heard only in your browser, never on a
+  radio** — ▶ on each of xAI's voices plays the same audition (a check-in, "working on it", "I have a response ready",
+  the answer); choose one and a speed (0.7–1.5), saved in the station's settings; **▶ Hear it** on a draft uses it.
+  Your call is spoken letter by letter. Each clip is made once (xAI bills by characters) and kept in `data\tts\`;
+  offline only the clips already made play.
+- **Grok speech-to-text, compared** (Settings → Grok speech-to-text, off by default): on the radios you tick, each
+  transmission's recording is also sent to xAI's speech-to-text as it is heard (your xAI key; hinted with your call,
+  your local names and the net's name), and kept beside the station's own text (`data\grok_stt\<day>.jsonl`). The
+  station's engine stays the transcriber. **Never queued**: a transmission heard while xAI is unreachable, while two
+  requests are out, past the day's minutes (default 60) or longer than 2 minutes is skipped and counted. **Compare
+  today** shows word errors and calls found for each engine against your corrections (human) and the accurate pass
+  (large-v3), and each transmission side by side. A past net: `python -m tools.grok_compare 20261110 --radio net
+  --from 21:00 --to 22:00 --limit 60`. The recordings leave the PC; xAI had not published a per-minute price
+  (2026-11-10), so the minutes cap bounds the spend.
 - **Quiet HF nets**: on a radio the station tunes (CAT), when an HF or 6 m net has been silent for 3 minutes (nothing
   heard in the last 3, also after a net ends early) and another net is scheduled at the same time — a net that lost
   a clash included — the station switches to that one (it goes back only if everything else
@@ -545,6 +584,9 @@ The station can read an EOC's situation report on a voice net — from the compa
 | Recording per transmission (carrier gate for FM data jacks; voice gate otherwise) | working, tested on the FTM-150R |
 | Weak-signal repetition guard (Whisper loops) | working |
 | Repeaters / carrier that stays up between speakers: split at speech pauses (>= 0.8 s) and carrier dips, cut in the middle of the pause, a fragment ("Over.", the end of a call sign) kept with its neighbour, a voiceless repeater tail never its own transmission | working (`split_pause_ms`, `dip_split_ms`, carrier-gate radios; see "Segmenting"); 2026-11-03 FM net replayed: 140 → 105 transmissions, blank ones 31 → 3, words lost in dropped pieces 79 → 0 |
+| **Sidekick** (the station agent, Draft mode): operator-named (call-like names refused), two speeds (quick model per turn; a thinking model for a question, announced "response ready" when net control gives the floor, read word for word when told to go ahead), offline rules (check-in, acknowledge, announce/read a prepared answer), memory across a restart, local names in its context, FCC Part 97 checks in code | built + unit-tested 2026-11-10; offline rules replayed on a real 280-transmission FM net (one check-in, at "next station, please" in open check-ins; silent for city/EOC/county calls); the models on real nets: see the replay |
+| Sidekick's voice: xAI TTS audition of every voice, chosen in Settings, ▶ Hear it on drafts (browser only, never a radio) | built + unit-tested 2026-11-10 |
+| Grok speech-to-text compared live on chosen radios (never queued; skipped offline/busy/over the minutes), Compare today, `tools/grok_compare.py` | built + unit-tested 2026-11-10 |
 | Voice gate on squelched FM: the pre-roll reaches back to where the squelch opened (up to 2.5 s; the 11-10 roll call lost the first letters of 60% of its calls to a late VAD) | built + unit-tested (`squelch_db`), 2026-11-10; measured on the next squelched-FM net |
 | Far call one rhyming letter from a licence within 50 km: not counted, the near ones offered (never moved); a net's own **Reach (km)**; PO-box ZIPs placed by region (far only); a net edit keeps its repeater offset/tone | working (`station/consensus.py`, `hamkit/zipgeo.py`), 2026-11-10 |
 | HF / voice gate: 600 ms pre-roll; a short piece waits 0.6 s after the hangover for its continuation (a call sign spelled with gaps, a kerchunk before the words) | built + unit-tested (`merge_gap_ms`, `merge_max_s`, `preroll_ms`); not yet measured on a live HF net |
