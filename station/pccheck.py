@@ -185,8 +185,10 @@ def measure(data: Path, models: Path, out: Path, py: str = sys.executable, run=s
             f"{held if held is not None else '?'}% with the screen held on")
         if held is not None and held < FULL_SPEED_PCT:
             say("  !! the processor is held back: the results below may be too slow (see 'This PC' at the end)")
+        import os
+        env = dict(os.environ, HAMNET_PLAN_HELD="1")      # the benchmarks leave the plan to us (tools/pick_*.py)
         for tool in ("pick_engine.py", "pick_accurate.py"):
-            run([py, str(ROOT / "tools" / tool), "--models", str(models), "--out", str(out)], check=False)
+            run([py, str(ROOT / "tools" / tool), "--models", str(models), "--out", str(out)], check=False, env=env)
         after = pct(1)
     finally:
         keeper.set(False)

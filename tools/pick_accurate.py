@@ -147,7 +147,10 @@ def main():
     live = (choice.get("final") or {}).get("device")
     rows = []
     from station.awake import KeepAwake              # measure at full speed: laptops crawl with the screen dark
-    awake = KeepAwake("HamNet accurate-pass benchmark", snapshot=ROOT / "data" / "power_snapshot_bench.json")
+    # Under station.pccheck measure (HAMNET_PLAN_HELD=1) the power plan is already held and saved: only the screen
+    # request here, or this would see the HamNet plan with nothing saved and put Balanced back mid-measurement.
+    awake = KeepAwake("HamNet accurate-pass benchmark", snapshot=None if os.environ.get("HAMNET_PLAN_HELD") else
+                      ROOT / "data" / "power_snapshot_bench.json")
     awake.set(True)
     try:
         for c in candidates(models, a.devices.split(",") if a.devices else None):

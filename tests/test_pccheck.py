@@ -36,13 +36,17 @@ class Hold:
 
 def test_measure_holds_full_speed_waits_for_it_and_always_lets_go(tmp_path):
     speeds = iter([25, 30, 90, 150])
-    ran, hold = [], Hold()
+    ran, hold, envs = [], Hold(), []
+
+    def fake(a, check=False, env=None):
+        ran.append(a[1]); envs.append(env["HAMNET_PLAN_HELD"])
     out = tmp_path / "engine.yaml"
     out.write_text("final: {device: GPU, model: m, rtf: 0.03}\naccurate: {mode: final_only, rtf: 0.3}\n")
-    r = pccheck.measure(tmp_path, tmp_path, out, py="py", run=lambda a, check=False: ran.append(a[1]),
+    r = pccheck.measure(tmp_path, tmp_path, out, py="py", run=fake,
                         hold=hold, pct=lambda *a: next(speeds), sleep=lambda s: None, say=lambda s: None)
     assert hold.calls == [True, False] and [p.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] for p in ran] == \
         ["pick_engine.py", "pick_accurate.py"]
+    assert envs == ["1", "1"]
     assert r["perf_before"] == 25 and r["perf_held"] == 90 and not r["slowed"] and r["final"]["rtf"] == 0.03
     assert pccheck.load(tmp_path)["measured"]["perf_held"] == 90
 
@@ -50,7 +54,7 @@ def test_measure_holds_full_speed_waits_for_it_and_always_lets_go(tmp_path):
 def test_a_measurement_that_stayed_slow_is_marked(tmp_path, monkeypatch):
     monkeypatch.setattr(pccheck, "WAIT_S", 0)
     hold = Hold()
-    r = pccheck.measure(tmp_path, tmp_path, tmp_path / "e.yaml", run=lambda a, check=False: None, hold=hold,
+    r = pccheck.measure(tmp_path, tmp_path, tmp_path / "e.yaml", run=lambda a, check=False, env=None: None, hold=hold,
                         pct=lambda *a: 25, sleep=lambda s: None, say=lambda s: None)
     assert r["slowed"] and hold.calls == [True, False]
 

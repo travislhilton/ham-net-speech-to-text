@@ -90,7 +90,10 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "config" / "engine.yaml")); a = ap.parse_args()
     audio = sf.read(CLIP, dtype="float32")[0]
     from station.awake import KeepAwake              # measure at full speed: laptops crawl with the screen dark
-    awake = KeepAwake("HamNet engine benchmark", snapshot=ROOT / "data" / "power_snapshot_bench.json")
+    # Under station.pccheck measure (HAMNET_PLAN_HELD=1) the power plan is already held and saved: only the screen
+    # request here, or this would see the HamNet plan with nothing saved and put Balanced back mid-measurement.
+    awake = KeepAwake("HamNet engine benchmark", snapshot=None if os.environ.get("HAMNET_PLAN_HELD") else
+                      ROOT / "data" / "power_snapshot_bench.json")
     awake.set(True)
     try:
         return _measure_all(a, audio)
