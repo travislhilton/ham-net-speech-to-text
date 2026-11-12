@@ -139,11 +139,14 @@ talking, then the text. The callsign at the start is **who is talking** (bold = 
 control; blank = not known: press **Who?**). Tap any callsign for its license card. **✎ Fix** corrects a line (the
 minutes, search and Winlink messages use your text). **Coach** (a tab on the radio's card) says what to do when
 someone asks for a relay or calls emergency traffic; a red **Urgent** box keeps anything urgent in view. **Stations
-heard** lists every call with name and town.
+heard** lists every call with name and town. The **Net board** tab on each radio shows who is in (numbered), who to ask again, who has traffic,
+regulars not heard yet, and when net control last said its call.
 
 **After the net.** When net control closes the net (or you press **End net**), the station re-reads the whole net
 for better text and drafts the **minutes** (attendance, announcements, action items, traffic). Then
-[After the net: Winlink messages](#after-the-net-winlink-messages).
+[After the net: Winlink messages](#after-the-net-winlink-messages). Open the **Net board** tab (or the minutes' Attendance) and **review the check-ins**: ▶ listen, ✓ right,
+✎ the right call, ✗ not in the net. About half the calls the station hears only once are mis-heard; your marks fix
+the minutes and the Winlink messages.
 
 **At night.** **☾ Night** (top right) turns the whole screen red on black to keep your night vision; press it again
 for normal colours. **Settings → Display** chooses Automatic / Light / Dark / Night and a 24-hour or 12-hour clock
@@ -381,6 +384,9 @@ server addresses, keys and logins go only in those files (`config/station.yaml`,
 | Sidekick's turn, from the 11-12 review of real nets: who net control called is read around the call ("Any station holding traffic, traffic only. Check in now.", maritime-only calls, "Before I start taking check-ins…", a bare "Please call now." whose start was lost); roll calls by place answered only for **your region** (Settings → Station agent); net control's "W9XYZ, thank you, you're in the log" = checked in, not a question; "break break" / emergency traffic silences it on every net; a net can be set to **never check in**. Replayed on 4 real net days: 11 wrong invitations stopped, none lost | built 2026-11-12 (`tests/test_sidekick_turns.py`) |
 | Sidekick's card: **YOUR TURN** chip (Check-ins open to you / CALLED / Checked in ✓ time / Listening: why), **I checked in myself**, **Mute for this net**, the last draft that would have spoken stays in view, silent drafts counted | built 2026-11-12 |
 | Sidekick with **no xAI key** or **no internet**: says on its card that it drafts with its offline rules (check in when invited, acknowledge a call; questions wait for the operator), never waits on the network, tries xAI again by itself; **▶ Hear it** uses this computer's own voice | built 2026-11-12, tested both ways |
+| **Net board** per radio (a tab above the log): who is in (numbered), **heard once** marked, **Ask again**, traffic, heard but not checked in, regulars not heard yet, net control's 10-minute ID timer; refreshed after each transmission | built 2026-11-12 (`History.board`, `tests/test_review_board.py`) |
+| **Review the check-ins** after a net (✓ / ✎ right call / ✗, ▶ where it was heard): fixes the attendance, the minutes, the ICS-309 and Winlink messages; calls heard once show as **(?)** until reviewed; each mark is logged to `data/review_log.jsonl` as the human truth for call accuracy | built 2026-11-12 |
+| Phones: the radio column scrolls as a whole when the notices and Sidekick's card are taller than the screen (the tabs under them were out of reach) | fixed 2026-11-12 |
 | Read-out end to end with the forms project's real EOC server (`tests/test_forms_e2e.py`, `EMCOMM_FORMS_REPO=…`); the two copies of the contract checked identical | tested 2026-11-12 against forms 2026-11-12.3 |
 
 ## License

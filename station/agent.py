@@ -595,7 +595,52 @@ class Agent:
         self.calls: deque = deque()                 # monotonic times of model calls (rate guard)
         self.timers: dict[str, threading.Timer] = {}
         self.online = {p: Online(p) for p in self.providers}
+        self._probe_stop = threading.Event()
         self.state: dict[str, dict] = self._load_state()   # radio -> {"last_id", "disclosed", "checked_in", "pending"}
+
+    # ----- is the model reachable? (Sidekick's card says so before a turn needs it) -----
+    PROBE_EVERY_S = 120
+
+    def probe(self) -> dict | None:
+        """One free request (the model list) when Sidekick is on, a key is set and a radio is in Draft; updates the
+        online state the card shows. Returns the new mode_now when it changed."""
+        if not self.cfg.get("enabled") or not any(self.mode(r) == "draft" for r in self.st.radios):
+            return None
+        prov = MODELS.get(self.cfg.get("model") or DEFAULT_MODEL, {}).get("provider", "xai")
+        keyname, _ = self.providers.get(prov, (None, None))
+        key = secrets.read(self.st.root, keyname) if keyname else None
+        if not key or prov != "xai":
+            return None
+        on = self.online.setdefault(prov, Online(prov))
+        if not on.should_try():
+            return None
+        before = on.online
+        try:
+            req = urllib.request.Request("https://api.x.ai/v1/models", headers={"Authorization": f"Bearer {key}"})
+            with urllib.request.urlopen(req, timeout=8):
+                pass
+            on.ok()
+        except Exception as e:  # noqa: BLE001
+            if is_network_error(e):
+                on.failed(e)
+            else:
+                on.ok()                                    # an answer (401...) is not offline
+        if on.online != before:
+            keys = {p: secrets.status(self.st.root, k)["set"] for p, (k, _) in self.providers.items()}
+            m = self._mode_now(keys)
+            self.st.bus.publish("agent", {"mode_now": m})
+            return m
+        return None
+
+    def start_probe(self):
+        def loop():
+            while not self._probe_stop.wait(5 if not any(o.online is not None for o in self.online.values())
+                                             else self.PROBE_EVERY_S):
+                try:
+                    self.probe()
+                except Exception as e:  # noqa: BLE001
+                    print(f"agent probe: {type(e).__name__}: {e}", flush=True)
+        threading.Thread(target=loop, daemon=True, name="agent-probe").start()
 
     # ----- memory across a restart -----
     def _load_state(self) -> dict:
@@ -729,6 +774,17 @@ class Agent:
         rid = tx.get("radio")
         if self.mode(rid) != "draft" or tx.get("noise") or not (tx.get("text") or "").strip():
             return
+        call = self.st.me or ""
+        if call and tx.get("speaker") == call and self._net(rid, self.st.clock()).get("name"):
+            st, contact = self.state.setdefault(rid, {}), self.contact_now(rid)   # the operator on the air himself
+            if st.get("checked_in") != contact:                                  # (11-10: heard on another receiver)
+                self._checked_in(st, contact, self.st.clock(), f"{call} heard on the air")
+                self.st.bus.publish("agent", {"turn": {rid: self.turn(rid)}})
+        elif call and call in (tx.get("callsigns") or []) and acknowledged(tx.get("text") or ""):
+            st, contact = self.state.setdefault(rid, {}), self.contact_now(rid)   # net control logged this station: at
+            if st.get("checked_in") != contact:                                  # once, even if the next station keys
+                self._checked_in(st, contact, self.st.clock(), "net control acknowledged " + call)   # inside 1.2 s
+                self.st.bus.publish("agent", {"turn": {rid: self.turn(rid)}})
         self._later(rid, DEBOUNCE_S, tx.get("id"))
 
     def _later(self, rid, delay, after, why=""):
@@ -840,6 +896,8 @@ class Agent:
         system = SYSTEM.format(name=name, call=call, op=op, kinds="/".join(KINDS))
         lastrow = rows[-1] if rows else {}
         addressed = bool(rows) and (call in (lastrow.get("callsigns") or []) or name_in(lastrow.get("text", ""), name))
+        if addressed and lastrow.get("speaker") == call:
+            addressed = False                                  # this station's own transmission, heard back
         if addressed and acknowledged(lastrow.get("text", "")) and not name_in(lastrow.get("text", ""), name):
             addressed = False                                  # "W9XYZ, thank you": logged, not asked anything
         ctx = {"call": call, "name": name, "op": op, "first": first, "id_due": id_due, "emergency": emergency,

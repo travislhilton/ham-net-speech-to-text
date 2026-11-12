@@ -62,8 +62,10 @@ header #nightBtn[aria-pressed=true]{background:#fff;color:var(--hdr)}
   #rtabs .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}#rtabs .dot.rx{background:var(--ok)}#rtabs .dot.em{background:var(--bad)}
   main{flex:1;min-height:0;padding:8px 12px 10px;display:flex;flex-direction:column}
   #radios{flex:1;min-height:0;display:flex;flex-direction:column;align-items:stretch}
-  .rcol{display:none;flex:1;min-height:0}.rcol.sel{display:flex}
-  .rcol>.logbox{flex:1;min-height:0;display:flex;flex-direction:column}
+  .rcol{display:none;flex:1;min-height:0}.rcol.sel{display:flex;overflow-y:auto;overscroll-behavior:contain}
+  /* the column scrolls as a whole when what sits above the log (the power notice, nets, Sidekick's card) is taller
+     than the screen: before 2026-11-12 the tabs under Sidekick's card were out of reach on a phone */
+  .rcol>.logbox{flex:1 0 auto;min-height:55dvh;display:flex;flex-direction:column}
 
   .feed{flex:1;min-height:0;max-height:none}
   .radio{flex:none}.radio .wf{height:64px;margin-top:6px}.radio .cap{display:none}.radio .axis{height:13px;font-size:10px}
@@ -225,6 +227,19 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 #scanDlg table{width:100%;border-collapse:collapse;font-size:13px}#scanDlg td,#scanDlg th{padding:3px 6px;border-bottom:1px solid var(--line);text-align:left}
 #scanDlg td button{all:unset;cursor:pointer;color:var(--accent);margin-right:8px}
 /* the station agent, Draft mode (station/agent.py): what it would say, checked against FCC Part 97 in code */
+.pane.board{padding:6px 2px}.bhead{font-size:14px;margin:2px 0 4px}.bsum{margin:4px 0}
+.idtimer{display:inline-block;border-radius:6px;padding:2px 8px;font-size:13px;margin:2px 0;border:1px solid var(--line)}
+.idtimer.ok{color:var(--ok);border-color:var(--ok)}.idtimer.warn{color:var(--ink);background:color-mix(in srgb,var(--warn) 25%,var(--panel));border-color:var(--warn)}
+.idtimer.bad{background:var(--bad);color:var(--on);border-color:var(--bad);font-weight:700}
+.broll{list-style:none;margin:4px 0;padding:0;column-width:15em;column-gap:16px}.broll li{break-inside:avoid;padding:2px 0}
+.broll .bn{display:inline-block;min-width:1.8em;color:var(--muted);font-variant-numeric:tabular-nums}.broll li.unc .call{color:var(--muted);font-style:italic}
+.badge.tr{background:color-mix(in srgb,var(--warn) 25%,var(--panel));color:var(--ink)}.bsec{margin:8px 0}.bsec h4{margin:0 0 2px;font-size:13px}
+.call.unc{font-style:italic;color:var(--muted)}
+.roll.rev li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:3px 0;border-bottom:1px solid var(--line)}
+.roll.rev .revb{margin-left:auto;display:inline-flex;gap:4px}.roll.rev .revb button{min-width:34px}
+.roll.rev .revb button.on{background:var(--ok);color:var(--on);border-color:var(--ok)}
+.roll li.unc .call{color:var(--muted);font-style:italic}.once{color:var(--warn);font-size:12px;font-weight:600}
+.roll li.rok .call::after{content:" ✓";color:var(--ok)}.strike{text-decoration:line-through}.revhead{margin:4px 0 6px}
 .turn{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0;background:var(--chip);font-size:14px}
 .turn.ok{background:var(--ok);color:var(--on);border-color:var(--ok)}.turn.bad{background:var(--bad);color:var(--on);border-color:var(--bad)}
 .turn.in{border-color:var(--ok)}.turn.in b{color:var(--ok)}.turn.mute{opacity:.75}.turn span{font-weight:400}
@@ -285,6 +300,7 @@ details.hrow{border:0;border-top:1px solid var(--line);border-radius:0;margin:0;
 .rcol.folded .stack,.rcol.folded .split{display:none!important}.rcol.folded .toptabs>.tabs{margin-bottom:0}
 .toptabs>.tabs .fold{margin-left:auto;font-size:13px;color:var(--muted);border:0;background:none}
 .toptabs>.tabs .fold::after{content:"▴ Hide"}.rcol.folded .toptabs>.tabs .fold::after{content:"▾ Show"}
+@media (max-width:560px){.toptabs>.tabs .fold::after{content:"▴"}.rcol.folded .toptabs>.tabs .fold::after{content:"▾"}.toptabs>.tabs .fold{min-width:36px}}
 .rcol.folded .toptabs>.tabs button.on{border-bottom-color:transparent}
 details.hrow>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer;min-width:0}
 details.hrow>summary::-webkit-details-marker,details.sess>summary::-webkit-details-marker{display:none}
@@ -1186,8 +1202,8 @@ function ensureCard(r){
    <div class="cardbtns"><button class="pz" data-pause="${esc(r.id)}"></button> <button data-nets="${esc(r.id)}" title="This radio's nets, and listening only while they are on">Nets…</button> <button data-clear="${esc(r.id)}" title="Clear this radio's log and stations heard from the screen (files stay on disk)">Clear log…</button> <button data-test="${esc(r.id)}" title="Read a fixed text over the air and see how many words the station gets right">Test transcription…</button> <button data-level="${esc(r.id)}" title="Set this radio's audio level just right, with a meter and a target">Set level…</button></div>`;
   const c=el.querySelector("canvas").getContext("2d");c.fillStyle="rgb(8,12,40)";c.fillRect(0,0,m.bins||128,120);
   const id=esc(r.id),top=document.createElement("section");top.className="toptabs";
-  top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">Coach</span><span class="sm">Coach</span><span class="gn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button><button class="fold" data-fold="${id}" title="Fold this panel away to see more of the log (or tap the open tab)"></button></div>
-    <div class="stack"><div class="pane guide" id="guide-${id}"></div><div class="pane heard" id="heard-${id}"><p class="muted small">None yet.</p></div></div>`;
+  top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">Coach</span><span class="sm">Coach</span><span class="gn"></span></button><button data-tab="board" data-rid="${id}" role="tab" title="The net on the air: who is in, who to ask again, traffic, regulars not heard yet"><span class="lg">Net board</span><span class="sm">Board</span> <span class="bn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button><button class="fold" data-fold="${id}" title="Fold this panel away to see more of the log (or tap the open tab)"></button></div>
+    <div class="stack"><div class="pane guide" id="guide-${id}"></div><div class="pane heard" id="heard-${id}"><p class="muted small">None yet.</p></div><div class="pane board" id="board-${id}"></div></div>`;
   el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
   try{if(localStorage.getItem("hamnet.fold."+r.id))col.classList.add("folded")}catch(e){}
   const sec=document.createElement("section");sec.className="logbox";
@@ -1379,6 +1395,30 @@ function heardRow(rid,c,e){
     `<span class="who">${esc(where)}${c.name&&where?" · ":""}<span class="muted">${esc(tc(c.name))}</span>${!c.name&&!where?'<span class="muted">not in the callbooks</span>':""}</span>`+
     `<span class="n" title="Heard ${e.count}×, last ${esc(lastHeard(e.last))}">${e.count}× · ${lastHeard(e.last)}</span></summary>${cardHtml(c,e)}</details>`;
 }
+// ---------- the net board (station/history.py board): the net on the air on this radio ----------
+const BOARD={},BTIMER={};
+function boardSoon(rid){clearTimeout(BTIMER[rid]);BTIMER[rid]=setTimeout(()=>loadBoard(rid,true),2500)}
+async function loadBoard(rid,quiet){
+  const pane=$("board-"+rid);if(!pane)return;
+  if(quiet&&!pane.classList.contains("show")&&BOARD[rid]===undefined)return;       // never opened: nothing to keep fresh
+  try{BOARD[rid]=(await api("/api/netboard?radio="+enc(rid))).board}catch(e){if(!quiet)pane.innerHTML=`<p class="err small">${esc(e.message)}</p>`;return}
+  renderBoard(rid)}
+function renderBoard(rid){
+  const pane=$("board-"+rid),b=BOARD[rid];if(!pane)return;
+  const bn=document.querySelector(`#col-${CSS.escape(rid)} .bn`);if(bn)bn.textContent=b&&b.recheck.length?`(${b.recheck.length}?)`:"";
+  if(!b){pane.innerHTML=`<div class="empty small">No net on the air on this radio. As soon as one starts, this board shows who is in (numbered), who to ask again, who has traffic, regulars not heard yet, and when net control last said its call.</div>`;return}
+  const idm=b.ncs_id_min,idc=idm==null?"":idm>=b.id_every_min?"bad":idm>=b.id_every_min-1?"warn":"ok";
+  const chip=(c,cls,t)=>`<span class="call ${cls||""}" data-call="${esc(c)}"${t?` title="${esc(t)}"`:""}>${esc(c)}</span>`;
+  const n=b.roll.filter(p=>p.role!=="ncs").length;
+  pane.innerHTML=`<div class="bhead"><b>${esc(b.name)}</b>${b.ncs?` · net control ${chip(b.ncs)}`:""} · ${hhmm(b.start)}${b.minutes!=null?` (${b.minutes} min)`:""}${b.closed_at?` · <span class="muted">closed ${hhmm(b.closed_at)}</span>`:""}</div>
+   ${b.ncs&&!b.closed_at?`<div class="idtimer ${idc}" title="97.119(a): a station identifies at least every 10 minutes">${idm==null?`${esc(b.ncs)} has not said its call yet`:`${esc(b.ncs)} last said its call ${idm} min ago`}${idc==="bad"?" · time to identify":""}</div>`:""}
+   <div class="small bsum"><b>${n}</b> checked in${b.recheck.length?` · <span class="once">${b.recheck.length} heard once</span>`:""}${b.traffic.length?` · <b>${b.traffic.length}</b> with traffic`:""}</div>
+   <ol class="broll">${b.roll.map(p=>`<li class="${p.confirmed?"":"unc"}"><span class="bn">${p.ord||""}</span>${chip(p.call)}${p.role==="ncs"?' <span class="badge">NCS</span>':""}${p.traffic?' <span class="badge tr">traffic</span>':""}${p.confirmed?"":' <span class="once">heard once</span>'}<span class="muted small"> ${esc([p.name,p.city].filter(Boolean).join(", "))} ${hhmm(p.first_at)}</span></li>`).join("")}</ol>
+   ${b.recheck.length?`<div class="bsec"><h4>Ask again</h4><p class="small muted">Heard once: about half of these are mis-heard.</p>${b.recheck.map(c=>chip(c,"unc")).join(" ")}</div>`:""}
+   ${b.traffic.length?`<div class="bsec"><h4>Traffic</h4>${b.traffic.map(c=>chip(c)).join(" ")}</div>`:""}
+   ${b.mentioned.length?`<div class="bsec"><h4>Heard, not checked in</h4><p class="small muted">Named on the air but not acknowledged by net control.</p>${b.mentioned.map(c=>chip(c,"muted")).join(" ")}</div>`:""}
+   ${b.missing.length?`<div class="bsec"><h4>Regulars not heard yet</h4>${b.missing.map(c=>chip(c,"muted")).join(" ")}</div>`:""}
+   <p class="row small"><button data-mins="${esc(b.key)}"${b.closed_at&&b.review.reviewed<b.review.total?' class="primary"':""}>${b.review.reviewed>=b.review.total&&b.review.total?"Minutes ✓ reviewed":b.closed_at?`Net closed: review ${b.review.total-b.review.reviewed} check-ins ›`:"Review check-ins &amp; minutes ›"}</button></p>`}
 function renderHeard(rid){
   const cards=Object.fromEntries((S.heard||[]).map(e=>[e.call,e.card]));
   for(const r of S.radios){
@@ -1588,7 +1628,8 @@ document.addEventListener("click",e=>{
     if(tb.classList.contains("on")||col.classList.contains("folded")){              // the open tab again: fold / unfold
       const f=tb.classList.contains("on")&&!col.classList.contains("folded");setFold(tb.dataset.rid,f);if(f)return}
     col.querySelectorAll(".toptabs [data-tab]").forEach(b=>b.classList.toggle("on",b===tb));
-    const want={radio:"r-",guide:"guide-",heard:"heard-"}[tb.dataset.tab]+tb.dataset.rid;
+    const want={radio:"r-",guide:"guide-",heard:"heard-",board:"board-"}[tb.dataset.tab]+tb.dataset.rid;
+    if(tb.dataset.tab==="board")loadBoard(tb.dataset.rid);
     col.querySelectorAll(".stack>.pane").forEach(x=>x.classList.toggle("show",x.id===want));applySplit(tb.dataset.rid,tb.dataset.tab)}
   const p=e.target.closest("[data-play]");if(p){new Audio("/audio/"+p.dataset.play).play()}
   const wb=e.target.closest("[data-who]");if(wb)openWho(wb.dataset.who);
@@ -1610,7 +1651,7 @@ function connect(){
   es.onopen=()=>{$("conn").textContent="● live";$("conn").className="ok"};
   es.onerror=()=>{$("conn").textContent="● reconnecting…";$("conn").className="bad"};
   es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HamNet Station";renderEngine(d.engines);all();renderPCNote()});
-  es.addEventListener("tx",e=>upsertTx(JSON.parse(e.data)));
+  es.addEventListener("tx",e=>{const t=JSON.parse(e.data);upsertTx(t);if(t.status==="final")boardSoon(t.radio)});
   es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
     if(m.pending){const p=m.pending;AG.pending=AG.pending||{};if(p.state==="none")delete AG.pending[p.radio];else AG.pending[p.radio]=p;renderEcho(p.radio);return}
     if(m.turn){AG.turn=Object.assign(AG.turn||{},m.turn)}if(m.mode_now)AG.mode_now=m.mode_now;
@@ -1927,6 +1968,7 @@ async function renderMinutes(){
   try{MIN=await api("/api/history/instance?key="+enc(NV.key))}catch(err){box.innerHTML=`<div class="empty">${esc(err.message==="not found"?"This net or conversation is not in the history yet. It appears a few seconds after its first transmission.":err.message)}</div>`;return}
   const d=MIN,net=d.kind==="net";
   const roll=d.participants.filter(p=>p.role!=="mentioned"),ment=d.participants.filter(p=>p.role==="mentioned");
+  const rv=d.review||{total:0,reviewed:0,once:0,removed:[]};
   const acc=d.acc_total?(d.acc_final>=d.acc_total?'<span class="ok">✓ accurate text</span>':`${d.acc_final} of ${d.acc_total} accurate`):"";
   const by=k=>d.items.filter(i=>i.kind===k);
   const sec=(k,extra=[])=>{const its=by(k).concat(extra);if(!its.length)return "";
@@ -1946,8 +1988,11 @@ async function renderMinutes(){
       <a class="helpbtn" href="/api/history/minutes?key=${enc(d.key)}&format=md" download>Download .md</a> <button id="mCopy">Copy as text</button>${d.net_id?` <button data-goto="open" data-net="${esc(d.net_id)}">Still open</button>`:""}</div></div>
    <p class="small muted">Drafted from the transcript by rules: <span class="sug">suggested</span> items are the station's; check them, edit or mark them not right. Your changes are kept and never overwritten.</p>
    ${sec("urgent",carried.filter(i=>i.kind==="urgent"))}
-   <section class="msec"><h4>Attendance <span class="muted">(${roll.length})</span></h4>
-    <ol class="roll">${roll.map(p=>`<li><span class="call" data-call="${esc(p.call)}">${esc(p.call)}</span>${p.role==="ncs"?' <span class="badge">net control</span>':""}${p.name?` <span class="muted small">${esc(p.name)}</span>`:""} <span class="muted small">${hhmm(p.first_at)}</span>${p.source==="operator"?' <span class="small" title="added by you">✎</span>':""} <button class="x" data-attrm="${esc(p.call)}" title="Not in this net" aria-label="Remove ${esc(p.call)}">✕</button></li>`).join("")}</ol>
+   <section class="msec" id="mReview"><h4>Attendance <span class="muted">(${roll.length})</span></h4>
+    ${roll.length?`<p class="small revhead">${rv.reviewed>=rv.total?'<span class="ok">✓ All check-ins reviewed</span>':`<b>Review the check-ins:</b> ${rv.reviewed} of ${rv.total} done${rv.once?` · <span class="once">${rv.once} heard once</span> (about half of these are mis-heard: ▶ listen, then ✓ or ✎)`:""}`}. Your marks fix the minutes, the ICS-309 and Winlink messages, and they measure how well the station hears calls.</p>`:""}
+    <ol class="roll rev">${roll.map(p=>{const r=p.review;return `<li class="${p.confirmed?"":"unc"}${r==="ok"?" rok":""}"><span class="call" data-call="${esc(p.call)}">${esc(p.call)}</span>${p.role==="ncs"?' <span class="badge">net control</span>':""}${p.confirmed?"":' <span class="once" title="The station heard this call only once: check it">heard once</span>'}${p.traffic?' <span class="badge">traffic</span>':""}${p.name?` <span class="muted small">${esc(p.name)}${p.city?", "+esc(p.city):""}</span>`:""} <span class="muted small">${hhmm(p.first_at)}${p.n>1?` · ${p.n}×`:""}</span>${p.source==="operator"&&r!=="ok"?' <span class="small" title="added by you">✎</span>':""}
+      <span class="revb">${p.evidence?`<button data-play="${esc(p.evidence)}" title="Hear where the station heard it" aria-label="Play ${esc(p.call)}">▶</button>`:""}<button data-rev="${esc(p.call)}" data-v="ok" class="${r==="ok"?"on":""}" title="Right: this station took part" aria-label="${esc(p.call)} is right">✓</button><button data-rev="${esc(p.call)}" data-v="fix" title="The call is wrong: type the right one" aria-label="Correct ${esc(p.call)}">✎</button><button data-rev="${esc(p.call)}" data-v="wrong" title="Not in this net (mis-heard, or only mentioned)" aria-label="${esc(p.call)} was not in this net">✗</button></span></li>`}).join("")}</ol>
+    ${rv.removed.length?`<p class="small muted">Taken out by you: ${rv.removed.map(x=>`<span class="strike">${esc(x.call)}</span>${x.mark&&x.mark.fix?` → ${esc(x.mark.fix)}`:""} <button class="linkish" data-rev="${esc(x.call)}" data-v="undo">undo</button>`).join(" · ")}</p>`:""}
     <form id="attAdd" class="row"><input name="call" maxlength="11" placeholder="callsign" class="up" aria-label="Callsign to add"> <button>Add to attendance</button></form>
     ${ment.length?`<p class="small muted">Mentioned only (not counted): ${ment.map(p=>`<span class="call" data-call="${esc(p.call)}">${esc(p.call)}</span>`).join(" ")}</p>`:""}</section>
    ${sec("announcement")}${sec("event")}${sec("action",carried.filter(i=>i.kind==="action"))}${sec("decision")}${sec("traffic",carried.filter(i=>i.kind==="traffic"))}${sec("note")}
@@ -1972,6 +2017,10 @@ async function renderMinutes(){
   if(FIX&&FIX.where==="min"){const det=$("mTx");if(det)det.open=true;fixFocus()}
   if(NV.hl){const el=$("mtx-"+NV.hl);if(el){el.classList.add("flash");el.scrollIntoView({block:"center"})}NV.hl=null}
 }
+document.addEventListener("click",e=>{const b=e.target.closest("[data-rev]");if(!b)return;
+  const call=b.dataset.rev,v=b.dataset.v;let to;
+  if(v==="fix"){to=(prompt(`The right callsign for ${call}:`,call)||"").trim().toUpperCase();if(!to||to===call)return}
+  saveMin({review:{call,verdict:v,to}})});
 async function saveMin(body,quiet){
   try{MIN=await post("/api/history/minutes",{key:NV.key,...body});if(quiet){$("mNotesSt").textContent="Saved ✓"}else renderMinutes()}
   catch(err){alert(err.message)}}
@@ -2277,7 +2326,7 @@ function renderEcho(rid){
   const chip=`<div class="turn ${TC}" role="status"><b>${T.state==="called"?"YOUR TURN · ":T.state==="open"?"YOUR TURN · ":""}${esc(T.say||"")}</b>${T.checked_in_at?` <span>✓ ${esc(new Date(T.checked_in_at).toLocaleTimeString([],TOPT()))}${T.checked_in_how?` (${esc(T.checked_in_how)})`:""}</span>`:""}</div>`;
   const btns=`<div class="row small" style="margin:4px 0">${T.checked_in?`<button data-agmark="${esc(rid)}" data-v="not_checked_in" title="Sidekick will check in again when check-ins are open to it">Not checked in</button>`:`<button data-agmark="${esc(rid)}" data-v="checked_in" title="You checked in yourself: Sidekick won't draft a check-in on this net">I checked in myself</button>`} <button data-agmark="${esc(rid)}" data-v="${T.muted?"unmute":"mute"}">${T.muted?"Unmute":"Mute for this net"}</button> <button data-agask="${esc(rid)}">What would you say now?</button></div>`;
   box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span></div>`
-    +(mn.how==="rules"?`<div class="okband warnband small" role="note">${esc(mn.say)}${mn.why==="no xAI key"?' <button class="linkish" data-goto-settings="agent">Add a key</button>':""}</div>`:"")
+    +(mn.how==="rules"?`<div class="warnband small" role="note">${esc(mn.say)}${mn.why==="no xAI key"?' <button class="linkish" data-goto-settings="agent">Add a key</button>':""}</div>`:"")
     +chip+btns+pend
     +(show?`<div class="meta">Last time it would have spoken (${esc(ago(show))}), after: ${esc(show.heard||"")}</div>${draftHtml(show)}
       <div class="rate meta">Right call? <button data-agrate="${esc(show.id)}" data-v="1" class="${(show.rating||{}).good===true?"on":""}" aria-label="Good draft">👍</button><button data-agrate="${esc(show.id)}" data-v="0" class="${(show.rating||{}).good===false?"on":""}" aria-label="Bad draft">👎</button></div>`

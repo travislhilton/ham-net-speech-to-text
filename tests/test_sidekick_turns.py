@@ -172,3 +172,49 @@ def test_no_internet_hear_it_fails_fast_with_a_reason(tmp_path, xai_key):
     with pytest.raises(LookupError, match="offline"):
         st.tts.clip("W9XYZ checking in again", "eve")                     # inside the back-off: not tried
     assert calls == [1]
+
+
+def test_an_acknowledgement_counts_even_when_the_next_station_keys_at_once(tmp_path):
+    st = _station(tmp_path)
+    _on(st)
+    tx = {"id": "a1", "radio": "ic", "status": "final", "start": "2026-11-10T20:04:00", "speaker": "K7NET",
+          "text": "W9XYZ, thanks Sam. Next station.", "callsigns": ["W9XYZ"]}
+    st.agent.on_final(tx)                                     # no draft yet (debounce), but the log entry is seen
+    assert st.agent.turn("ic")["checked_in"]
+
+
+def test_this_stations_own_transmission_is_never_a_call_to_answer_and_counts_as_in(tmp_path):
+    st = _station(tmp_path)
+    _on(st)
+    st.agent._net = lambda rid, now, rows=(): {"name": "Springfield ARES Net", "key": "ares@1"}
+    tx = {"id": "o1", "radio": "ic", "status": "final", "start": "2026-11-10T20:04:00", "speaker": "W9XYZ",
+          "text": "W9XYZ, Sam, Riverton, no traffic.", "callsigns": ["W9XYZ"]}
+    st.tx.append(tx)
+    st.agent.on_final(tx)
+    assert st.agent.turn("ic")["checked_in_how"] == "W9XYZ heard on the air"
+    d = st.agent.draft("ic", "o1")
+    assert d["speak"] is False and d["addressed"] is False
+
+
+def test_the_probe_finds_xai_unreachable_before_a_turn_needs_it(tmp_path, xai_key, monkeypatch):
+    import station.agent as A
+    st = _station(tmp_path)
+    _on(st)
+    seen = []
+    def down(req, timeout=None):
+        seen.append(req.full_url)
+        raise urllib.error.URLError("[Errno 65] No route to host")
+    monkeypatch.setattr(A.urllib.request, "urlopen", down)
+    m = st.agent.probe()
+    assert seen == ["https://api.x.ai/v1/models"] and m["how"] == "rules" and m["why"] == "offline"
+    assert st.agent.probe() is None and len(seen) == 1                      # inside the back-off: not tried
+
+
+def test_no_probe_without_a_key_or_with_sidekick_off(tmp_path, monkeypatch):
+    import station.agent as A
+    os.environ.pop("XAI_API_KEY", None)
+    monkeypatch.setattr(A.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("network")))
+    st = _station(tmp_path)
+    assert st.agent.probe() is None                                          # off
+    _on(st)
+    assert st.agent.probe() is None                                          # no key: nothing to reach

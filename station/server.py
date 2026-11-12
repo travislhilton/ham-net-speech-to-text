@@ -145,7 +145,7 @@ def make_handler(station):
                 return self._json(station.accuracy())
             if u.path == "/api/schedule":                        # schedule: the nets, for the editor
                 return self._json(station.nets.list())
-            if u.path.startswith(("/api/search", "/api/history", "/api/nets/", "/api/station/", "/api/alerts")):
+            if u.path.startswith(("/api/search", "/api/history", "/api/nets/", "/api/station/", "/api/alerts", "/api/netboard")):
                 return self._history_get(u)
             if u.path.startswith("/audio/"):
                 tid = u.path.rsplit("/", 1)[-1]
@@ -173,6 +173,8 @@ def make_handler(station):
                                        "status": h.status})
                 if u.path == "/api/history/instance":
                     return self._json(h.instance(q.get("key", "")))
+                if u.path == "/api/netboard":                   # the net on the air on a radio (station/history.py board)
+                    return self._json({"board": h.board(q.get("radio", ""), station.clock())})
                 if u.path == "/api/history/minutes":            # export: Markdown or plain text, as a download
                     md = q.get("format", "md") != "txt"
                     body = h.minutes_text(q.get("key", ""), md).encode("utf-8")

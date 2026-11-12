@@ -173,6 +173,22 @@ you chose is remembered. Each column shows:
 - **Coach** (per radio, the tab was "What you can do now" until 2026-11-09): step-by-step help and example phrases when someone asks for a relay,
   calls emergency or priority traffic, opens a net, takes check-ins or passes formal traffic, plus a
   reminder when your own 10-minute identification is due.
+- **Net board** (per radio, a tab above the log): the net on the air on that radio, for net control and anyone
+  logging it. Who is in, numbered in order (net control first), with name, town and time; **heard once** in grey
+  italics (about half the calls the station hears only once are mis-heard: ask again); **traffic** on stations that
+  said they have some ("with one piece of traffic"; "no traffic" is not); **Ask again** (the calls heard once);
+  **Heard, not checked in** (named on the air, not acknowledged by net control); **Regulars not heard yet** (from
+  the net's history); and **net control's ID timer**: when net control last said its call, amber at 9 minutes and
+  red at 10 (97.119(a)). It refreshes after each transmission. **Review check-ins & minutes ›** opens the net's
+  minutes; once the net has closed the button turns blue and says how many check-ins are left to review. The same
+  attendance as the minutes, the ICS-309 and Winlink messages.
+- **Review the check-ins** (Nets → the net's minutes → Attendance; or the Net board's button after the net): every
+  call that took part, with ▶ (the transmission where the station heard it), **✓** (right), **✎** (the call is
+  wrong: type the right one) and **✗** (not in this net). Calls heard once are marked **heard once** until you
+  check them; the minutes text marks them **(?)**. ✎ and ✗ take the call out of the attendance (and the ICS-309 and
+  Winlink messages); **undo** puts it back. Each mark is also kept in `data\review_log.jsonl` with what the station
+  had (times heard, role): the first human truth for how well the station hears calls (before, every accuracy figure
+  was an estimate).
 - **Stations heard** (per radio, a tab above the log; the same calls as the log: your corrections, then the
   net-wide agreement, then the accurate pass, then the live text): one line per callsign (city, state, country · name, how
   often, and the date and time last heard — the most recently heard first); tap a line for the license, grid, zones and address (FCC, QRZ.com and the country file). Click any callsign for its card (with
@@ -281,6 +297,31 @@ you chose is remembered. Each column shows:
     opens. Outside those the station drafts "silent" itself, at once, without asking a model; when it asks, the model
     is offered only the moves that turn allows (replays of four real nets: the quick model, offered every move, tried
     to check in on 29 turns of one roll call).
+  - **Who net control called** (2026-11-12, from a review of real nets where all three drafts that would have spoken
+    were wrong turns): the station reads the calling sentence and the one before it (and the transmission before,
+    when the call opens a transmission under 10 s after it). It does not check in when the call is for another kind of
+    station ("Any station holding traffic, traffic only. Check in now."; maritime or mobiles only; members; EOCs),
+    when net control says check-ins come later ("Before I start taking check-ins…"), or when only "Please call now."
+    was heard and the start of the call was lost. **Roll calls by place** ("Stations Colorado, check in now"): it
+    checks in only when the place is in **Settings → Station agent → Your region**; with no region set it never
+    answers one. A net named after its state is not a roll call. **Emergency or priority traffic** ("break break",
+    "emergency traffic") silences it on every net, flagged or not. In the net's own settings (Nets → the net →
+    **Sidekick on this net**) a members-, mobiles- or traffic-only net can be set to **never check in**.
+  - **Checked in, by what it hears**: when net control logs your call ("W9XYZ, thank you, you're in the log") or
+    your own call is heard checking in (you on the air yourself, heard on another receiver), the radio counts as
+    checked in to this net, even if the next station keys at once. Net control's "thank you" is not a question:
+    Sidekick does not answer it. Your own transmission is never a call to answer.
+  - **The card**: a **YOUR TURN** chip says where things stand (Check-ins open to you / CALLED: what was said /
+    Answer ready / Checked in ✓ time and how / Listening: why not), with **I checked in myself** (or **Not checked
+    in**), **Mute for this net** and **What would you say now?**. The last draft that would have spoken stays in
+    view with its age and 👍/👎; the silent ones are counted, with the latest reason.
+  - **No xAI key, or no internet**: the card says so in an amber band ("Offline rules: no xAI key on this PC…" with
+    **Add a key**, or "Offline rules: xAI not reachable…"), and Sidekick keeps taking its turns with the offline
+    rules below: it checks in when check-ins are open to it and acknowledges a call ("your control operator will
+    answer you personally"); it cannot answer questions or think. Nothing waits for the network. With a key, the
+    station checks every 2 minutes that xAI answers (one free request, the model list), so the card says "not
+    reachable" before a turn needs it. **▶ Hear it** without a key or internet uses this computer's own voice
+    (the browser's), heard only there.
   - **Two speeds.** The **model** (Grok 4.20 fast by default: measured 1.0 s median on real nets) decides the turn:
     check-ins, acknowledgements, short answers. A question that needs thinking gets a short "copy your question, working on
     it, I'll report back" and goes to the **thinking model** (Grok 4.5 by default) while the net carries on. When the

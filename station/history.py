@@ -15,7 +15,14 @@ overwritten by re-extraction or the accurate pass.
     part       who took part in an instance: ncs | checkin (spoke, or was acknowledged by net control) | mentioned
     item       the minutes: announcement / event / action / decision / traffic / urgent; `auto` = drafted by
                station/minutes.py, `edited` = the operator changed it (re-extraction then leaves it alone)
-    minutes    per instance: the operator's notes, net control and attendance corrections
+    minutes    per instance: the operator's notes, net control, attendance corrections and the end-of-net review
+               (`review`: call -> "ok" | "wrong" | {"fix": call}); each review mark is also appended to
+               data/review_log.jsonl with what the station had (times heard, role) — the human truth the accuracy
+               figures are measured against (2026-11-12 audit: no truth yet, every number was a proxy)
+
+A call taking part is CONFIRMED when net control, the operator (added or reviewed ✓), or heard twice or more; a call
+heard once is shown as "heard once" until reviewed (2026-11-12 audit: ~90 % of calls heard twice were right, ~50 %
+of calls heard once).
 
 Taking part (attendance, the regulars): net control, the speaker of a transmission (station/speaker.py), a station
 net control acknowledges ("K7ABC, thank you, you're in the log"), or one that starts a transmission with its own
@@ -38,6 +45,11 @@ from . import ics, minutes, recur, speaker
 from .schedule import occurrence_at
 
 GAP = timedelta(minutes=15)
+# a station saying it has traffic ("with one piece of traffic", "I have traffic for the net"); "no traffic" is not
+TRAFFIC_HAS = re.compile(r"\b(with|have|has|got|holding|listing|list) (one|two|three|a|some|\d+|formal|priority|"
+                         r"emergency|welfare|health)?\s*(pieces? of |piece of )?(formal |priority |emergency )?(traffic|"
+                         r"messages?|radiograms?)\b", re.I)
+TRAFFIC_NONE = re.compile(r"\b(no|without|negative|nothing for the|not holding any) (formal )?(traffic|messages?)\b", re.I)
 REGULAR_LAST, REGULAR_SHARE = 8, 0.5
 REGULAR_RULE = (f"A regular took part in at least half of the last {REGULAR_LAST} times the net met "
                 f"(and at least twice). Taking part = spoke, checked in or was acknowledged by net control; "
@@ -126,6 +138,8 @@ class History:
         for col in ("closed_at", "closed_by", "closed_tx"):        # an index made before net closes were heard
             if col not in have:
                 self.con.execute(f"ALTER TABLE inst ADD COLUMN {col} TEXT")
+        if "review" not in {r[1] for r in self.con.execute("PRAGMA table_info(minutes)")}:   # before the review
+            self.con.execute("ALTER TABLE minutes ADD COLUMN review TEXT")
         if "corrected" not in {r[1] for r in self.con.execute("PRAGMA table_info(tx)")}:   # before tap-to-correct
             self.con.execute("ALTER TABLE tx ADD COLUMN corrected TEXT")
         self.con.execute("CREATE INDEX IF NOT EXISTS tx_corrected ON tx(corrected) WHERE corrected IS NOT NULL")
@@ -645,10 +659,31 @@ class History:
                        for v in self._tx_views(key)]
         names = {s["call"]: dict(s) for s in self._q("SELECT * FROM station WHERE call IN (SELECT call FROM part"
                                                       " WHERE inst=?)", (key,))}
-        d["participants"] = [dict(p) | {"name": (names.get(p["call"]) or {}).get("name"),
-                                        "city": (names.get(p["call"]) or {}).get("city")}
-                             for p in self._q("SELECT call, role, first_at, n, ord, source FROM part WHERE inst=?"
-                                              " ORDER BY ord IS NULL, ord, call", (key,))]
+        m0 = self._one("SELECT review FROM minutes WHERE inst=?", (key,))
+        review = json.loads((m0["review"] if m0 else None) or "{}")
+        heard_in = {}
+        for t in d["tx"]:
+            if t.get("noise"):
+                continue
+            for c in ([t["speaker"]] if t.get("speaker") else []) + list(t.get("callsigns") or []):
+                e = heard_in.setdefault(c, {"tx": t["id"], "wav": bool(t.get("wav")), "traffic": False})
+                if TRAFFIC_HAS.search(t.get("text") or "") and not TRAFFIC_NONE.search(t.get("text") or ""):
+                    e["traffic"] = True
+        d["participants"] = []
+        for p in self._q("SELECT call, role, first_at, n, ord, source FROM part WHERE inst=? ORDER BY ord IS NULL, ord,"
+                         " call", (key,)):
+            p = dict(p)
+            rv = review.get(p["call"])
+            p.update(name=(names.get(p["call"]) or {}).get("name"), city=(names.get(p["call"]) or {}).get("city"),
+                     review=rv, evidence=(heard_in.get(p["call"]) or {}).get("tx"),
+                     traffic=(heard_in.get(p["call"]) or {}).get("traffic", False))
+            p["confirmed"] = bool(rv == "ok" or p["role"] == "ncs" or p["source"] in ("operator", "me") or (p["n"] or 0) >= 2)
+            d["participants"].append(p)
+        roll = [p for p in d["participants"] if p["role"] in ("ncs", "checkin")]
+        d["review"] = {"marks": review, "total": len(roll), "reviewed": sum(1 for p in roll if p["review"]),
+                       "once": sum(1 for p in roll if not p["confirmed"]),
+                       "removed": [{"call": c, "mark": v} for c, v in review.items()
+                                   if v == "wrong" or isinstance(v, dict)]}
         d["items"] = self._items("item.inst=? AND item.status!='dismissed'", (key,))
         d["dismissed"] = self._items("item.inst=? AND item.status='dismissed'", (key,))
         if d.get("net_id"):                                 # open items from earlier times this net met
@@ -998,7 +1033,9 @@ class History:
         return {"deleted": iid}
 
     def set_minutes(self, key: str, body: dict) -> dict:
-        """The operator's notes, net control, and attendance corrections ({"add": call} / {"remove": call})."""
+        """The operator's notes, net control, attendance corrections ({"add": call} / {"remove": call}) and the review
+        ({"review": {"call", "verdict": ok | wrong | fix | undo, "to"}})."""
+        self.flush([key])
         with self.lock:
             if not self.con.execute("SELECT 1 FROM inst WHERE key=?", (key,)).fetchone():
                 raise LookupError(key)
@@ -1013,6 +1050,48 @@ class History:
                 ncs = str(body["ncs"] or "").strip().upper() or None
                 if ncs and not re.fullmatch(r"[A-Z0-9]{3,8}(-\d{1,2})?", ncs):
                     raise ValueError("net control must be a callsign")
+            review = json.loads((m["review"] if m and "review" in m.keys() else None) or "{}")
+            rv = body.get("review")
+            if rv:
+                c = str(rv.get("call") or "").strip().upper()
+                verdict = rv.get("verdict")
+                if not re.fullmatch(r"[A-Z0-9]{3,8}(-\d{1,2})?", c) or verdict not in ("ok", "wrong", "fix", "undo"):
+                    raise ValueError("review: a callsign and ok, wrong, fix or undo")
+                part = self.con.execute("SELECT role, n, source FROM part WHERE inst=? AND call=?", (key, c)).fetchone()
+                was = review.get(c)
+                if verdict == "undo":
+                    review.pop(c, None)
+                    if c in removed:
+                        removed.remove(c)
+                    if isinstance(was, dict) and was.get("fix"):
+                        to = was["fix"]
+                        if to in added:
+                            added.remove(to)
+                        review.pop(to, None)
+                elif verdict == "ok":
+                    review[c] = "ok"
+                    if c in removed:
+                        removed.remove(c)
+                elif verdict == "wrong":
+                    review[c] = "wrong"
+                    if c not in removed:
+                        removed.append(c)
+                else:
+                    to = str(rv.get("to") or "").strip().upper()
+                    if not re.fullmatch(r"[A-Z0-9]{3,8}(-\d{1,2})?", to) or to == c:
+                        raise ValueError("review: the right callsign")
+                    review[c] = {"fix": to}
+                    review[to] = "ok"
+                    if c not in removed:
+                        removed.append(c)
+                    if to in removed:
+                        removed.remove(to)
+                    if to not in added:
+                        added.append(to)
+                self._review_log({"at": self.clock().isoformat(timespec="seconds"), "inst": key, "call": c,
+                                  "verdict": verdict, "to": (review.get(c) or {}).get("fix") if verdict == "fix" else None,
+                                  "n": part["n"] if part else None, "role": part["role"] if part else None,
+                                  "source": part["source"] if part else None})
             for k, lst, other in (("add", added, removed), ("remove", removed, added)):
                 c = str(body.get(k) or "").strip().upper()
                 if c:
@@ -1022,13 +1101,55 @@ class History:
                         other.remove(c)
                     elif c not in lst:
                         lst.append(c)
-            self.con.execute("INSERT OR REPLACE INTO minutes(inst, notes, ncs, added, removed, updated)"
-                             " VALUES(?,?,?,?,?,?)", (key, notes, ncs, json.dumps(added), json.dumps(removed),
-                                                      self.clock().isoformat(timespec="seconds")))
+            self.con.execute("INSERT OR REPLACE INTO minutes(inst, notes, ncs, added, removed, updated, review)"
+                             " VALUES(?,?,?,?,?,?,?)", (key, notes, ncs, json.dumps(added), json.dumps(removed),
+                                                        self.clock().isoformat(timespec="seconds"), json.dumps(review)))
             self.con.execute("UPDATE inst SET dirty=1 WHERE key=?", (key,))
         return self.instance(key)
 
     # ---------- export ----------
+    def _review_log(self, row: dict):
+        try:
+            with open(self.path.parent / "review_log.jsonl", "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row) + "\n")
+        except OSError:
+            pass
+
+    def board(self, radio: str, now: datetime | None = None, id_every_min: int = 10) -> dict | None:
+        """The net on the air on this radio, for net control and anyone logging it: who is in (numbered, confirmed
+        or heard once), who to recheck, who was heard but not acknowledged, traffic, regulars not heard yet, and when
+        net control last said its call (97.119(a): every 10 minutes)."""
+        now = now or self.clock()
+        self.flush()
+        r = self._one("SELECT key FROM inst WHERE radio=? AND tx_count>0 AND end>=? ORDER BY end DESC LIMIT 1",
+                      (radio, (now - GAP).isoformat(timespec="seconds")))
+        if not r:
+            return None
+        d = self.instance(r["key"])
+        roll = [p for p in d["participants"] if p["role"] in ("ncs", "checkin")]
+        ncs = d.get("ncs")
+        last_id = None
+        if ncs:
+            for t in d["tx"]:
+                if not t.get("noise") and ncs in (t.get("callsigns") or []):     # said its call (not just spoke)
+                    last_id = t["start"]
+        regulars, missing = [], []
+        if d.get("net_id") and d.get("kind") == "net":
+            a = self.analysis(d["net_id"])
+            regulars = a["regulars"]
+            missing = [c for c in regulars if c not in {p["call"] for p in roll}]
+        mins = lambda iso: int((now - datetime.fromisoformat(iso)).total_seconds() // 60) if iso else None   # noqa: E731
+        return {"key": d["key"], "name": d.get("name") or "Conversation", "kind": d.get("kind"), "ncs": ncs,
+                "start": d.get("start"), "closed_at": d.get("closed_at"), "minutes": mins(d.get("start")),
+                "roll": [{k: p.get(k) for k in ("call", "role", "ord", "first_at", "n", "name", "city", "confirmed",
+                                                 "review", "traffic", "evidence")} for p in roll],
+                "recheck": [p["call"] for p in roll if not p["confirmed"]],
+                "mentioned": [p["call"] for p in d["participants"] if p["role"] == "mentioned"],
+                "traffic": [p["call"] for p in roll if p["traffic"]],
+                "missing": missing, "regular": regulars,
+                "ncs_id_min": mins(last_id), "id_every_min": id_every_min,
+                "review": d["review"]}
+
     def minutes_text(self, key: str, md=True) -> str:
         d = self.instance(key)
         h = (lambda s: f"\n## {s}\n") if md else (lambda s: f"\n{s.upper()}\n")
@@ -1045,7 +1166,10 @@ class History:
         lines.append(h(f"Attendance ({len(roll)})"))
         for p in roll:
             lines.append(f"{b}{p['ord'] or ''}. {p['call']}" + (f" — {p['name']}" if p.get("name") else "")
-                         + (" (net control)" if p["role"] == "ncs" else "") + f" {(p['first_at'] or '')[11:16]}")
+                         + (" (net control)" if p["role"] == "ncs" else "") + f" {(p['first_at'] or '')[11:16]}"
+                         + ("" if p.get("confirmed") else " (?)"))
+        if any(not p.get("confirmed") for p in roll):
+            lines.append("(?) = heard once by the station and not confirmed by the operator")
         labels = [("urgent", "Urgent"), ("announcement", "Announcements"), ("event", "Schedule"),
                   ("action", "Action items"), ("decision", "Decisions"), ("traffic", "Traffic handled"),
                   ("note", "Notes")]
