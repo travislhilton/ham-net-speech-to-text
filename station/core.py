@@ -883,7 +883,7 @@ class Station:
                 out[k] = datetime.fromisoformat(s)
         return out
 
-    def overrun(self, rid: str, at: datetime | None = None) -> dict | None:
+    def overrun(self, rid: str, at: datetime | None = None, freq_mhz: float | None = None) -> dict | None:
         """The net on `rid` running past its scheduled end (station/schedule.overrun), or None."""
         from .schedule import overrun
         at = at or self.clock()
@@ -891,13 +891,14 @@ class Station:
         closed = {k for k, c in ((closer.closes if closer and hasattr(closer, "closes") else {}) or {}).items()
                   if c.get("radio") == rid and c.get("state") == "closed"}
         return overrun(self.cfg.get("schedule") or [], rid, at, self.last_heard(rid, at), closed,
-                       quiet=self.cfg.get("overrun_quiet_min", 5), most=self.cfg.get("overrun_max_min", 180))
+                       quiet=self.cfg.get("overrun_quiet_min", 5), most=self.cfg.get("overrun_max_min", 180),
+                       freq_mhz=freq_mhz)
 
     def net_of(self, rid: str, at: datetime, freq_mhz: float | None = None) -> dict | None:
         """The scheduled occurrence a transmission on `rid` at `at` (heard on `freq_mhz`) belongs to, or None.
         A net running past its end keeps its transmissions until another net on the radio is due."""
         from .schedule import occurrence_at
-        ov = self.overrun(rid, at)
+        ov = self.overrun(rid, at, freq_mhz)
         if ov:
             return {"key": ov["key"], "id": ov["id"], "date": ov["date"], "name": ov["name"]}
         o = occurrence_at(self.cfg.get("schedule") or [], rid, at, freq_mhz=freq_mhz, ended=self.ended_nets(rid, at))

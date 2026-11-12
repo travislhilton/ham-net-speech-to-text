@@ -362,3 +362,30 @@ def test_an_edit_keeps_what_the_net_form_does_not_send_and_the_nets_reach(tmp_pa
     assert "reach_km" not in next(x for x in st.cfg["schedule"] if x["id"] == nid)
     with pytest.raises(ValueError):
         st.nets.update(nid, {"name": "Intertie", "radio": "ftm", "start": "20:30", "days": ["Tue"], "reach_km": 5})
+
+
+def test_the_frequency_outranks_a_net_counted_as_ended():
+    """2026-11-11: a club net (147.52, 20:00-21:00) closed at 20:20; its closing words were filed under the 20:30 net
+    (146.94) on the same radio, which then counted as 'ended' after 15 quiet minutes, and the whole 20:30 net, heard
+    on 146.94, was filed under the club net."""
+    from station.schedule import occurrence_at
+    nets = [{"id": "club", "name": "Club net", "radio": "ftm", "freq_mhz": 147.52, "days": ["Tue"],
+             "start": "20:00", "duration_min": 60},
+            {"id": "erc", "name": "ERC net", "radio": "ftm", "freq_mhz": 146.94, "days": ["Tue"],
+             "start": "20:30", "duration_min": 30}]
+    at = lambda h, m: TUE.replace(hour=h, minute=m)
+    name = lambda t, f, ended=(): (occurrence_at(nets, "ftm", t, freq_mhz=f, ended=set(ended)) or {}).get("name")
+    assert name(at(20, 20), 147.52) == "Club net"                       # its own closing words, on its frequency
+    assert name(at(20, 38), 146.94, ["erc@2026-11-03"]) == "ERC net"    # the ERC net on its own frequency
+    assert name(at(20, 38), 147.52, ["erc@2026-11-03"]) == "Club net"
+
+
+def test_an_overrun_is_not_claimed_on_another_frequency():
+    from station.schedule import overrun
+    nets = [{"id": "club", "name": "Club net", "radio": "ftm", "freq_mhz": 147.52, "days": ["Tue"],
+             "start": "20:00", "duration_min": 60}]
+    at = TUE.replace(hour=21, minute=3)
+    heard = {"club@2026-11-03": TUE.replace(hour=21, minute=1)}
+    assert overrun(nets, "ftm", at, heard)["name"] == "Club net"
+    assert overrun(nets, "ftm", at, heard, freq_mhz=147.52)["name"] == "Club net"
+    assert overrun(nets, "ftm", at, heard, freq_mhz=146.94) is None

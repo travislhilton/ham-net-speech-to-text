@@ -190,7 +190,12 @@ def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, 
     (A tie on the nearest start alone once put a 20:45 simplex net's transmissions at 20:52 into the 21:00 net.)
     `ended`: occurrence keys that are over although their scheduled time is not (closed, or quiet for longer than
     the gap that ends a conversation): they lose to any other net that could take the transmission (the next net's
-    early check-ins), but a lone net keeps its own after a long quiet spell. None = not a scheduled net."""
+    early check-ins), but a lone net keeps its own after a long quiet spell. None = not a scheduled net.
+    A transmission heard on another frequency than the net's is never that net's (owner 2026-11-11: "when I enter
+    the radio frequency it actually matches what the radio is set at. If the net isn't matching that frequency then
+    it should not be recorded" [as that net]); both must be known for that. Before that rule, ranked: (2026-11-11, a station PC: a club net on one repeater closed at 20:20 and its
+    closing words were filed early under the 20:30 net on another frequency; 15 quiet minutes later that net counted
+    as "ended", and the whole of it, heard on its own frequency, was filed under the club net)."""
     best = None
     for n in nets:
         if not may_be_on(n, rid):
@@ -202,15 +207,17 @@ def occurrence_at(nets: list[dict], rid: str, at: datetime, before=BELONGS_MIN, 
                 over = recur.key(n.get("id"), o["date"]) in ended     # ranks last: wins only when nothing else can
                 f = o.get("freq_mhz") or n.get("freq_mhz")
                 off_freq = bool(freq_mhz and f and abs(float(f) - float(freq_mhz)) > 0.0005)
+                if off_freq:
+                    continue        # owner 2026-11-11: the radio's frequency is what it is on; not the net's = not it
                 outside = not (o["start"] <= at < o["end"])
-                rank = (over, off_freq, outside, abs((at - o["start"]).total_seconds()))
+                rank = (off_freq, over, outside, abs((at - o["start"]).total_seconds()))
                 if best is None or rank < best[0]:
                     best = (rank, item(n, o))
     return best[1] if best else None
 
 
 def overrun(nets: list[dict], rid: str, at: datetime, last_heard: dict, closed=(), quiet=OVERRUN_QUIET_MIN,
-            most=OVERRUN_MAX_MIN, lead=LEAD_MIN) -> dict | None:
+            most=OVERRUN_MAX_MIN, lead=LEAD_MIN, freq_mhz: float | None = None) -> dict | None:
     """The occurrence on radio `rid` still going past its scheduled end at `at` (owner, 2026-11-03: "let the net run
     until it is done or until just before the next net"), or None. Going = its end has passed, it was heard
     (`last_heard`: occurrence key -> datetime of its latest transmission) within `quiet` minutes, it was not closed
@@ -228,6 +235,9 @@ def overrun(nets: list[dict], rid: str, at: datetime, last_heard: dict, closed=(
             if o["start"] - timedelta(minutes=lead) <= at < o["end"]:
                 due = True                                      # another net is on (or about to be): it wins
             elif o["end"] <= at <= o["end"] + timedelta(minutes=most) and k not in closed:
+                f = o.get("freq_mhz") or n.get("freq_mhz")
+                if freq_mhz and f and abs(float(f) - float(freq_mhz)) > 0.0005:
+                    continue                                    # heard on another frequency: not this net running on
                 h = last_heard.get(k)
                 if h and at - h <= timedelta(minutes=quiet) and h >= o["end"] - timedelta(minutes=quiet):
                     if best is None or o["end"] > best[0]:

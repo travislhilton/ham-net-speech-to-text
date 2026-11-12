@@ -263,6 +263,10 @@ you chose is remembered. Each column shows:
   pages past the newest 50. Searching 100,000 transmissions takes about a tenth of a second.
 - **Nets** (on each radio card): the nets scheduled on that radio, the one running now in green, the next date of the
   others.
+  A transmission belongs to a net only when the radio is on the net's frequency (the frequency on the radio's card —
+  read by CAT, or what you entered with **Change** — is taken as what the radio is on). Off it, it is filed as a
+  conversation, not as the net. A day already filed wrongly: `python -m tools.refile_nets YYYYMMDD --radio R --from
+  HH:MM --to HH:MM` shows the moves, `--apply` writes them (station stopped).
 - **Nets** (top of the page; **Nets…** on a radio card opens it for that radio). One window, full screen on a phone, with
   five tabs and a **Net** picker:
   - **Schedule**: one list of nets for this PC, each as a card in plain words ("Every 1st and 3rd Sunday at 19:00,

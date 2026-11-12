@@ -120,7 +120,11 @@ def test_the_rule_is_honoured_everywhere(tmp_path):
     clock.t = SUN.replace(hour=19, minute=30)
     n = st.schedule_now()
     assert n["current"]["name"] == "Sunday Net" and n["by_radio"]["ftm"]["ncs"] == "K7NET"
-    # a transmission heard in the net is named after it (its history instance)
+    # the radio is on another frequency (retune): what it hears is not the net's (owner 2026-11-11)
+    st._tx_start("ftm", SUN.replace(hour=19, minute=20).timestamp())
+    assert "net" not in st.tx[-1]
+    # on the net's frequency, a transmission heard in the net is named after it (its history instance)
+    st.set_radio("ftm", 146.94, "FM")
     st._tx_start("ftm", SUN.replace(hour=19, minute=20).timestamp())
     assert st.tx[-1]["net"] == {"key": "sun@2026-11-15", "id": "sun", "date": "2026-11-15", "name": "Sunday Net"}
     st._tx_start("ftm", SUN.replace(hour=21, minute=0).timestamp())               # long after it: a conversation
