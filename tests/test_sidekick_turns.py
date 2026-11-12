@@ -9,6 +9,13 @@ from station.agent import acknowledged, checkin_invited, rules_draft
 from tests.test_agent import CTX_R, _on, _say, _station, xai_key  # noqa: F401  (fixture)
 
 
+@pytest.fixture(autouse=True)
+def states(monkeypatch):
+    """The Census list the station downloads (hamkit/places.py); a few states are enough here."""
+    import station.agent as A
+    monkeypatch.setattr(A, "_place_names", lambda: ["Colorado", "Kansas", "New Mexico", "Wyoming", "Montana"])
+
+
 def inv(*texts, region="", gap_s=2.0):
     rows, t = [], 0.0
     for x in texts:
@@ -218,3 +225,21 @@ def test_no_probe_without_a_key_or_with_sidekick_off(tmp_path, monkeypatch):
     assert st.agent.probe() is None                                          # off
     _on(st)
     assert st.agent.probe() is None                                          # no key: nothing to reach
+
+
+def test_without_the_state_list_a_roll_call_by_place_is_known_by_its_shape(monkeypatch):
+    import station.agent as A
+    monkeypatch.setattr(A, "_place_names", lambda: [])
+    assert inv("Nothing heard. Stations Colorado. Check in now.")[0] is False
+    assert inv("Nothing heard. Stations Colorado. Check in now.", region="Colorado")[0] is True
+    assert inv("Any stations, please call now.")[0] is True                 # not a place
+
+
+def test_the_census_list_is_parsed_and_read(tmp_path):
+    from hamkit import places
+    txt = "STATE|STUSAB|STATE_NAME|STATENS\n08|CO|Colorado|01779779\n20|KS|Kansas|00481813\n"
+    assert places.parse(txt) == ["Colorado", "Kansas"]
+    p = tmp_path / "us_states.txt"
+    assert places.names(p) == []
+    p.write_text("Colorado\nKansas\n", encoding="utf-8")
+    assert places.names(p) == ["Colorado", "Kansas"]

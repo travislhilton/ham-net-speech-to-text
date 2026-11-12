@@ -328,13 +328,33 @@ NOT_YET = re.compile(r"\b(before (i|we) (start|begin|take|open|go to)|(i'?ll|i w
 # "please call now" alone: who is called was said earlier (maybe not heard). A check-in word must be near it.
 BARE_CALL = re.compile(r"^\W*(please,? )?(call|come) (now|in)\W*$|^\W*(please,? )?call now with your call\W*$", re.I)
 CHECKIN_WORD = re.compile(r"\bcheck[- ]?ins?\b|\bvisitors?\b|\bstations?\b|\btakers\b", re.I)
-US_PLACES = ("alabama alaska arizona arkansas california colorado connecticut delaware florida georgia hawaii idaho "
-             "illinois indiana iowa kansas kentucky louisiana maine maryland massachusetts michigan minnesota "
-             "mississippi missouri montana nebraska nevada ohio oklahoma oregon pennsylvania tennessee texas "
-             "vermont virginia washington wisconsin wyoming").split() + [
-    "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", "rhode island",
-    "south carolina", "south dakota", "west virginia", "puerto rico", "british columbia", "alberta", "ontario"]
-PLACE = re.compile(r"\b(" + "|".join(sorted((re.escape(p) for p in US_PLACES), key=len, reverse=True)) + r")\b", re.I)
+# a roll call by place: the state names come from the US Census list in the callbook folder (hamkit/places.py; none
+# are written here). Without it, the shape of the call: "Stations Colorado. Check in now."
+_PLACE_RE: dict[tuple, re.Pattern] = {}
+_NOT_PLACE = {"please", "any", "all", "with", "without", "holding", "wishing", "check", "who", "that", "only", "listening",
+              "go", "call", "come", "now", "net", "control", "on", "the", "a", "and", "or", "mobile", "portable", "for"}
+PLACE_SHAPE = re.compile(r"\b[Ss]tation'?s?,?\s+(?:in |from |of )?(?:the )?(?:state of )?([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?=\s*[.,])")
+
+
+def _place_names() -> list[str]:
+    try:
+        from hamkit import places
+        return places.names()
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def named_places(text: str) -> set[str]:
+    """Places named in `text` (lower case)."""
+    names = _place_names()
+    if names:
+        key = tuple(names)
+        rx = _PLACE_RE.get(key)
+        if rx is None:
+            rx = _PLACE_RE[key] = re.compile(r"\b(" + "|".join(sorted((re.escape(n) for n in names), key=len,
+                                                                     reverse=True)) + r")\b", re.I)
+        return {m.group(0).lower() for m in rx.finditer(text)}
+    return {m.group(1).lower() for m in PLACE_SHAPE.finditer(text) if m.group(1).split()[0].lower() not in _NOT_PLACE}
 
 # kinds of station a fixed home station is not (said in the sentence that calls for check-ins)
 RESTRICTED = re.compile(
@@ -388,7 +408,7 @@ def _restriction(scope: str, sent: str, region: str, net_name: str = "") -> str:
     if OPEN_TO_ALL.search(sent):
         return ""
     near = re.sub(re.escape(net_name), " ", scope, flags=re.I) if net_name else scope   # a net named after its state is not a roll call
-    named = {m.group(0).lower() for m in PLACE.finditer(near)}
+    named = named_places(near)
     if named:                                          # a roll call by place: "Stations Colorado. Check in now."
         if {p for p in named if p in (region or "").lower()}:
             return ""

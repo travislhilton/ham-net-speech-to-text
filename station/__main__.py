@@ -64,7 +64,12 @@ def main(argv=None):
         if (choice["final"].get("device") or "CPU").upper() != "CPU":   # a stuck graphics engine: the same model on the CPU
             st._cpu_factory = lambda: engine.make({**choice["final"], "device": "CPU"})
     st.start(listen=not (a.no_listen or a.simulate))
-    st.agent.start_probe()                                # Sidekick's card knows xAI is unreachable before a turn needs it
+    st.agent.start_probe()
+    try:
+        from hamkit import places
+        places.ensure()      # a station installed before 2026-11-12 fetches the state names once (2 KB)
+    except Exception:  # noqa: BLE001
+        pass                                # Sidekick's card knows xAI is unreachable before a turn needs it
     port = a.port or cfg["port"]
     srv = serve(st, cfg["bind"], port)
     print(f"station {st.me or '(no callsign)'}: {len(cfg['radios'])} radio(s); dashboard http://localhost:{port}/",
