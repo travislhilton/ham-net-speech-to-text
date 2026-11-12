@@ -427,3 +427,69 @@ def test_the_pass_holds_when_memory_runs_short_and_is_ended_when_critical(tmp_pa
         assert killed
     finally:
         loc._stop.set()
+
+
+# ----- the home server comes and goes (owner 2026-11-12: "fully handled ... not available and ... available") -----
+class FlakyRemote(ContextRemote):
+    """Answers /health, then drops the connection on a request (the Mac asleep, Tailscale down mid-net)."""
+    def __init__(self):
+        super().__init__()
+        self.up, self.health = True, True
+
+    def reachable(self):
+        return self.health
+
+    def transcribe_context(self, clips, highpass_hz, stage):
+        if not self.up:
+            raise ConnectionResetError("connection reset by peer")
+        return super().transcribe_context(clips, highpass_hz, stage)
+
+
+def test_the_server_lost_mid_net_hands_the_rest_to_this_pc_and_says_so(tmp_path):
+    loc, mac = FakeLocal(provisional=True), FlakyRemote()
+    st = _station(tmp_path, ["K7ABC checking in.", "K7ABC again."], remote=mac, local=loc)
+    try:
+        st.inject("ftm", np.zeros(SR * 2, np.float32))
+        assert wait_for(lambda: st.tx[-1].get("accurate"))
+        assert st.accurate.server() == "up" and st.accurate.where == "home server"
+        mac.up = False                                     # /health still said yes, then the request fails
+        st.inject("ftm", np.zeros(SR * 2, np.float32))
+        assert wait_for(lambda: st.accurate.reach is False)
+        assert st.accurate.server() == "down" and st.accurate.where == "this PC"
+        mac.health = False
+        st.accurate.tick(datetime.now() + timedelta(minutes=6))  # no 2-minute wait: this PC takes the net now
+        assert wait_for(lambda: all(stage_of(t) == "final" for t in st.tx[-2:]))
+        assert st.tx[-1]["accurate"]["where"] == "this PC"
+    finally:
+        st.stop.set()
+
+
+def test_the_probe_finds_the_server_back_and_what_waited_goes_at_once(tmp_path):
+    mac = FlakyRemote()
+    mac.health = False
+    st = _station(tmp_path, ["K7ABC checking in."], remote=mac)        # no local pass: the job must wait
+    try:
+        st.inject("ftm", np.zeros(SR * 2, np.float32))
+        assert wait_for(lambda: st.accurate.status() and st.accurate.status()[0]["state"] == "unreachable")
+        assert st.accurate.server() == "down" and not st.accurate.available()
+        key = st.accurate.status()[0]["key"]
+        assert st.accurate.retry_at[key] > time.time()
+        mac.health = True
+        st.accurate.probe(force=True)                                   # the idle check, every PROBE_S
+        assert st.accurate.server() == "up" and st.accurate.available() and st.accurate.retry_at[key] == 0
+        st.accurate.tick(datetime.now() + timedelta(minutes=6))
+        assert wait_for(lambda: stage_of(st.tx[-1]) == "final")
+        assert st.tx[-1]["accurate"]["where"] == "home server"
+    finally:
+        st.stop.set()
+
+
+def test_no_home_server_configured_says_none(tmp_path, monkeypatch):
+    monkeypatch.delenv("EMCOMM_STT_KEY", raising=False)
+    st = _station(tmp_path, ["x"], local=FakeLocal())
+    try:
+        assert st.accurate.server() is None
+        st.accurate.probe(force=True)                                   # nothing to check, nothing changes
+        assert st.accurate.reach is None
+    finally:
+        st.stop.set()

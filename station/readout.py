@@ -253,8 +253,16 @@ def facts(doc: dict) -> list[tuple[str, str]]:
     """The approver's facts table (what the numbers in the script come from)."""
     r, p, n, s, c, v = (doc.get(k) or {} for k in ("reporting", "property", "needs", "supplies", "crews", "volunteers"))
     show = lambda x: "not reported" if x is None else str(x)
-    return [("As of", doc.get("as_of") or "not reported"),
-            ("Units reported", f"{show(r.get('units_reported'))} of {show(r.get('units_expected'))}"),
+    def asof(iso):                                   # "2026-11-12T12:10:37-07:00" -> "12:10 local, Nov 12"
+        try:
+            d = datetime.fromisoformat(iso)
+            return f"{d:%H:%M} local, {d:%b} {d.day}"
+        except (TypeError, ValueError):
+            return iso or "not reported"
+    units = show(r.get("units_reported")) + (f" of {r['units_expected']}" if r.get("units_expected") is not None
+                                             else " (how many are expected: not reported)")
+    return [("As of", asof(doc.get("as_of"))),
+            ("Units reported", units),
             ("Not yet reported", ", ".join(r.get("not_reported") or []) or "—"),
             ("Reports (DR / SO / WCL)", " / ".join(show((r.get("reports") or {}).get(k)) for k in ("dr", "so", "wcl"))),
             ("Homes damaged / destroyed", f"{show(p.get('homes_damaged'))} / {show(p.get('homes_destroyed'))}"),

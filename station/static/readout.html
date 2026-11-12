@@ -5,8 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Situation report read-out</title>
 <style>
-:root{--bg:#f6f5f1;--panel:#fff;--ink:#1b1a17;--muted:#5d5a52;--line:#dcd8ce;--accent:#1f5f8b;--ok:#2e7d4f;--warn:#9a6200;--bad:#b3261e;--card:#10314a;--cardink:#f1f6fa}
-@media (prefers-color-scheme:dark){:root{--bg:#141413;--panel:#1e1e1c;--ink:#ecebe6;--muted:#a8a49a;--line:#3a3935;--accent:#73b4e2;--ok:#6cc596;--warn:#e2b04a;--bad:#f08a80;--card:#0c2638;--cardink:#e6eef4}}
+:root{--bg:#f2f4f7;--panel:#fff;--ink:#0f172a;--muted:#64748b;--line:#d4d9e1;--accent:#1e40af;--ok:#065f46;--warn:#92400e;--bad:#be123c;--card:#1e3a8a;--cardink:#f1f5f9}
+/* the station's colours (the companion EMCOMM forms' family); Settings → Display on the dashboard applies here too */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#0f172a;--panel:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--line:#334155;--accent:#60a5fa;--ok:#4ade80;--warn:#fbbf24;--bad:#fb7185;--card:#0f2a6e;--cardink:#e0e7ff}}
+:root[data-theme=dark],:root[data-theme=night]{color-scheme:dark;--bg:#0f172a;--panel:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--line:#334155;--accent:#60a5fa;--ok:#4ade80;--warn:#fbbf24;--bad:#fb7185;--card:#0f2a6e;--cardink:#e0e7ff}
+:root[data-theme=night]{--bg:#000;--panel:#0b0b0b;--ink:#c8c8c8;--muted:#8a8a8a;--line:#2b2b2b;--accent:#9a9a9a;--ok:#b0b0b0;--okbg:#141414;
+--warn:#d0d0d0;--warnc:#a0a0a0;--warnbg:#1a1a1a;--bad:#ffffff;--badbg:#262626;--chip:#1c1c1c;--partial:#7a7a7a;--term:#b8b8b8;--hdr:#101010;--hdr-fg:#b0b0b0;
+--card:#0b0b0b;--cardink:#d0d0d0;--hdr-ok:#bbb;--hdr-warn:#ddd;--hdr-bad:#fff}
+:root[data-theme=night]{filter:grayscale(1) sepia(1) saturate(12) hue-rotate(-45deg) brightness(.7)}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:860px;margin:0 auto;padding:14px 16px 60px}h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
 a{color:var(--accent)}.muted{color:var(--muted)}.small{font-size:.88rem}
@@ -27,6 +33,7 @@ table{border-collapse:collapse;width:100%;font-size:.92rem}td{padding:5px 6px;bo
 #card .ctl{display:flex;gap:10px}#card .ctl button{flex:1;padding:14px;font-size:1.05rem;background:rgba(255,255,255,.12);color:inherit;border-color:rgba(255,255,255,.3)}
 #card .ctl button.next{background:#7cc3f0;color:#062033;border-color:#7cc3f0}
 </style>
+<script>try{const d=JSON.parse(localStorage.getItem("hamnet.display")||"{}");if(d.theme&&d.theme!=="auto")document.documentElement.dataset.theme=d.theme}catch(e){}</script>
 </head>
 <body>
 <main>
@@ -63,8 +70,8 @@ function render(){
   const d=V.doc;
   if(!d){$("src").innerHTML=(V.error?`<span class="err">${esc(V.error)}</span>`:`<span class="muted">No report loaded yet.</span>`);$("body").innerHTML="";return}
   const a=age(d.as_of),stale=a!==null&&a>V.stale_min;
-  $("src").innerHTML=`<b>${esc(d.source.eoc.name||"EOC")}</b> · ${esc(d.source.event.name||"")} ${d.exercise?'<span class="tag warn">EXERCISE</span>':""}<br>
-   As of ${esc((d.as_of||"").slice(11,16)||"?")} local${a!==null?` · <span class="${stale?"warn":"muted"}">${a} min old${stale?": get a newer report, or say the as-of time":""}</span>`:""} · from ${esc(V.how||"")}
+  $("src").innerHTML=`<b>${esc(d.source.eoc.name||"The EOC (no name set at the EOC)")}</b>${d.source.event.name?" · "+esc(d.source.event.name):' · <span class="muted">no event named yet</span>'} ${d.exercise?'<span class="tag warn">EXERCISE</span>':""}<br>
+   ${d.as_of?`As of ${esc(d.as_of.slice(11,16))} local`:'<span class="warn">No reports at the EOC yet</span>'}${a!==null?` · <span class="${stale?"warn":"muted"}">${a} min old${stale?": get a newer report, or say the as-of time":""}</span>`:""} · from ${esc(V.how||"")}
    ${V.error?`<br><span class="err">${esc(V.error)}</span>`:""}`;
   const ap=V.approval,rv=V.revoked;
   $("body").innerHTML=`

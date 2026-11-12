@@ -47,13 +47,14 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
 .phrase-box{background:var(--navy);color:#BFD8D5;border-radius:8px;padding:11px 16px;font-size:14.5px;line-height:1.45}
 .phrase-box b{color:#fff}
 .tier-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.35}
+@media screen and (max-width:600px){.tier-table{display:block;overflow-x:auto}}
 .tier-table th{background:var(--navy);color:#fff;padding:6px 10px;text-align:left;font-size:13px;font-weight:600;letter-spacing:.06em}
 .tier-table td{padding:5px 10px;border-bottom:1px solid var(--border);vertical-align:top}
 .tier-table tr:nth-child(even) td{background:#F7F9FC}
 .tier-table td:first-child{font-weight:600;color:var(--navy);white-space:nowrap}
 .k{display:inline-block;font-weight:600;font-size:.92em;border:1px solid #8a96a3;border-radius:4px;padding:0 5px;line-height:1.35;background:#fff;white-space:nowrap;color:var(--navy)}
 .mono{font-family:Consolas,'Courier New',monospace;font-size:.92em}
-.grey{color:#8a96a3}.edge{border-left:3px solid var(--blue);padding-left:4px}
+.grey{color:#6b7785}.edge{border-left:3px solid var(--blue);padding-left:4px}
 .call{text-decoration:underline;font-family:Consolas,'Courier New',monospace}
 .fill{display:inline-block;min-width:2.1in;border-bottom:1px solid #2D3748;height:1em;vertical-align:baseline}
 .turn-over{margin-top:auto;text-align:right;font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--muted)}
@@ -105,10 +106,10 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
 
   <p class="card-part">A · Install <span>(once, on a Windows 10 or 11 PC)</span></p>
   <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Download:</b> open the download page (scan the code) → green <span class="k">Code</span> → <b>Download ZIP</b><small>Internet is needed this first time: about 4 GB, 10–20 minutes.</small></div></div>
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Download:</b> open the download page (scan the code) → green <span class="k">Code</span> → <b>Download ZIP</b><small>Internet is needed this first time: about 4 GB, 10–30 minutes.</small></div></div>
     <div class="step"><div class="step-num">2</div><div class="step-text"><b>Unblock, then extract:</b> right-click the ZIP → Properties → tick <b>Unblock</b> → OK; then right-click → <b>Extract All</b></div></div>
     <div class="step"><div class="step-num">3</div><div class="step-text"><b>Run</b> the extracted folder's <span class="mono">install\windows\install.cmd</span> and press <b>Yes</b><small>"Windows protected your PC"? <b>More info</b> → <b>Run anyway</b>. It asks for administrator rights itself.</small></div></div>
-    <div class="step"><div class="step-num">4</div><div class="step-text"><b>Type your callsign.</b> Press Enter to skip the QRZ.com question. Wait for <span class="mono">== Done</span><small>It picks the fastest engine for this PC and lists the sound inputs it can record from.</small></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><b>Type your callsign.</b> Press Enter to skip the QRZ.com question. Wait for <span class="mono">== Done</span><small>Keep the PC plugged in while it measures. It lists what would slow this PC and the sound inputs it can record from.</small></div></div>
   </div>
 
   <p class="card-part">B · First steps <span>(on the dashboard)</span></p>
@@ -168,7 +169,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
   </table>
 
   <div class="note-box" style="font-size:14px">This station: <span class="fill"></span><br>Radios / nets: <span class="fill" style="min-width:2.6in"></span></div>
-  <p class="card-disclaimer">HamNet Station is an independent volunteer project (MIT License), a companion to the Church of Jesus Christ EMCOMM forms. Machine transcription: the operator reviews every message before it is sent. The station never transmits unless you switch Transmit on for a radio. Full manual: README.md in the install folder.</p>
+  <p class="card-disclaimer">HamNet Station is an independent volunteer project (MIT License), a companion to the Church of Jesus Christ EMCOMM forms. Machine transcription: the operator reviews every message before it is sent. The station never transmits: Sidekick only drafts. <b>☾ Night</b> (top) turns the screen red to keep your night vision. Manual: README.md.</p>
 </div>
 
 </div>

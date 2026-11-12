@@ -5,17 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HamNet Station</title>
 <style>
-:root{--bg:#f5f6f8;--panel:#fff;--ink:#16181d;--muted:#5d6472;--line:#dfe2e8;--accent:#1f6feb;--ok:#1a7f37;
---warn:#9a6700;--warnc:#d4a72c;--warnbg:#fff8c5;--bad:#cf222e;--badbg:#ffebe9;--chip:#eef2ff;--partial:#7d8590;--term:#0969da}
-@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--panel:#161b22;--ink:#e6edf3;--muted:#8b949e;--line:#30363d;
---accent:#58a6ff;--ok:#3fb950;--warn:#d29922;--warnc:#d29922;--warnbg:#3a2f0b;--bad:#ff7b72;--badbg:#3c1618;--chip:#1c2a44;--partial:#8b949e;--term:#79c0ff}}
+:root{--bg:#f2f4f7;--panel:#fff;--ink:#0f172a;--muted:#64748b;--line:#d4d9e1;--accent:#1e40af;--ok:#065f46;--okbg:#ecfdf5;
+--warn:#92400e;--warnc:#d97706;--warnbg:#fffbeb;--bad:#be123c;--badbg:#fff1f2;--chip:#dbeafe;--partial:#64748b;--term:#1d4ed8;
+--hdr:#1e3a8a;--hdr-fg:#e0e7ff;--on:#fff;--hdr-ok:#86efac;--hdr-warn:#fcd34d;--hdr-bad:#fda4af}
+/* The look is the companion EMCOMM forms' (EOC Message Center): same slate colours, navy header, bold clock, so an
+   operator moving between the two feels at home. */
+/* Colours (Settings → Display, per browser): Automatic follows the device; Light; Dark; Night = dark and all red, to keep
+   night vision in a dark shack or EOC (the red filter also covers the waterfall, meters and the dialogs). */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#0f172a;--panel:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--line:#334155;--okbg:#052e16;
+--accent:#60a5fa;--ok:#4ade80;--warn:#fbbf24;--warnc:#fbbf24;--warnbg:#1c1400;--bad:#fb7185;--badbg:#1c0014;--chip:#1e3a8a;--partial:#94a3b8;--term:#93c5fd;
+--hdr:#0f2a6e;--hdr-fg:#c7d2fe;--on:#0f172a}}
+:root[data-theme=dark],:root[data-theme=night]{color-scheme:dark;--bg:#0f172a;--panel:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--line:#334155;--okbg:#052e16;
+--accent:#60a5fa;--ok:#4ade80;--warn:#fbbf24;--warnc:#fbbf24;--warnbg:#1c1400;--bad:#fb7185;--badbg:#1c0014;--chip:#1e3a8a;--partial:#94a3b8;--term:#93c5fd;
+--hdr:#0f2a6e;--hdr-fg:#c7d2fe;--on:#0f172a}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=night]{--bg:#000;--panel:#0b0b0b;--ink:#c8c8c8;--muted:#8a8a8a;--line:#2b2b2b;--accent:#9a9a9a;--ok:#b0b0b0;--okbg:#141414;
+--warn:#d0d0d0;--warnc:#a0a0a0;--warnbg:#1a1a1a;--bad:#ffffff;--badbg:#262626;--chip:#1c1c1c;--partial:#7a7a7a;--term:#b8b8b8;--hdr:#101010;--hdr-fg:#b0b0b0;
+--card:#0b0b0b;--cardink:#d0d0d0;--on:#000;--hdr-ok:#bbb;--hdr-warn:#ddd;--hdr-bad:#fff}
+:root[data-theme=night],:root[data-theme=night] dialog{filter:grayscale(1) sepia(1) saturate(12) hue-rotate(-45deg) brightness(.7)}
 *{box-sizing:border-box}html,body{overflow-x:hidden;margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,"Segoe UI",sans-serif}
-header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color:var(--muted)}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 16px;background:var(--hdr);color:var(--hdr-fg);position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0;color:#fff;letter-spacing:.01em}.clock{font-variant-numeric:tabular-nums;font-weight:700;letter-spacing:.05em;color:#fff}
+header button,header .helpbtn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);color:#fff;font-weight:600;font-size:13px;padding:4px 10px;border-radius:6px}
+header button:hover,header .helpbtn:hover{background:rgba(255,255,255,.22)}
+header button:focus-visible,header a:focus-visible,header input:focus-visible{outline:2px solid #fff;outline-offset:1px}
+header #q{background:#fff;color:#0f172a;border-color:transparent}header a{color:#fff}header .muted{color:var(--hdr-fg);opacity:.8}
+header .st{color:var(--hdr-fg)}header .st.ok,header .ok{color:var(--hdr-ok)}header .st.warn{color:var(--hdr-warn)}header .st.bad,header .bad{color:var(--hdr-bad)}
+header #nettype{background:rgba(255,255,255,.14);color:#fff;border-color:transparent}
+header #nightBtn[aria-pressed=true]{background:#fff;color:var(--hdr)}
 .net{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.net b{font-size:16px}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--chip)}
-.badge.emergency{background:var(--bad);color:#fff;border-color:var(--bad)}.badge.exercise{background:var(--warnbg);color:var(--warn)}
-#alert{display:none;padding:10px 16px;background:var(--bad);color:#fff;font-weight:700;font-size:17px}
+.badge.emergency{background:var(--bad);color:var(--on);border-color:var(--bad)}.badge.exercise{background:var(--warnbg);color:var(--warn)}
+#alert{display:none;padding:10px 16px;background:var(--bad);color:var(--on);font-weight:700;font-size:17px}
 #radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:12px;align-items:start}
 .rcol{display:flex;flex-direction:column;gap:10px;min-width:0}.rcol>section{margin-bottom:0}
 .feed{max-height:calc(100dvh - 120px);overflow-y:auto;overscroll-behavior:contain}
@@ -34,10 +55,10 @@ header h1{font-size:18px;margin:0}.clock{font-variant-numeric:tabular-nums;color
 /* phones / narrow windows: one radio at a time, picked with the tabs under the header */
 @media (max-width:900px) and (min-height:560px){
   body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
-  header{flex-wrap:wrap;gap:4px 10px}#engine,#nettype,#net{display:none}
+  header{flex-wrap:wrap;gap:4px 10px}#nettype,#net{display:none}#engine .st.ok{display:none}
   #rtabs{display:flex;gap:6px;padding:6px 12px 0;overflow-x:auto;flex:none}
   #rtabs button{flex:1 0 auto;padding:6px 10px;border-radius:8px 8px 0 0;border-bottom:0;font-weight:600;display:flex;gap:6px;align-items:center;justify-content:center}
-  #rtabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  #rtabs button.on{background:var(--accent);color:var(--on);border-color:var(--accent)}
   #rtabs .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}#rtabs .dot.rx{background:var(--ok)}#rtabs .dot.em{background:var(--bad)}
   main{flex:1;min-height:0;padding:8px 12px 10px;display:flex;flex-direction:column}
   #radios{flex:1;min-height:0;display:flex;flex-direction:column;align-items:stretch}
@@ -77,7 +98,7 @@ body.noterms .gloss{display:none}body.noterms .term{border-bottom:0;cursor:inher
 .sess .sbody{justify-content:flex-start;gap:6px 8px}.sess .acc.ok,.sess .nclose:not(.closed):not(.ask){flex-basis:auto}
 /* the log: the net on the air (open, sticky header), or one line for the scheduled net on now / up next; then
    Completed: one collapsed line per earlier net or conversation under a day heading (time · name · status · size) */
-.logbox .tag{flex:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 7px;border-radius:9px;background:var(--accent);color:#fff;vertical-align:1px}
+.logbox .tag{flex:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 7px;border-radius:9px;background:var(--accent);color:var(--on);vertical-align:1px}
 .logbox .tag.on{background:var(--ok)}.logbox .tag.ps{background:var(--warnc);color:#16181d}
 .sess.live{border-color:color-mix(in srgb,var(--ok) 60%,var(--line))}
 .nowbar{flex:none;margin-bottom:6px}.nowbar[hidden]{display:none}
@@ -147,7 +168,7 @@ body.dragging{user-select:none;cursor:row-resize}
 .hsearch{display:flex;gap:4px;align-items:center;margin:0}#q{width:200px;text-transform:none}
 .radio{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 .radio .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.radio .top .nm{flex:1}
-.rx{font-weight:700;color:var(--muted);font-size:13px}.rx.on{color:#fff;background:var(--ok);padding:0 8px;border-radius:6px}
+.rx{font-weight:700;color:var(--muted);font-size:13px}.rx.on{color:var(--on);background:var(--ok);padding:0 8px;border-radius:6px}
 .mrow{display:grid;grid-template-columns:48px minmax(0,1fr) 74px;gap:8px;align-items:center;margin-top:7px;font-size:13px}
 .ml{color:var(--muted)}.mv{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
 .bar{position:relative;height:14px;border-radius:4px;background:var(--line);overflow:hidden}
@@ -175,7 +196,7 @@ dialog h3{margin:0 0 8px}dialog h4{margin:12px 0 4px;font-size:14px;color:var(--
 .chk input{display:inline!important;margin:0!important;width:auto}.tolist{max-height:180px;overflow:auto}
 details{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0}summary{cursor:pointer}
 table.log{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}table.log td,table.log th{border-top:1px solid var(--line);padding:3px 4px;text-align:left;vertical-align:top}
-button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}input[type=datetime-local]{width:auto;text-transform:none}
+button.primary{background:var(--accent);color:var(--on);border-color:var(--accent)}input[type=datetime-local]{width:auto;text-transform:none}
 .err{color:var(--bad);font-size:13px}.morse{margin:4px 0;padding:4px 8px;border-left:3px solid var(--accent,#3a7bd5);background:color-mix(in srgb,var(--accent,#3a7bd5) 8%,transparent);border-radius:4px}.morse .mtag{font-weight:600;font-size:12px;letter-spacing:.02em}.morse .msym{font-family:ui-monospace,Consolas,monospace;font-size:15px;letter-spacing:.06em;word-break:break-word;margin:2px 0}.morse .mtext{font-family:ui-monospace,Consolas,monospace}.err .silent{display:block;font-weight:600}.err .silent.quiet{color:var(--warnc);font-weight:400}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding:10px 16px 24px}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}main{padding-left:12px;padding-right:12px}}
@@ -231,7 +252,7 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 .rnets .none{color:var(--muted);padding:2px 6px}
 .dropv{border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rcol.dz{outline:2px dashed var(--line);outline-offset:3px;border-radius:12px}
 .rcol.dz.over{outline-style:solid;outline-color:var(--accent)}.rcol.dz.no{opacity:.6}
-#hamtoast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;background:var(--ink);color:var(--bg);border-radius:9px;padding:8px 12px;display:flex;gap:12px;align-items:center;font-size:13.5px;max-width:calc(100vw - 32px);flex-wrap:wrap}
+#hamtoast[hidden]{display:none}#hamtoast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;background:var(--ink);color:var(--bg);border-radius:9px;padding:8px 12px;display:flex;gap:12px;align-items:center;font-size:13.5px;max-width:calc(100vw - 32px);flex-wrap:wrap}
 #hamtoast button{all:unset;cursor:pointer;font-weight:700;text-decoration:underline}
 .attn{display:flex;gap:8px;align-items:center;font-size:13px}.attn button{all:unset;cursor:pointer;color:var(--bad);font-weight:600}
 /* one schedule per PC: each net's radio, whether it will be recorded (station/fit.py) */
@@ -248,7 +269,7 @@ button.np{cursor:pointer;font-size:12.5px;padding:2px 10px}button.np.sel{border-
 #rpick .opt{display:grid;grid-template-columns:20px minmax(0,1fr);gap:1px 8px;padding:6px 8px;border-radius:6px;cursor:pointer;border:0;background:none;width:100%;text-align:left;color:var(--ink);font:inherit}
 #rpick .opt:hover,#rpick .opt:focus-visible{background:var(--chip)}#rpick .opt.no{opacity:.6}#rpick .d{grid-column:2;font-size:12px;color:var(--muted)}#rpick .h{font-size:12px;color:var(--muted);padding:4px 8px}#rpick hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .rsetup{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px;margin-top:4px}.rseg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.rseg button{border:0;border-radius:0;padding:1px 9px;font-size:12px;background:var(--panel);color:var(--ink)}.rseg button.on{background:var(--accent);color:#fff}
+.rseg button{border:0;border-radius:0;padding:1px 9px;font-size:12px;background:var(--panel);color:var(--ink)}.rseg button.on{background:var(--accent);color:var(--on)}
 .rem{background:var(--warnbg);color:var(--warn);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-weight:600}
 .st{display:grid;grid-template-columns:auto 1fr;gap:0 10px;font-size:13px}.st dt{color:var(--muted)}.st dd{margin:0;overflow-wrap:anywhere}
 .station{border-top:1px solid var(--line);padding:8px 0}.station:first-of-type{border-top:0}
@@ -268,7 +289,9 @@ details.hrow[open]>summary::before,details.sess[open]>summary::before{content:"�
 .hrow .who{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
 .hrow .n{flex:none;font-size:12px;color:var(--muted)}
 .hrow .station{border-top:0;padding:0 0 8px 18px}
-.muted{color:var(--muted)}.small{font-size:13px}input{font:inherit;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);width:130px;text-transform:uppercase}
+.muted{color:var(--muted)}.small{font-size:13px}input{font:inherit;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);width:130px}
+/* callsigns only are shown in capitals (a radio's name, a key or a search is typed as written) */
+input[name=callsign],input[name=call],input[name=ncs],input[placeholder=callsign],#srCall,#mNcs,#wlAdd{text-transform:uppercase}
 /* schedule: the Nets dialog and the card's listening line */
 .why{margin-top:4px;font-size:13px;color:var(--muted)}.why b{color:var(--ink)}
 table.nets{width:100%;border-collapse:collapse;font-size:13px}table.nets td,table.nets th{border-top:1px solid var(--line);padding:4px;text-align:left;vertical-align:top}
@@ -281,7 +304,7 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
 @media (max-width:900px){.hsearch{flex:1 1 180px}#q{flex:1;width:auto;min-width:0}}
 button.quiet{border-color:transparent;background:none;color:var(--muted)}button.quiet:hover{color:var(--ink);border-color:var(--line)}
 .linkish{border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font:inherit}
-.badge.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.badge.ok{background:var(--ok);color:var(--on);border-color:var(--ok)}
 .sbtn{display:inline-flex;gap:6px;flex-wrap:wrap}
 input.up,.dbody input.up{text-transform:uppercase}
 /* the pre-net alert: a strip under the header, the full banner on the radio's column */
@@ -301,7 +324,7 @@ input.up,.dbody input.up{text-transform:uppercase}
 .urg ul{list-style:none;margin:4px 0 0;padding:0}.urg li{border-top:1px solid color-mix(in srgb,var(--bad) 30%,transparent);padding:5px 0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
 .urg .ut{font-weight:600;flex:1 1 55%;min-width:0}.urg .ub{margin-left:auto;display:flex;gap:4px}
 .txset{margin:6px 0}.txset summary{cursor:pointer;font-size:13px}.txsw{font-weight:600}
-.cat{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:4px;background:var(--bad);color:#fff}
+.cat{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:4px;background:var(--bad);color:var(--on)}
 /* big dialogs: the Nets area and Search */
 dialog.big{max-width:min(980px,96vw);height:min(88dvh,920px);padding:0;flex-direction:column}dialog.big[open]{display:flex}
 .dhead{display:flex;gap:12px;align-items:center;padding:12px 16px 6px;flex:none}.dhead h3{margin:0;flex:none}.dhead .x{margin-left:auto}
@@ -310,7 +333,7 @@ button.x{font-size:16px;line-height:1;padding:5px 10px}
 .ntabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;flex:none}
 .ntabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 12px;font-weight:600;color:var(--muted);white-space:nowrap}
 .ntabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
-.dbody{padding:10px 16px 18px;overflow-y:auto;flex:1;min-height:0}.dbody input{text-transform:none}
+.dbody{padding:10px 16px 18px;overflow-y:auto;flex:1;min-height:0}
 .empty{border:1px dashed var(--line);border-radius:10px;padding:14px 16px;color:var(--muted);margin:8px 0;line-height:1.5}.empty b{color:var(--ink)}
 @media (max-width:600px){dialog.big{max-width:100vw;width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;border:0}
   .dhead{padding:10px 12px 4px;gap:8px}.dhead label{flex:1;min-width:0}.dhead select{width:100%;max-width:none}.dbody{padding:8px 12px 18px}.ntabs{padding:0 4px}.ntabs button{padding:8px 7px;font-size:14px}}
@@ -322,12 +345,12 @@ button.x{font-size:16px;line-height:1;padding:5px 10px}
 fieldset.rep{border:1px solid var(--line);border-radius:10px;padding:8px 12px 10px;margin:8px 0 0;min-width:0}fieldset.rep legend{font-weight:600;padding:0 4px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
 .seg label{margin:0}.seg input{position:absolute;opacity:0;width:1px;height:1px}.seg span{display:block;padding:5px 12px;cursor:pointer;border-right:1px solid var(--line)}
-.seg label:last-child span{border-right:0}.seg input:checked+span{background:var(--accent);color:#fff}.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-2px}
+.seg label:last-child span{border-right:0}.seg input:checked+span{background:var(--accent);color:var(--on)}.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-2px}
 .rline{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:8px}.rline[hidden],[data-for][hidden]{display:none!important}.rline label{margin:0}
 .netform .rline input,.netform .rline select{width:auto;display:inline-block;margin:0}.netform input.num{width:64px}
 .chips{display:inline-flex;flex-wrap:wrap;gap:4px}.chip{margin:0!important;position:relative}.chip input{position:absolute;opacity:0;width:1px;height:1px}
 .chip span{display:inline-block;min-width:40px;text-align:center;padding:3px 8px;border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:13px}
-.chip input:checked+span{background:var(--accent);border-color:var(--accent);color:#fff}.chip input:focus-visible+span{outline:2px solid var(--accent);outline-offset:1px}
+.chip input:checked+span{background:var(--accent);border-color:var(--accent);color:var(--on)}.chip input:focus-visible+span{outline:2px solid var(--accent);outline-offset:1px}
 .inl{display:inline-flex!important;gap:6px;align-items:center;margin:0!important}.inl input{margin:0!important;display:inline-block!important}
 .pv{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px}.pvsum{font-size:15px;margin-bottom:4px}
 ol.occ{margin:4px 0 0;padding-left:20px;font-size:14px}ol.occ li{padding:2px 0}ol.occ li.cx>span{text-decoration:line-through;color:var(--muted)}
@@ -374,7 +397,7 @@ ol.mtx button{font-size:11px;padding:0 5px}
 .srfilters{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0}.srfilters label{margin:0;display:flex;align-items:center;gap:4px}.srfilters input,.srfilters select{display:inline-block;width:auto;margin:0}
 .srfilters #srCall{width:96px}
 .srg h4{margin:12px 0 4px}ul.srl{list-style:none;margin:0;padding:0}li.sr{border-top:1px solid var(--line);padding:6px 0}
-.srt{font-size:15px;margin:2px 0;overflow-wrap:anywhere}mark{background:color-mix(in srgb,var(--warnc) 55%,transparent);color:inherit;border-radius:2px;padding:0 1px}
+.srt{font-size:15px;margin:2px 0;overflow-wrap:anywhere}mark{background:color-mix(in srgb,var(--warnc) 55%,transparent);color:var(--ink);border-radius:2px;padding:0 1px}
 .srb{display:flex;gap:6px;flex-wrap:wrap}
 .today{display:flex;flex-direction:column;gap:2px;padding:4px 16px 6px;border-bottom:1px solid var(--line)}.today:empty{display:none}
 .today .th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;gap:10px;align-items:center}
@@ -407,8 +430,28 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
 #pcNote .pcn.slow{border-color:#c0392b;background:rgba(192,57,43,.08)}
 #pcNote .pcn button{margin-left:8px}
 #pcSet ul{margin:4px 0 6px 18px;padding:0}#pcSet li.bad{color:#c0392b}#pcSet .fix{color:var(--muted)}
-#openSettings .badge{font-size:11px;padding:0 6px;margin-left:4px;background:var(--accent);color:#fff;border-color:var(--accent)}
+.st{white-space:nowrap;color:var(--muted)}.st.ok{color:var(--ok)}.st.warn{color:var(--warn)}.st.bad{color:var(--bad)}
+#settings .savebar{position:sticky;bottom:-16px;background:var(--panel);border-top:1px solid var(--line);margin:12px -16px -16px;padding:10px 16px;z-index:2}
+button:disabled{cursor:not-allowed}
+.wlsend{font-size:15px;padding:8px 16px;font-weight:700}
+.wlsend:disabled{background:var(--line);border-color:var(--line);color:var(--muted);opacity:1}
+.wlsend.ready{background:var(--ok);border-color:var(--ok);color:var(--on);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+#wlExp{background:var(--badbg);border:1px solid var(--bad);border-radius:8px;padding:8px 12px}
+.okband{background:var(--okbg);color:var(--ok);border:1px solid var(--ok);border-radius:8px;padding:8px 12px;font-weight:600}
+#wlBody details>summary{display:flex;align-items:center;gap:6px;cursor:pointer}#wlBody details>summary label{margin:0}
+#openSettings .badge{font-size:11px;padding:0 6px;margin-left:4px;background:var(--accent);color:var(--on);border-color:var(--accent)}
 </style>
+<script>
+// Display choices, per browser (Settings → Display): colours and the clock. Applied before the page draws.
+const DISP=(()=>{let d={};try{d=JSON.parse(localStorage.getItem("hamnet.display")||"{}")}catch(e){}
+  return {theme:d.theme||"auto",clock:d.clock||"24"}})();
+if(DISP.theme!=="auto")document.documentElement.dataset.theme=DISP.theme;
+const TOPT=()=>DISP.clock==="12"?{hour:"numeric",minute:"2-digit"}:{hour:"2-digit",minute:"2-digit",hourCycle:"h23"};
+function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamnet.display",JSON.stringify(DISP))}catch(e){}
+  if(k==="theme"){if(v==="auto")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=v;
+    const b=document.getElementById("nightBtn");if(b)b.setAttribute("aria-pressed",v==="night")}
+  if(typeof all==="function"){try{tick();all()}catch(e){}}}
+</script>
 </head>
 <body>
 <div id="alert"></div>
@@ -417,7 +460,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <div class="net" id="net"></div>
   <span id="nettype" class="badge">Net type: listening…</span>
   <span class="clock" id="clock"></span>
-  <span id="conn" class="muted">connecting…</span> <span class="muted small" id="engine"></span>
+  <span id="conn" class="muted">connecting…</span> <span class="small" id="engine" aria-live="polite"></span>
   <form id="searchForm" class="hsearch" role="search"><input id="q" type="search" placeholder="Search everything" aria-label="Search every transmission, callsign, net and the minutes" autocomplete="off"> <button>Search</button></form>
   <label class="small" title="Explain Q-codes, prowords and abbreviations (Roger, QSO, QSY…) under each transmission"><input type="checkbox" id="explain" checked style="width:auto"> <span class="xl">Explain radio terms</span><span class="xs">Explain terms</span></label>
   <button id="openNets" title="Schedule, history, who takes part, minutes and what is still open">Nets</button>
@@ -425,6 +468,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
   <button id="openPhone" title="Show a QR code: point a phone's camera at it to open this dashboard on the phone">Open on phone</button>
   <button id="openReadout" title="The EOC's situation report: approve it, then read it on the net from a large-type card" onclick="window.open('/readout','_blank')">Read-out</button>
+  <button id="nightBtn" aria-pressed="false" title="Night colours: all red on black, to keep your night vision (again for normal colours)" onclick="setDisplay('theme',DISP.theme==='night'?(DISP.prevTheme||'auto'):(DISP.prevTheme=DISP.theme,'night'))">☾ Night</button>
   <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the two-sided reference card (printable)">Help</a>
 </header>
 <nav id="today" class="today" aria-label="Nets today"></nav>
@@ -443,7 +487,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <label>Winlink Express folder <select name="winlink_dir"></select></label>
   <div class="small muted" id="wlNone"></div>
   <label>Send as (callsign account in that folder) <select name="winlink_account"></select></label>
-  <label>VHF/UHF reach, km <input name="reach_km" type="number" min="50" max="5000" step="10" style="width:7em"></label>
+  <label class="inl">VHF/UHF reach <input name="reach_km" type="number" min="50" max="5000" step="10" style="width:7em"> km</label>
   <div class="small muted">On a repeater or simplex net, a callsign licensed farther away than this, heard only once, that the two transcription passes did not read alike and that has no name or earlier check-in with it is shown struck through and not counted. Raise it for a linked repeater system.</div>
   <label>Full speed and screen on <select name="keep_awake">
     <option value="traffic">During nets and traffic (then back to my own power settings)</option>
@@ -451,8 +495,11 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
     <option value="always">Always, while the station runs</option>
     <option value="off">Never (my power settings only)</option></select></label>
   <div class="small muted">Laptops run several times slower once the screen goes dark. “During nets and traffic” switches to full speed for a scheduled net, for every transmission (from its first moment) and for 10 minutes after the last one; the rest of the time your own power plan, screen and sleep settings apply, and the radio still listens.</div>
-  <label>Keep recordings and net history for <input name="keep_weeks" type="number" min="1" max="104" step="1" style="width:5em"> weeks</label>
+  <label class="inl">Keep recordings and net history for <input name="keep_weeks" type="number" min="1" max="104" step="1" style="width:5em"> weeks</label>
   <div class="small muted" id="keepNote">Older recordings, day logs, net history, minutes and voiceprints are deleted (checked every 6 hours). Settings, radios, the net schedule and local names are always kept.</div>
+  <h4>Display <span class="muted small" style="text-transform:none">(this browser only, applied at once)</span></h4>
+  <div class="row"><label>Colours <select id="dispTheme" onchange="setDisplay('theme',this.value)"><option value="auto">Automatic (follow this device)</option><option value="light">Light (daylight, bright rooms)</option><option value="dark">Dark</option><option value="night">Night: red on black (keeps night vision)</option></select></label>
+  <label>Clock <select id="dispClock" onchange="setDisplay('clock',this.value)"><option value="24">24-hour (19:30)</option><option value="12">12-hour (7:30 PM)</option></select></label></div>
   <h4>This PC</h4><div id="pcSet" class="small"></div>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
@@ -460,7 +507,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
   <h4>Station agent (optional)</h4><div id="agentSet" class="small"></div><div id="keySet" class="small"></div>
   <h4>Sidekick's voice</h4><div id="voiceSet" class="small"></div>
   <h4>Grok speech-to-text (compared)</h4><div id="grokSet" class="small"></div>
-  <div class="row"><button value="save" id="setSave">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
+  <div class="row savebar"><button value="save" id="setSave" class="primary">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
 </form></dialog>
 <dialog id="wl"><div id="wlBody"></div></dialog>
 <dialog id="testDlg"><div id="testBody"></div></dialog>
@@ -496,8 +543,8 @@ const hhmm=iso=>iso?iso.slice(11,16):"";
 // Stations heard: when a station was last heard, date and time ("Nov 9 21:03"; owner 2026-11-09)
 const lastHeard=iso=>iso?new Date(iso).toLocaleDateString([],{month:"short",day:"numeric"})+" "+hhmm(iso):"";
 function freq(b){return b?esc(b.label):""}
-function tick(){const d=new Date();$("clock").textContent=d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})+" local · "+d.toISOString().slice(11,16)+" UTC"}
-setInterval(tick,1000);tick();
+function tick(){const d=new Date();$("clock").textContent=d.toLocaleTimeString([],{...TOPT(),second:"2-digit"})+" local · "+d.toISOString().slice(11,16)+" UTC"}
+setInterval(tick,1000);tick();try{$("nightBtn").setAttribute("aria-pressed",DISP.theme==="night")}catch(e){}
 
 function markTerms(text,terms){
   let h=esc(text);
@@ -1071,7 +1118,7 @@ function renderNow(rid){
   if(!ACTIVE[rid]){
     const on=(n.running||[]).find(x=>x.radio===rid),nx=(n.next_by_radio||{})[rid];
     const skip=x=>((n.today||[]).find(y=>y.key===x.key)||{}).skipped;
-    const tm=iso=>new Date(iso).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+    const tm=iso=>new Date(iso).toLocaleTimeString([],TOPT());
     const day=iso=>{const d=dayLabel(iso);return d==="Today"?"":d==="Yesterday"?d+" ":(Date.parse(iso)-Date.now()<6*864e5?new Date(iso).toLocaleDateString([],{weekday:"short"}):d)+" "};
     const when=x=>`${day(x.start)}${tm(x.start)}<span class="te">–${tm(x.end)}</span>`;
     const fq=x=>x.freq_mhz?`<span class="fq">${Number(x.freq_mhz).toFixed(3)} ${esc(x.mode||"")}</span>`:"";
@@ -1267,7 +1314,7 @@ function renderToday(){
 function renderTodayStrip(){
   const L=(S.net||{}).today||[],box=$("today");
   if(!L.length){box.innerHTML="";return}
-  const hm=s=>new Date(s).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  const hm=s=>new Date(s).toLocaleTimeString([],TOPT());
   const mhz=x=>x.freq_mhz?`${Number(x.freq_mhz).toFixed(3)} ${esc(x.mode||"")}`:"";
   let open=false;try{open=localStorage.getItem("todayOpen")==="1"}catch(e){}
   const key=x=>x.state==="on"||(x.state==="next"&&!x.skipped);
@@ -1340,6 +1387,7 @@ function fillAccounts(f){
 }
 $("openSettings").onclick=async()=>{
   const op=await loadSettings(),f=$("setForm");
+  $("dispTheme").value=DISP.theme;$("dispClock").value=DISP.clock;
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";f.keep_weeks.value=op.keep_weeks||6;f.keep_weeks.dataset.was=op.keep_weeks||6;
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
@@ -1396,9 +1444,15 @@ async function wlPreview(body){
 let WL_POLL=null;
 function wlExpress(running){         // Winlink Express open: the button is off until it is closed (checked every 2 s)
   const b=$("wlSend"),n=$("wlExp");if(!b||!n)return;
-  const off=!!running||!(WL&&WL.operator&&WL.operator.winlink_dir);
+  const nodir=!(WL&&WL.operator&&WL.operator.winlink_dir),off=!!running||nodir;
   n.hidden=!running;b.disabled=off;
-  b.title=running?"Close Winlink Express first":"";
+  // the state must be obvious at a glance (owner 2026-11-12): grey with the reason while it can't write, the
+  // full-colour "ready" button the moment Winlink Express is closed
+  b.textContent=running?"🔒 Close Winlink Express first":nodir?"Choose the Winlink Express folder in Settings":"✓ Put in Winlink Express Outbox";
+  b.classList.toggle("ready",!off);
+  b.title=running?"Winlink Express is open: close it, and this button turns on by itself (checked every 2 seconds)"
+    :nodir?"Settings → Winlink Express folder":"Winlink Express is closed: ready to write the messages to its Outbox";
+  const k=$("wlReady");if(k){k.hidden=off;}
   clearTimeout(WL_POLL);
   if($("wl").open)WL_POLL=setTimeout(async()=>{
     try{const r=await api("/api/winlink/express");wlExpress(r.running)}catch(e){WL_POLL=setTimeout(()=>wlExpress(running),2000)}},2000);
@@ -1419,7 +1473,8 @@ function renderWl(){
    <div class="tolist">${to}</div><div class="small">Add: <input id="wlAdd" maxlength="11" placeholder="callsign"> <button id="wlAddB">Add</button></div>
    <h4>Forms</h4>${forms}
    <p id="wlExp" class="bad" role="status" hidden><b>Winlink Express is open.</b> Close Winlink Express to put these messages in its Outbox; the button turns on as soon as it is closed. (Express keeps its Outbox list in memory and would overwrite what the station writes.)</p>
-   <div class="row"><button id="wlSend" class="primary">Put in Winlink Express Outbox</button> <button onclick="$('wl').close()">Close</button> <span id="wlMsg"></span></div>`;
+   <p id="wlReady" class="okband" role="status" hidden>✓ Winlink Express is closed: ready to put the messages in its Outbox.</p>
+   <div class="row"><button id="wlSend" class="primary wlsend">Put in Winlink Express Outbox</button> <button onclick="$('wl').close()">Close</button> <span id="wlMsg"></span></div>`;
   wlExpress(op.express_running);
   const box=$("wlBody"),toBoxes=()=>[...box.querySelectorAll("input[name=to]")];
   const count=()=>{const n=toBoxes().filter(x=>x.checked).length;box.querySelector(".tocount").textContent=`(${n} of ${toBoxes().length} checked)`};
@@ -1445,7 +1500,20 @@ function renderWl(){
     m.className="ok";m.textContent=`${res.written.length} message(s) are in the ${res.account} Outbox. Open Winlink Express to check them, then connect to send.`;
   };
 }
-function renderEngine(e){if(!e)return;$("engine").textContent=e.status==="ready"?"· "+e.final:e.status==="loading"?"· loading speech models…":"· "+(e.status||"")+" "+(e.final||e.final_error||"")}
+// The header says in plain words what transcribes and where the accurate pass runs; the model names are in the
+// tooltip (an operator needs "ready" / "home server not reachable", not "whisper-large-v3-turbo-int8-ov@GPU").
+let ENG=null;
+function renderEngine(e){if(e)ENG=e;e=ENG;if(!e)return;
+  const live=e.status==="ready"?`<span class="st ok" title="Live text: ${esc(e.final||"")}">● Live text</span>`
+    :e.status==="loading"?'<span class="st warn" title="Loading the speech models (about a minute after a start)">◌ Loading speech…</span>'
+    :`<span class="st bad" title="${esc(e.final_error||e.status||"")}">● Live text stopped</span>`;
+  const sv=S.accurate_server,w=S.accurate_where;let acc="";
+  if(sv==="up")acc='<span class="st ok" title="The accurate second pass runs on the home server">● Home server</span>';
+  else if(sv==="down")acc=w==="this PC"?'<span class="st warn" title="The home server is not reachable: the accurate pass runs on this PC until it is back (checked every minute)">● Accurate on this PC</span>'
+    :'<span class="st warn" title="The home server is not reachable: the accurate pass waits for it (checked every minute). The live text is not affected.">● Home server offline</span>';
+  else if(sv==="unknown")acc='<span class="st" title="Checking the home server…">◌ Home server</span>';
+  else if(w)acc='<span class="st ok" title="The accurate second pass runs on this PC">● Accurate on this PC</span>';
+  $("engine").innerHTML=live+(acc?" "+acc:"")}
 function all(){renderRadios();renderNet();renderHints();renderHeard();renderFeed();renderAlerts();renderUrgent()}
 async function lookup(call){
   call=call.trim().toUpperCase();if(!call)return;
@@ -1548,7 +1616,7 @@ function connect(){
     if(!INST_T)INST_T=setTimeout(go,3000)});
   es.addEventListener("learned",()=>learnBadge());
   es.addEventListener("netclose",e=>{S.netclose=JSON.parse(e.data);renderFeed();renderRadios()});
-  es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;S.accurate_where=d.where;S.accurate_rate=d.rate;renderFeed();wlAccNote()});
+  es.addEventListener("accurate",e=>{const d=JSON.parse(e.data);S.accurate=d.sessions;S.accurate_available=!!d.available;S.accurate_where=d.where;S.accurate_rate=d.rate;S.accurate_server=d.server;renderEngine();renderFeed();wlAccNote()});
 }
 // ---------- the Nets area: Schedule | History | Analysis | Minutes | Still open ----------
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],DAYN=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -1851,7 +1919,7 @@ async function renderMinutes(){
   $("netsBody").dataset.mkey=d.key;
   $("netsBody").innerHTML=`<div class="mhead">
      <div class="mnav">${d.prev?`<button data-mins="${esc(d.prev)}" title="The time before">‹</button>`:""}<div><div class="mtitle">${esc(net?d.name:"Conversation")} ${d.emergency?'<span class="badge emergency">Emergency net</span>':""}</div>
-     <div class="small muted">${esc(fmtDate(d.occ_date||d.start))} · ${hhmm(d.start)}–${hhmm(d.end)}${d.freq_mhz?" · "+mhz(d.freq_mhz,d.mode):""} · ${d.tx_count} transmissions${acc?" · "+acc:""}${(d.winlink||[]).length?` · ✉ Winlink sent ${(d.winlink||[]).length}×`:""}${d.closed_at?` · ${d.closed_by==="operator"?"ended by you":"closed by "+esc(d.closed_by||"net control")} at ${hhmm(d.closed_at)}`:""}</div></div>${d.next?`<button data-mins="${esc(d.next)}" title="The time after">›</button>`:""}</div>
+     <div class="small muted">${esc(fmtDate(d.occ_date||d.start))} · ${hhmm(d.start)}–${hhmm(d.end)}${d.freq_mhz?" · "+mhz(d.freq_mhz,d.mode):""} · ${d.tx_count} transmission${d.tx_count===1?"":"s"}${acc?" · "+acc:""}${(d.winlink||[]).length?` · ✉ Winlink sent ${(d.winlink||[]).length}×`:""}${d.closed_at?` · ${d.closed_by==="operator"?"ended by you":"closed by "+esc(d.closed_by||"net control")} at ${hhmm(d.closed_at)}`:""}</div></div>${d.next?`<button data-mins="${esc(d.next)}" title="The time after">›</button>`:""}</div>
      <div class="row mtools"><label class="inl small">Net control <input id="mNcs" class="up" maxlength="11" value="${esc(d.ncs||"")}" placeholder="callsign"></label>
       <button id="mWl" title="ICS-309 log + ICS-213 summary with these minutes">Winlink messages…</button>
       <a class="helpbtn" href="/api/history/minutes?key=${enc(d.key)}&format=md" download>Download .md</a> <button id="mCopy">Copy as text</button>${d.net_id?` <button data-goto="open" data-net="${esc(d.net_id)}">Still open</button>`:""}</div></div>
@@ -1897,7 +1965,7 @@ async function renderOpen(){
       :`<div class="empty"><b>Nothing open${NV.net?" for this net":""}.</b><br>Announcements, upcoming events and action items from the minutes show here until they are done or out of date.</div>`);
 }
 // ----- each radio column's nets; drag a net to another radio -----
-const hm12=s=>new Date(s).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+const hm12=s=>new Date(s).toLocaleTimeString([],TOPT());
 function radioMeetings(rid){
   const now=Date.now(),out=[];
   for(const n of S.schedule||[])for(const w of n.week||[])if(w.radio===rid&&new Date(w.end).getTime()>now)out.push({n,w});

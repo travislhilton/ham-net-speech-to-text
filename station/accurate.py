@@ -55,6 +55,9 @@ PROV_BATCH_S = 120.0            # provisional catch-up: up to this much target a
 FINAL_BLOCK_S = 240.0           # final: target audio per request
 FINAL_MARGIN_S = 30.0           # final: context on each side of a block
 ROLL_LAG_S = 45.0               # rolling final: a transmission joins once it ended this long ago (after-context)
+PROBE_S = 60.0                  # the home server's health is checked this often while the pass is idle, so the
+                                # dashboard says whether it is there and the pass goes back to it when it returns
+PROV_TIMEOUT_S = 120            # a provisional request (one window) that takes longer: the server is not answering
 
 
 def read_key(root: Path) -> str | None:
@@ -112,7 +115,7 @@ class Remote:
         req = urllib.request.Request(f"{self.url}/accurate/context", data=body, method="POST",
                                      headers={"Content-Type": ctype, "X-API-Key": self.key or ""})
         try:
-            with urllib.request.urlopen(req, timeout=900) as r:
+            with urllib.request.urlopen(req, timeout=PROV_TIMEOUT_S if stage == "provisional" else 900) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code in (404, 405):
@@ -159,6 +162,7 @@ class AccuratePass:
         self.lock = threading.Lock()
         self.retry_at: dict[str, float] = {}
         self.reach: bool | None = None          # the home server at the last try (None = not tried yet)
+        self.probed_at = 0.0
 
     # ----- status -----
     def status(self) -> list[dict]:
@@ -182,9 +186,40 @@ class AccuratePass:
     def rate(self) -> float:
         return self.rates[self._kind()]
 
+    def server(self) -> str | None:
+        """The home server as the dashboard says it: None (none configured), "up", "down" or "unknown" (not tried)."""
+        if not self.has_remote:
+            return None
+        return {True: "up", False: "down"}.get(self.reach, "unknown")
+
+    def _set_reach(self, ok: bool, why: str = ""):
+        """Remember whether the home server answered; say so in the log and on the dashboard when it changes."""
+        was, self.reach = self.reach, ok
+        if ok and was is False:                 # back: what waited for it goes now, not after the 2-minute retry
+            with self.lock:
+                for k, j in self.jobs.items():
+                    if j["state"] in ("unreachable", "error"):
+                        self.retry_at[k] = 0
+        if was is not ok:
+            where = ("the home server is back: the accurate pass uses it again" if was is False else
+                     "the home server answers: the accurate pass uses it") if ok else \
+                "home server not reachable" + (f" ({why})" if why else "") + \
+                ("; the accurate pass runs on this PC" if self.local is not None else "; the accurate pass waits for it")
+            print(f"{datetime.now():%H:%M:%S} accurate pass: {where}", flush=True)
+            self._publish()
+
+    def probe(self, force: bool = False):
+        """Check the home server every PROBE_S while idle (also when nothing is queued), so a server that comes back
+        is used at once, and one that left is shown before the next net needs it."""
+        if not self.has_remote or (not force and time.time() - self.probed_at < PROBE_S):
+            return
+        self.probed_at = time.time()
+        self._set_reach(bool(self.remote.reachable()))
+
     def _publish(self):
         self.st.bus.publish("accurate", {"sessions": self.status(), "available": self.available(),
-                                         "where": self.where if self.enabled else None, "rate": round(self.rate, 2)})
+                                         "where": self.where if self.enabled else None, "rate": round(self.rate, 2),
+                                         "server": self.server()})
 
     def _measured(self, kind, audio_s, took):
         self.rates[kind] = 0.7 * self.rates[kind] + 0.3 * (audio_s / max(took, 0.05))
@@ -336,6 +371,10 @@ class AccuratePass:
                     try:
                         key = self.q.get(timeout=0.5)
                     except queue.Empty:
+                        try:
+                            self.probe()
+                        except Exception:  # noqa: BLE001 - a probe never stops the pass
+                            pass
                         continue
             self._run_job(key)
 
@@ -364,7 +403,8 @@ class AccuratePass:
         stage = j.get("stage", "final")
         backend = None
         if self.has_remote:
-            self.reach = self.remote.reachable()
+            self.probed_at = time.time()
+            self._set_reach(bool(self.remote.reachable()))
             if self.reach:
                 backend = self.remote
         if backend is None and self.local is not None and (stage == "final" or self.local.provisional):
@@ -389,6 +429,8 @@ class AccuratePass:
             if self.context or local:
                 try:
                     self._context_all(j, todo, tried, hp, stage, backend)
+                    if not local and self.reach is False:        # the server went away mid-job
+                        break
                 except NoContextEndpoint:
                     self.context = False                       # an older Mac service: one at a time from now on
                     print(f"{datetime.now():%H:%M:%S} accurate pass: the Mac has no /accurate/context; one transmission at a time", flush=True)
@@ -400,8 +442,9 @@ class AccuratePass:
         with self.lock:
             j.update(state="done" if j["done"] or not j["failed"] else "error", eta_s=0,
                      finished_at=datetime.now().isoformat(timespec="seconds"))
-            if j["state"] == "error":
-                self.retry_at[key] = time.time() + 120
+            if j["state"] == "error":            # the server left mid-job and this PC can take over: no wait
+                handover = backend is not self.local and self.reach is False and self.local is not None
+                self.retry_at[key] = time.time() + (0 if handover else 120)
         if not j["auto"] or self.st.stop.is_set():
             print(f"{datetime.now():%H:%M:%S} accurate pass {key}: {j['done']} of {j['total']} done, {j['failed']} failed", flush=True)
         self._publish()
@@ -507,6 +550,12 @@ class AccuratePass:
             except (OSError, ValueError, urllib.error.URLError) as e:
                 with self.lock:
                     j["failed"] += len(targets); j["error"] = f"{type(e).__name__}: {e}"[:200]
+                if not local and isinstance(e, OSError):   # connection lost / timed out: no more blocks to it now
+                    self._set_reach(False, type(e).__name__)
+                    with self.lock:
+                        j["audio_done_s"] += sum(float(t.get("duration_s") or 0) for t in targets)
+                    self._publish()
+                    return
             with self.lock:
                 j["audio_done_s"] += sum(float(t.get("duration_s") or 0) for t in targets)
                 j["eta_s"] = self._eta(j)

@@ -85,3 +85,30 @@ def test_the_reference_is_read_with_its_prompt_and_a_bad_one_is_dropped(tmp_path
     st._final_factory = PromptEng
     st._maybe_recover(eng, audio, {"text": "Over."}, "p")
     assert st._canary is None and "reference is dropped" in capsys.readouterr().out
+
+
+class StuckEng(Eng):
+    """2026-11-11 on a laptop station: the live engine wrote the same sentence for every transmission for ~4 hours."""
+    def transcribe(self, audio, prompt=None):
+        return {"text": "And I'm going to go ahead and see if you can do that." if self.broken else GOOD}
+
+
+def test_a_stuck_engine_repeating_itself_is_caught_and_reloaded(tmp_path):
+    st = station(tmp_path); st.viewer(True)
+    eng = StuckEng()
+    a5, a7, a9 = (np.zeros(s * SR, np.float32) for s in (5, 7, 9))
+    st._maybe_recover(eng, a5, eng.transcribe(a5), "p")                       # a good read: the reference
+    eng.broken = True
+    for a in (a7, a9):                                                         # same words, different clips
+        eng, res = st._maybe_recover(eng, a, eng.transcribe(a), "p")
+    eng.broken = True
+    new, res = st._maybe_recover(eng, a7, eng.transcribe(a7), "p")             # third time: suspect, checked, reloaded
+    assert new is not eng and res["text"] == GOOD
+
+
+def test_digit_runs_and_looped_decodes_are_stuck(tmp_path):
+    st = station(tmp_path)
+    assert st._stuck("The.9.9.9.9.9.9.9", 4.0) and st._stuck("anything", 4.0, looped=True)
+    assert not st._stuck("K7ABC, you're in the log, 73.", 4.0)
+    st._recent_finals.extend([("thank you", 2.0), ("thank you", 2.1)])
+    assert not st._stuck("Thank you.", 2.2)                                    # short "thank you"s of one length: real

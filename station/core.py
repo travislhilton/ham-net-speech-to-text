@@ -6,7 +6,7 @@ import queue
 import re
 import threading
 import time
-from collections import Counter
+from collections import Counter, deque
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -83,6 +83,10 @@ def speaker_of(text: str, calls: list[str]) -> str | None:
     """The callsign the transmission identifies as its own (station/speaker.py), else None — never a guess."""
     return speaker.stated(text, calls)
 
+
+
+class InputMissing(RuntimeError):
+    """A radio's sound input is not there (unplugged, renamed, Remote Utility not running): said to the operator as is."""
 
 class RawRing:
     """Everything a radio hears, in one-minute WAVs, kept for `keep_min` minutes (0 = off). When a
@@ -206,6 +210,7 @@ class Station:
         self.last_traffic = None                       # time.time() of the last transmission's end (keep awake)
         self.viewers, self.viewer_seen = 0, None       # dashboards open in a browser (server.py /api/events)
         self._canary = None                            # (audio, words, prompt): a recent final that read well
+        self._recent_finals = deque(maxlen=3)   # (text, audio seconds): a stuck engine repeats itself
         self._engine_check = False                     # a dashboard just opened: check the live engine when idle
         self._engine_reload_at = 0.0
         self._partial_reload = False
@@ -1529,7 +1534,8 @@ class Station:
                 idx = pick_index(name, list(sd.query_devices()))
             if idx is None:
                 from .radios import why_missing
-                raise RuntimeError(why_missing(name) or f"audio input containing '{name}' not found")
+                raise InputMissing(why_missing(name) or f"Its sound input '{name}' is not there: check the radio's audio "
+                                   "cable (an IC-705 on Wi-Fi: is Icom Remote Utility running and connected?)")
             frames = queue.Queue(maxsize=400)
 
             def cb(d, n, t, s):          # never raise in the audio callback: it would stop the stream
@@ -1578,7 +1584,8 @@ class Station:
                             self._set_radio(rid, level_db=round(seg.level_db, 1), carrier=seg.active,
                                             snr_db=m["snr"] if m else self.radios[rid].get("snr_db"))
             except Exception as e:  # noqa: BLE001 — keep trying; a radio unplugged is not a crash
-                self._set_radio(rid, state="error", error=f"{type(e).__name__}: {e}", carrier=False)
+                self._set_radio(rid, state="error", carrier=False,         # the operator reads words, not a Python type
+                                error=str(e) if isinstance(e, InputMissing) else f"{type(e).__name__}: {e}")
                 self.stop.wait(10)
 
     _rescan_lock = threading.Lock()
@@ -1810,13 +1817,29 @@ class Station:
     def _words(text: str) -> int:
         return len(re.findall(r"[A-Za-z0-9]+", text or ""))
 
+    STUCK_DIGITS = re.compile(r"(?:\.\d){5,}")
+
+    def _stuck(self, text: str, audio_s: float, looped: bool = False) -> bool:
+        """Output that does not depend on the audio (2026-11-11, a laptop station, ~4 h unnoticed: 171 x "And I'm going
+        to go ahead and see if you can...", 94 x "The.9.9.9.9..." for different transmissions): a looped decode, a run of
+        ".9.9.9", or the same words as the last two finals although the clips differ in length."""
+        t = re.sub(r"\W+", " ", (text or "").lower()).strip()
+        if looped or self.STUCK_DIGITS.search(text or ""):
+            return True
+        same = [d for x, d in self._recent_finals if x == t]
+        return bool(t) and len(same) >= 2 and max(same + [audio_s]) - min(same + [audio_s]) > 0.5
+
     def _engine_broken(self, eng) -> bool:
         """Re-read the reference transmission: a live engine that read it well and now cannot is broken."""
         if self._canary is None:
             return False
         audio, words, prompt = self._canary            # read it as it was read: without its prompt a noisy reference
         try:                                           # fell to one word on a good engine (8 false reloads on one station)
-            return self._words(eng.transcribe(audio, prompt=prompt).get("text")) <= 1 < words
+            got = eng.transcribe(audio, prompt=prompt)
+            text = got.get("text") or ""
+            return (self._words(text) <= 1 < words or bool(self.STUCK_DIGITS.search(text))
+                    or any(re.sub(r"\W+", " ", text.lower()).strip() == x for x, _ in self._recent_finals
+                           if self._stuck(x, -1.0)))
         except Exception:  # noqa: BLE001
             return True
 
@@ -1844,11 +1867,13 @@ class Station:
     def _maybe_recover(self, eng, audio, res: dict, prompt: str):
         """-> (engine, result). Only while a dashboard is open (owner): a suspect final -> check the engine on the
         reference; broken -> reload and read the transmission again. A good final becomes the new reference."""
-        n = self._words(res.get("text"))
-        if n >= 4 and len(audio) <= 15 * SR:
+        n, secs = self._words(res.get("text")), len(audio) / SR
+        stuck = self._stuck(res.get("text"), secs, bool(res.get("looped")))
+        self._recent_finals.append((re.sub(r"\W+", " ", (res.get("text") or "").lower()).strip(), secs))
+        if n >= 4 and len(audio) <= 15 * SR and not stuck:      # never a stuck output as the reference
             self._canary = (audio, n, prompt)
             return eng, res
-        if (n > 1 or len(audio) < self.SUSPECT_S * SR or not self.dashboard_open()
+        if ((n > 1 and not stuck) or len(audio) < self.SUSPECT_S * SR or not self.dashboard_open()
                 or time.time() - self._engine_reload_at < self.RELOAD_EVERY_S or not self._engine_broken(eng)):
             return eng, res
         eng = self._reload_final(eng, f"read {len(audio) / SR:.1f} s as {res.get('text')!r} and failed the reference")
@@ -2159,5 +2184,6 @@ class Station:
                     "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False,
                     "accurate_where": self.accurate.where if getattr(self, "accurate", None) and self.accurate.enabled else None,
                     "accurate_rate": round(self.accurate.rate, 2) if getattr(self, "accurate", None) else None,
+                    "accurate_server": self.accurate.server() if getattr(self, "accurate", None) else None,
                     "pc": {"slow": self.slowwatch.state(),
                            "notice": not (self._saved().get("pc") or {}).get("notice_seen"), "mode": self.awake_mode}}
