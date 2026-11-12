@@ -1412,13 +1412,13 @@ function renderBoard(rid){
   const n=b.roll.filter(p=>p.role!=="ncs").length;
   pane.innerHTML=`<div class="bhead"><b>${esc(b.name)}</b>${b.ncs?` · net control ${chip(b.ncs)}`:""} · ${hhmm(b.start)}${b.minutes!=null?` (${b.minutes} min)`:""}${b.closed_at?` · <span class="muted">closed ${hhmm(b.closed_at)}</span>`:""}</div>
    ${b.ncs&&!b.closed_at?`<div class="idtimer ${idc}" title="97.119(a): a station identifies at least every 10 minutes">${idm==null?`${esc(b.ncs)} has not said its call yet`:`${esc(b.ncs)} last said its call ${idm} min ago`}${idc==="bad"?" · time to identify":""}</div>`:""}
-   <div class="small bsum"><b>${n}</b> checked in${b.recheck.length?` · <span class="once">${b.recheck.length} heard once</span>`:""}${b.traffic.length?` · <b>${b.traffic.length}</b> with traffic`:""}</div>
+   <div class="small bsum">${!b.roll.length?`<span class="muted">No callsign heard yet${b.kind==="net"?"":" in this conversation"}.</span>`:`<b>${n}</b> ${b.kind==="net"?"checked in":`station${n===1?"":"s"} taking part`}`}${b.recheck.length?` · <span class="once">${b.recheck.length} heard once</span>`:""}${b.traffic.length?` · <b>${b.traffic.length}</b> with traffic`:""}</div>
    <ol class="broll">${b.roll.map(p=>`<li class="${p.confirmed?"":"unc"}"><span class="bn">${p.ord||""}</span>${chip(p.call)}${p.role==="ncs"?' <span class="badge">NCS</span>':""}${p.traffic?' <span class="badge tr">traffic</span>':""}${p.confirmed?"":' <span class="once">heard once</span>'}<span class="muted small"> ${esc([p.name,p.city].filter(Boolean).join(", "))} ${hhmm(p.first_at)}</span></li>`).join("")}</ol>
    ${b.recheck.length?`<div class="bsec"><h4>Ask again</h4><p class="small muted">Heard once: about half of these are mis-heard.</p>${b.recheck.map(c=>chip(c,"unc")).join(" ")}</div>`:""}
    ${b.traffic.length?`<div class="bsec"><h4>Traffic</h4>${b.traffic.map(c=>chip(c)).join(" ")}</div>`:""}
    ${b.mentioned.length?`<div class="bsec"><h4>Heard, not checked in</h4><p class="small muted">Named on the air but not acknowledged by net control.</p>${b.mentioned.map(c=>chip(c,"muted")).join(" ")}</div>`:""}
    ${b.missing.length?`<div class="bsec"><h4>Regulars not heard yet</h4>${b.missing.map(c=>chip(c,"muted")).join(" ")}</div>`:""}
-   <p class="row small"><button data-mins="${esc(b.key)}"${b.closed_at&&b.review.reviewed<b.review.total?' class="primary"':""}>${b.review.reviewed>=b.review.total&&b.review.total?"Minutes ✓ reviewed":b.closed_at?`Net closed: review ${b.review.total-b.review.reviewed} check-ins ›`:"Review check-ins &amp; minutes ›"}</button></p>`}
+   <p class="row small"><button data-mins="${esc(b.key)}"${b.closed_at&&b.review.reviewed<b.review.total?' class="primary"':""}>${b.review.reviewed>=b.review.total&&b.review.total?"Minutes ✓ reviewed":b.closed_at&&b.review.total?`Net closed: review ${b.review.total-b.review.reviewed} check-ins ›`:b.roll.length?"Review check-ins &amp; minutes ›":b.kind==="net"?"Minutes ›":"Transcript &amp; notes ›"}</button></p>`}
 function renderHeard(rid){
   const cards=Object.fromEntries((S.heard||[]).map(e=>[e.call,e.card]));
   for(const r of S.radios){
