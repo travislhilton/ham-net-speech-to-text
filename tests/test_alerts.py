@@ -184,3 +184,28 @@ def test_skip_move_restore_preview_and_alert_api(tmp_path):
         assert e.value.code == 404
     finally:
         srv.shutdown()
+
+
+def test_the_winlink_summary_is_titled_by_the_net_on_the_radios_frequency(tmp_path):
+    """2026-11-11: a 20:30 net (its own frequency) was filed right but its Winlink summary said '<20:00 club net>
+    summary' — the title came from the first net scheduled on the radio, not the one on its frequency."""
+    cfg = copy.deepcopy(CFG)
+    cfg["schedule"] = [{"id": "club", "name": "Club Net", "radio": "ftm", "freq_mhz": 147.52, "mode": "FM",
+                        "start": "20:00", "duration_min": 60, "repeat": {"freq": "weekly", "weekdays": ["Sun"]}},
+                       {"id": "erc", "name": "ERC Net", "radio": "ftm", "freq_mhz": 146.94, "mode": "FM",
+                        "start": "20:30", "duration_min": 30, "repeat": {"freq": "weekly", "weekdays": ["Sun"]}}]
+    st, clock = make(tmp_path, SUN.replace(hour=20, minute=45), cfg)
+    st.set_radio("ftm", 146.94, "FM")
+    assert st._current_by_radio(SUN.replace(hour=20, minute=35))["ftm"]["name"] == "ERC Net"
+    st.set_radio("ftm", 147.52, "FM")
+    assert st._current_by_radio(SUN.replace(hour=20, minute=35))["ftm"]["name"] == "Club Net"
+    st.set_radio("ftm", 146.94, "FM")
+    for i, m in enumerate((31, 33, 38)):
+        start = SUN.replace(hour=20, minute=m)
+        st.tx.append({"id": str(100 + i), "radio": "ftm", "status": "final", "start": start.isoformat(),
+                      "duration_s": 3, "freq_mhz": 146.94, "text": "W9XYZ checking in", "callsigns": ["W9XYZ"],
+                      "speaker": "W9XYZ", "net": st.net_of("ftm", start, 146.94)})
+    assert st.tx[-1]["net"]["name"] == "ERC Net"
+    p = st.winlink_preview("ftm", st.tx[0]["start"], st.tx[-1]["start"])
+    sub = next(d for d in p["drafts"] if d["form"] == "ics213")["values"]["Subjectline"]
+    assert sub == "ERC Net summary"

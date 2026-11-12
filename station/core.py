@@ -6,6 +6,7 @@ import queue
 import re
 import threading
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -469,6 +470,9 @@ class Station:
                 notes = self.history.summary_for_213(key)
             except LookupError:
                 pass
+        filed = Counter((t.get("net") or {}).get("name") for t in span if (t.get("net") or {}).get("name"))
+        if filed:                       # the net its transmissions are filed under (re-filed ones included)
+            sched = {"name": filed.most_common(1)[0][0]}
         name = title or sched.get("name") or (inst or {}).get("name") if (inst or {}).get("kind") == "net" \
             else title or sched.get("name")
         from . import localnames
@@ -846,11 +850,22 @@ class Station:
         return rows
 
     def _current_by_radio(self, at) -> dict:
+        """The scheduled net on each radio at `at`. Two at once on one radio: the one on the radio's frequency
+        (2026-11-11: a 20:30 net on its own frequency was titled after the 20:00 club net on another one), else the
+        first to start."""
         from .schedule import running
-        out = {}
+        out, on_freq = {}, set()
         for it in running(self.cfg.get("schedule", []), at):
-            out.setdefault(it["radio"], {"name": it["name"], "ncs": it.get("ncs"), "key": it["key"], "id": it["id"],
-                                         "emergency": it.get("emergency", False)})
+            rid = it["radio"]
+            rf = (self.radios.get(rid) or {}).get("freq_mhz")
+            f = it.get("freq_mhz")
+            match = bool(rf and f and abs(float(f) - float(rf)) <= 0.0005)
+            if rid in on_freq or (rid in out and not match):
+                continue
+            out[rid] = {"name": it["name"], "ncs": it.get("ncs"), "key": it["key"], "id": it["id"],
+                        "emergency": it.get("emergency", False)}
+            if match:
+                on_freq.add(rid)
         return out
 
     def ended_nets(self, rid: str, at: datetime, gap_min: int = 15) -> set[str]:
