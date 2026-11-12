@@ -89,22 +89,36 @@ def write(root, name: str, value: str | None) -> dict:
     return status(root, name)
 
 
-def _lock(p: Path):
-    """A new secrets file: readable only by SYSTEM, Administrators and this user (Windows)."""
-    if sys.platform != "win32":
+def _lock(p: Path, run=None) -> bool:
+    """A new secrets file: readable only by SYSTEM, Administrators and this user (Windows). True when locked.
+    The user is named by its SID (whoami /user): in an SSH session USERDOMAIN is "WORKGROUP", "WORKGROUP\\user" maps
+    to no account, and icacls then changed nothing at all (2026-11-12: a key written over SSH stayed readable by
+    every user on the PC)."""
+    if sys.platform != "win32" and run is None:
         try:
             os.chmod(p, 0o600)
         except OSError:
             pass
-        return
-    user = os.environ.get("USERDOMAIN", "") + "\\" + os.environ.get("USERNAME", "") if os.environ.get("USERNAME") else None
-    args = ["icacls", str(p), "/inheritance:r", "/grant:r", "*S-1-5-18:F", "/grant:r", "*S-1-5-32-544:F"]
-    if user:
-        args += ["/grant:r", f"{user}:F"]
+        return True
+    run = run or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=15,
+                                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)))
+    me = None
     try:
-        subprocess.run(args, capture_output=True, timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        out = run(["whoami", "/user", "/fo", "csv", "/nh"]).stdout or ""
+        m = re.search(r"(S-1-5-[\d-]+)", out)
+        me = "*" + m.group(1) if m else None
     except (OSError, subprocess.SubprocessError):
         pass
+    base = ["icacls", str(p), "/inheritance:r", "/grant:r", "*S-1-5-18:F", "/grant:r", "*S-1-5-32-544:F"]
+    for who in dict.fromkeys(x for x in (me, os.environ.get("USERNAME")) if x):   # never without this user: the
+        args = [*base, "/grant:r", f"{who}:F"]                                     # station runs as it
+        try:
+            if run(args).returncode == 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+    print(f"secrets: could not restrict {p} to this user (check its permissions)", flush=True)
+    return False
 
 
 def test(root, name: str, opener=urllib.request.urlopen) -> dict:

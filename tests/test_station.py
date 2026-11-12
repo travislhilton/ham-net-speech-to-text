@@ -475,7 +475,7 @@ def test_help_card_is_served():
     import urllib.request
     from station.server import STATIC
     html = (STATIC / "card.html").read_text(encoding="utf-8")
-    assert "Side 1" in html and "Side 2" in html and "<title>" in html
+    assert "side 1 of 2" in html and "side 2 of 2" in html and "<title>" in html and "<!--DOWNLOAD_QR-->" in html
     assert 'href="/help"' in (STATIC / "index.html").read_text(encoding="utf-8")
 
 

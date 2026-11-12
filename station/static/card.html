@@ -1,288 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HamNet Station Card</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@500&display=swap">
+<!-- The two-sided reference card. Same look as the Church of Jesus Christ EMCOMM quick reference cards (one family):
+     system fonts (works with no internet), red front, navy back, numbered steps, one card side per Letter page.
+     Served by the station at /help (the download QR filled in by station/phone.py); the PDF is built by
+     tools/build_ref_card.py. Keep every side within one page: python -m tools.build_ref_card checks it. -->
 <style>
-/* Layout: two letter-size sheets (front / back), two columns each; a field card meant to be printed and kept by the radio. */
-:root{
-  --desk:#dfe3e6; --paper:#ffffff; --ink:#1d2328; --soft:#56616b; --rule:#c9d0d6;
-  --signal:#0b6b8a; --tint:#eaf3f6; --ok:#2e8540; --warn:#b7791f; --bad:#c0392b;
-  --display:"Barlow Semi Condensed","Arial Narrow",Arial,sans-serif;
-  --body:"IBM Plex Sans","Segoe UI",Arial,sans-serif;
-  --mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
-  color-scheme:light;
-}
-*{box-sizing:border-box}
-body{background:var(--desk);color:var(--ink);font-family:var(--body);font-size:9.2pt;line-height:1.34;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px}
-.note{max-width:8.5in;margin:0 auto 14px;color:var(--soft);font-size:10pt}
-.sheet{background:var(--paper);width:100%;max-width:8.5in;margin:0 auto 24px;padding:0.42in 0.45in;
-  box-shadow:0 1px 4px rgba(0,0,0,.18)}
-header.mast{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:6px 16px;
-  border-bottom:2.5px solid var(--ink);padding-bottom:5px;margin-bottom:10px}
-.mast h1{font-family:var(--display);font-weight:700;font-size:22pt;line-height:1;margin:0;letter-spacing:.01em;text-wrap:balance}
-.mast .side{font-family:var(--display);font-weight:600;font-size:11pt;text-transform:uppercase;letter-spacing:.08em;color:var(--signal)}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 0.3in}
-.cols>div{min-width:0;display:flex;flex-direction:column;gap:9px}
-section h2{font-family:var(--display);font-weight:700;font-size:11.5pt;text-transform:uppercase;letter-spacing:.07em;
-  margin:0 0 3px;padding-bottom:2px;border-bottom:1px solid var(--rule);color:var(--signal)}
-p{margin:0 0 4px}
-ol,ul{margin:0;padding-left:1.25em}
-li{margin:0 0 2.5px}
-b{font-weight:600}
-.btn{display:inline-block;font-family:var(--body);font-weight:600;font-size:8.3pt;border:1px solid var(--soft);
-  border-radius:3px;padding:0 4px;line-height:1.35;white-space:nowrap;background:var(--paper)}
-.mono{font-family:var(--mono);font-size:8.6pt}
-.fill{display:inline-block;min-width:1.9in;border-bottom:1px solid var(--ink);height:1em;vertical-align:baseline}
-.box{border:1.5px solid var(--ink);padding:6px 8px}
-.box.tint{background:var(--tint);border-color:var(--signal)}
-.sw{display:inline-block;width:.75em;height:.75em;border-radius:2px;vertical-align:-.05em;margin-right:3px;border:1px solid rgba(0,0,0,.25)}
-.sw.ok{background:var(--ok)}.sw.warn{background:var(--warn)}.sw.bad{background:var(--bad)}
-table{border-collapse:collapse;width:100%}
-td,th{text-align:left;vertical-align:top;padding:2px 4px 2px 0;border-bottom:1px solid var(--rule)}
-th{font-weight:600;white-space:nowrap;padding-right:8px}
-tr:last-child td,tr:last-child th{border-bottom:0}
-.small{font-size:8.2pt;color:var(--soft)}
-.dl{display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center}
-.dl svg{width:1.05in;height:1.05in;display:block}
-.url{font-family:var(--mono);font-size:8.3pt;word-break:break-all}
-pre.y{font-family:var(--mono);font-size:7.6pt;line-height:1.25;background:var(--tint);padding:4px 6px;margin:3px 0;white-space:pre-wrap}
-.diagram{border:1px solid var(--ink);font-size:8pt;line-height:1.25}
-.diagram .tabsrow{display:flex;gap:8px;border-bottom:1px solid var(--ink);padding:3px 6px;background:var(--tint);font-weight:600}
-.diagram .tabsrow span:last-child{margin-left:auto;color:var(--soft)}
-.diagram .panel{padding:3px 6px;border-bottom:1px dashed var(--soft);color:var(--soft)}
-.diagram .log{padding:3px 6px}
-.diagram .hdr{background:#eef1f8;padding:2px 4px;margin-bottom:2px}
-.diagram .row{display:grid;grid-template-columns:2.6em 1fr;gap:4px}
-.pend{border-left:3px solid var(--signal);padding-left:3px}
-.call{text-decoration:underline;text-decoration-thickness:1px;font-family:var(--mono);font-size:8pt}
-footer{margin-top:9px;padding-top:4px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
-@media (max-width:640px){
-  body{font-size:10.5pt}
-  .sheet{padding:18px 16px}
-  .cols{grid-template-columns:1fr}
-  .cols>div+div{margin-top:9px}
-  .fill{min-width:1.2in}
-}
-@page{size:letter;margin:0}
+:root{--red:#C8102E;--navy:#1A2744;--blue:#4A7FC1;--green:#5BAD8A;--amber:#D4850A;--muted:#4A5568;--border:#CBD5E0;color-scheme:light}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#F0F4F8;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#2D3748;padding:32px 16px 64px}
+.page-header{max-width:1120px;margin:0 auto}
+h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.page-intro{font-size:17px;color:var(--muted);margin-bottom:12px}
+.print-btn{background:var(--red);color:#fff;border:none;border-radius:8px;padding:10px 24px;font:600 18px system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;cursor:pointer;letter-spacing:.05em;margin-bottom:24px}
+.print-btn:hover{background:#9a0020}
+.card-row{display:flex;gap:20px;flex-wrap:wrap;max-width:1120px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:24px 28px;box-shadow:0 2px 8px rgba(0,0,0,.10);display:flex;flex-direction:column;gap:12px;min-width:340px;flex:1;max-width:550px}
+.card-front{border-top:5px solid var(--red)}
+.card-back{border-top:5px solid var(--navy)}
+.card-role{font-size:13.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card-title{font-size:24px;font-weight:700;color:var(--navy);line-height:1.1}
+.card-side{display:inline-block;font-size:13.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--red);color:#fff;padding:2px 10px;border-radius:4px;margin:2px 0}
+.card-side.back{background:var(--navy)}
+.card-head{display:flex;gap:12px;align-items:flex-start}
+.card-head>div:first-child{flex:1;min-width:0}
+.card-qr{flex:none;width:108px;text-align:center;font-size:12.5px;line-height:1.15;color:var(--muted)}
+.card-qr svg{display:block;width:100px;height:100px;margin:0 auto 2px}
+.card-qr .url{display:block;font-size:10px;word-break:break-all;margin-top:2px}
+.lead{font-size:15.5px;line-height:1.45}
+.card-part{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red);border-bottom:1px solid #D5DCE5;padding-bottom:2px}
+.card-back .card-part{color:var(--navy)}
+.card-part span{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:13.5px}
+.steps{display:flex;flex-direction:column;gap:7px}
+.step{display:flex;gap:12px;align-items:flex-start}
+.step-num{background:var(--red);color:#fff;border-radius:50%;width:26px;height:26px;min-width:26px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
+.card-back .step-num{background:var(--navy)}
+.step-text{font-size:15.5px;line-height:1.42;padding-top:2px}
+.step-text b{color:var(--navy)}
+.step-text small{color:var(--muted);font-size:13.5px;display:block}
+.note-box{background:#F0F4F8;border-left:4px solid var(--blue);border-radius:0 8px 8px 0;padding:9px 14px;font-size:14.5px;line-height:1.42}
+.note-box.warning{border-color:var(--amber);background:#FFF8E1}
+.note-box.tip{border-color:var(--green);background:#E8F8F0}
+.phrase-box{background:var(--navy);color:#BFD8D5;border-radius:8px;padding:11px 16px;font-size:14.5px;line-height:1.45}
+.phrase-box b{color:#fff}
+.tier-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.35}
+.tier-table th{background:var(--navy);color:#fff;padding:6px 10px;text-align:left;font-size:13px;font-weight:600;letter-spacing:.06em}
+.tier-table td{padding:5px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.tier-table tr:nth-child(even) td{background:#F7F9FC}
+.tier-table td:first-child{font-weight:600;color:var(--navy);white-space:nowrap}
+.k{display:inline-block;font-weight:600;font-size:.92em;border:1px solid #8a96a3;border-radius:4px;padding:0 5px;line-height:1.35;background:#fff;white-space:nowrap;color:var(--navy)}
+.mono{font-family:Consolas,'Courier New',monospace;font-size:.92em}
+.grey{color:#8a96a3}.edge{border-left:3px solid var(--blue);padding-left:4px}
+.call{text-decoration:underline;font-family:Consolas,'Courier New',monospace}
+.fill{display:inline-block;min-width:2.1in;border-bottom:1px solid #2D3748;height:1em;vertical-align:baseline}
+.turn-over{margin-top:auto;text-align:right;font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--muted)}
+.card-disclaimer{margin-top:auto;padding-top:6px;border-top:1px solid #e2e8f0;font-size:12.5px;line-height:1.35;color:var(--muted)}
+@media (max-width:600px){.card{min-width:0;padding:18px 16px}.card-head{flex-direction:column}}
+/* Printing: every card side is one US Letter page, front then back, so a sheet printed double-sided
+   ("flip on long edge") is the card. Nothing flows from one side onto the next. */
+@page{size:letter;margin:.5in}
 @media print{
-  body{background:var(--paper);padding:0;font-size:9.2pt}
-  .note{display:none}
-  .sheet{box-shadow:none;margin:0;width:8.5in;height:11in;max-width:none;overflow:hidden;padding:0.42in 0.45in;
-    break-after:page;page-break-after:always}
-  .sheet:last-child{break-after:auto;page-break-after:auto}
-  .cols{grid-template-columns:1fr 1fr}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  html,body{background:#fff;padding:0;margin:0}
+  .page-header{display:none}
+  .card-row{display:block;margin:0;max-width:none}
+  .card{max-width:none;width:100%;min-width:0;flex:none;box-shadow:none;border:1px solid #b8c2cc;border-top-width:6px;border-radius:10px;
+        min-height:9.8in;padding:16px 22px;gap:9px;break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid}
+  .card:last-child{break-after:auto;page-break-after:auto}
+  /* a touch smaller than on screen so every side fits one Letter page (measured with Chrome on macOS, whose
+     system font runs wider than Windows' Segoe UI) */
+  .card{gap:7px;padding:14px 20px}
+  .card-title{font-size:22px}
+  .lead,.step-text{font-size:14px;line-height:1.36}
+  .step-text small{font-size:12.5px}
+  .steps{gap:5px}
+  .step-num{width:24px;height:24px;min-width:24px;font-size:14px}
+  .note-box,.phrase-box{font-size:13px;line-height:1.36;padding:7px 12px}
+  .tier-table{font-size:13px;line-height:1.3}
+  .tier-table td{padding:4px 8px}
+  .card-part{font-size:13px}
+  .card-disclaimer{font-size:11.5px}
 }
 </style>
-
-<p class="note">Two-sided reference card for HamNet Station. Print it on letter paper, double-sided (flip on the long edge). The station also shows it under <b>Help</b>, where the browser's Print works.</p>
+</head>
+<body>
+<div class="page-header">
+  <h1>HamNet Station: Quick Reference Card</h1>
+  <p class="page-intro">Two sides, US Letter. Print double-sided ("flip on long edge"), then laminate it and keep it by the radio. Works in black and white.</p>
+  <button class="print-btn" onclick="window.print()">PRINT</button>
+</div>
+<div class="card-row">
 
 <!-- ===================== FRONT ===================== -->
-<article class="sheet">
-  <header class="mast">
-    <h1>HamNet Station</h1>
-    <span class="side">Side 1 · Install and open it</span>
-  </header>
-  <p style="margin-bottom:9px">HamNet Station listens to your radio and writes down every transmission as text, a few seconds after the station unkeys. It shows who is talking, looks up every callsign, coaches you through relays and traffic, and builds the <b>ICS-309</b> and <b>ICS-213</b> Winlink messages after the net. It runs on a Windows PC and works with no internet.</p>
-  <div class="cols">
-    <div>
-      <section>
-        <h2>You need</h2>
-        <ul>
-          <li>A Windows 10 or 11 PC (64-bit) with about 8 GB free.</li>
-          <li>Internet for the first install only (about 4 GB, 10–20 minutes; more with an NVIDIA card).</li>
-          <li>On a laptop: keep it plugged in and set the maker's fan/power profile to Performance. While a radio listens the station keeps the screen on and runs at full speed, then puts your power plan back.</li>
-          <li>The radio's receive audio on a USB sound input of its own, for example a data jack cable to a USB sound card. Never the input VARA or another digital mode uses.</li>
-        </ul>
-      </section>
+<div class="card card-front">
+  <div class="card-head"><div>
+    <p class="card-role">HamNet Station · ham net speech-to-text</p>
+    <span class="card-side">Front · side 1 of 2</span>
+    <h2 class="card-title">Install and Get Started</h2>
+    <p class="lead" style="margin-top:8px">Writes down every transmission your radio hears, a few seconds after the station unkeys: who is talking, every callsign looked up, the net's log and minutes, and the ICS (Incident Command System) 309 and 213 messages for Winlink. Runs on a Windows PC, with no internet once installed.</p>
+  </div><div class="card-qr"><!--DOWNLOAD_QR-->Download page<span class="url"><!--DOWNLOAD_URL--></span></div></div>
 
-      <section>
-        <h2>Quick install</h2>
-        <div class="dl">
-          <!--DOWNLOAD_QR-->
-          <div><b>Download</b><br><span class="url"><!--DOWNLOAD_URL--></span><br><span class="small">Scan with a phone camera to see the page, then open the same address on the PC.</span></div>
-        </div>
-        <ol style="margin-top:6px">
-          <li>On the PC, open the address above. Press the green <span class="btn">Code</span> button, then <b>Download ZIP</b>.</li>
-          <li>Open the downloaded ZIP and press <b>Extract all</b>.</li>
-          <li>In the extracted folder open <b>install</b> → <b>windows</b>, double-click <b>install.cmd</b>, and press <b>Yes</b> when Windows asks.</li>
-          <li>Type your callsign. Press <b>Enter</b> to skip the QRZ.com question if you don't use QRZ.</li>
-          <li>Wait for <b>== Done</b>. It lists the PC's sound inputs; note the name of your radio's input.</li>
-        </ol>
-        <p class="small">To update later, download again and run install.cmd again. Your settings are kept.</p>
-      </section>
-
-      <section>
-        <h2>Add your radio (once)</h2>
-        <ol>
-          <li>Open <b>C:\ham-net-speech-to-text\config\station.yaml</b> in Notepad.</li>
-          <li>Replace <span class="mono">radios: []</span> with your radio, using part of the input's name for <span class="mono">device</span>:</li>
-        </ol>
-<pre class="y">radios:
-  - id: vhf
-    name: Club VHF
-    device: USB PnP Sound
-    gate: carrier   # voice for SSB/HF
-    freq_mhz: 146.940
-    mode: FM</pre>
-        <ol start="3"><li>Save, then sign out of Windows and back in. The station starts again with your radio.</li></ol>
-      </section>
-    </div>
-
-    <div>
-      <section>
-        <h2>Open it</h2>
-        <ul>
-          <li>On the PC: double-click <b>HamNet Station</b> on the desktop.</li>
-          <li><b>On your phone:</b> press <span class="btn">Open on phone</span> at the top of the page and point the phone's camera at the code. The phone must be on the same Wi-Fi as the PC.</li>
-          <li><span class="btn">Help</span> at the top opens this card.</li>
-        </ul>
-      </section>
-
-      <section>
-        <h2>The screen</h2>
-        <p>One column per radio. On a phone, one radio at a time: tap its name under the header. A radio's dot turns <b>green while it is receiving</b>.</p>
-        <div class="diagram" aria-label="Sketch of one radio's column">
-          <div class="tabsrow"><span>Radio</span><span>Coach ●</span><span>Stations heard 12</span><span>▴ Hide</span></div>
-          <div class="panel">meters · waterfall · frequency · Pause · Nets… · Clear log… · Test transcription…</div>
-          <div class="log">
-            <div class="hdr"><b>▾ Tuesday Net</b> 19:00–19:42 · 3.915 MHz · 96 tx · 31 stations <span class="btn">Minutes</span> <span class="btn">Winlink messages…</span></div>
-            <div class="row"><span>19:04</span><span><b>K7ABC</b> <span class="btn">Who?</span> <span class="btn">▶ 4 s</span> <span class="call">K7ABC</span>, Springfield, no traffic.</span></div>
-            <div class="row pend"><span>19:05</span><span><b>≈ K7NET (net control)</b> <i class="small">improving…</i> Roger, you're in the log.</span></div>
-          </div>
-        </div>
-        <table style="margin-top:4px">
-          <tr><th>Radio</th><td>Frequency, meters, waterfall and the radio's buttons.</td></tr>
-          <tr><th>Coach</th><td>Steps and phrases for relays, priority or emergency traffic, check-ins and your 10-minute ID. A <b>red</b> dot means urgent.</td></tr>
-          <tr><th>Stations heard</th><td>One line per callsign. Tap it for licence, grid and address.</td></tr>
-          <tr><th><span class="btn">✎ Fix</span></th><td>Wrong words? Correct them (Enter saves); the station learns.</td></tr>
-        </table>
-        <p class="small"><b>More room for the log:</b> <span class="btn">▴ Hide</span> folds the panel away; <span class="btn">▾ Show</span> brings it back. Tap a net's title to fold that net.</p>
-      </section>
-
-      <section>
-        <h2>Check the audio</h2>
-        <table>
-          <tr><th>Signal</th><td><span class="sw ok"></span>good · <span class="sw warn"></span>low or hot · <span class="sw bad"></span>clipping, or no audio. It should jump when the radio hears someone.</td></tr>
-          <tr><th>⚠ on a radio</th><td>“seems to be OFF”: check the radio's battery / power, volume and cable. “No audio”: the cable or data level.</td></tr>
-          <tr><th>Radios…</th><td>Add, replace or remove a radio and choose its sound input; saving restarts the station (15 s).</td></tr>
-          <tr><th>Set level…</th><td>Once per radio; the dialog says when to open and close the squelch (MONI or SQL 0 = open). <b>1. Radio volume</b> finds the cleanest knob position. <b>2.</b> Squelch open, press <span class="btn">Adjust automatically</span>, close the squelch. By hand: the radio's volume knob low (a handheld's earphone jack is loud), then Settings → System → Sound → Input → the input → <b>Input volume</b>.</td></tr>
-          <tr><th>SNR</th><td>While receiving: <span class="sw ok"></span>20 dB+ · <span class="sw warn"></span>10–20 · <span class="sw bad"></span>under 10, expect mistakes.</td></tr>
-          <tr><th>Frequency</th><td>Wrong? Press <span class="btn">Change</span> and enter what the radio is tuned to.</td></tr>
-        </table>
-      </section>
-    </div>
+  <p class="card-part">A · Install <span>(once, on a Windows 10 or 11 PC)</span></p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Download:</b> open the download page (scan the code) → green <span class="k">Code</span> → <b>Download ZIP</b><small>Internet is needed this first time: about 4 GB, 10–20 minutes.</small></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><b>Unblock, then extract:</b> right-click the ZIP → Properties → tick <b>Unblock</b> → OK; then right-click → <b>Extract All</b></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><b>Run</b> the extracted folder's <span class="mono">install\windows\install.cmd</span> and press <b>Yes</b><small>"Windows protected your PC"? <b>More info</b> → <b>Run anyway</b>. It asks for administrator rights itself.</small></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><b>Type your callsign.</b> Press Enter to skip the QRZ.com question. Wait for <span class="mono">== Done</span><small>It picks the fastest engine for this PC and lists the sound inputs it can record from.</small></div></div>
   </div>
-  <footer class="small"><span>Everything heard is kept on the PC: C:\ham-net-speech-to-text\data</span><span>Turn over: how to use it →</span></footer>
-</article>
+
+  <p class="card-part">B · First steps <span>(on the dashboard)</span></p>
+  <div class="steps">
+    <div class="step"><div class="step-num">5</div><div class="step-text"><b>Open</b> the <b>HamNet Station</b> shortcut on the desktop<small>Or <span class="mono">http://localhost:8091</span>. On a phone: <span class="k">Open on phone</span> → scan the code (same Wi-Fi or Tailscale).</small></div></div>
+    <div class="step"><div class="step-num">6</div><div class="step-text"><b>Add your radio:</b> <span class="k">Radios…</span> → <b>+ Add a radio</b> → name, sound input, audio from, mode, frequency → <b>Save and restart the station</b><small>Icom IC-705: also its CAT (computer control) port, so the station reads and tunes the radio.</small></div></div>
+    <div class="step"><div class="step-num">7</div><div class="step-text"><b>Set level…</b> on the radio's card: follow its steps with the radio's volume and squelch</div></div>
+    <div class="step"><div class="step-num">8</div><div class="step-text"><b>Add your nets:</b> <span class="k">Nets</span> → <b>+ Add a net</b>: name, radio, start, length, frequency, how it repeats</div></div>
+  </div>
+
+  <div class="note-box warning"><b>Each radio needs its own sound input,</b> never the one VARA or Winlink uses. Two identical adapters? Rename one in Windows: Settings → System → Sound → the input → Rename.</div>
+  <div class="note-box tip"><b>On a laptop:</b> keep it plugged in and set the maker's fan profile to <b>Performance</b>. The station keeps the screen on and runs at full speed only while it transcribes, then puts your power plan back.</div>
+  <div class="note-box"><b>Optional, in Settings:</b> your name, grid and Winlink account (for the messages) · a QRZ.com login · local names · an xAI key for <b>Sidekick</b>, a station assistant that drafts what to say and never transmits.<br><b>To update:</b> download again and run <span class="mono">install.cmd</span> again. Your settings stay.</div>
+  <p class="turn-over">Turn over → side 2: Running a Net</p>
+</div>
 
 <!-- ===================== BACK ===================== -->
-<article class="sheet">
-  <header class="mast">
-    <h1>How to use it</h1>
-    <span class="side">Side 2 · Running a net</span>
-  </header>
-  <div class="cols">
-    <div>
-      <section>
-        <h2>Reading the log</h2>
-        <table>
-          <tr><th>Grey words</th><td>Rough text while the station is still talking.</td></tr>
-          <tr><th>Black text</th><td>The text, 2–3 seconds after they unkey.</td></tr>
-          <tr><th><span class="pend">Blue edge</span><br><i>improving…</i></th><td>Better text is on its way; the line updates by itself (accurate pass).</td></tr>
-          <tr><th><span class="call">K7ABC</span></th><td>A callsign: tap it for the station's card. <b>Dotted underline</b>: corrected from a near miss (hover: what was heard). <i>heard?</i> with calls to pick: a guess; tap the right one.</td></tr>
-          <tr><th><span class="call">K7ABC?</span></th><td><b>Dashed, with ?</b>: no callbook confirms it; still counted. <b>Faded, struck through</b>: too far away for VHF/UHF, not counted; <b>✎ Fix</b> it if it was real.</td></tr>
-          <tr><th>Underlined word</th><td>A Q-code or proword, meaning below (untick <b>Explain radio terms</b> to hide).</td></tr>
-          <tr><th><span class="btn">▶ 4 s</span></th><td>Play that transmission.</td></tr>
-          <tr><th><i>probably noise</i></th><td>No speech in it. Ignore it.</td></tr>
-        </table>
-      </section>
-
-      <section>
-        <h2>Who is talking</h2>
-        <table>
-          <tr><th><b>K7ABC</b></th><td>Bold: the station gave its own call.</td></tr>
-          <tr><th>≈ K7NET</th><td>Grey: probably net control.</td></tr>
-          <tr><th>K7ABC ✎</th><td>You chose it with <span class="btn">Who?</span>. Your choice wins; <b>Automatic</b> undoes it.</td></tr>
-          <tr><th>blank</th><td>Not known. It never guesses.</td></tr>
-        </table>
-      </section>
-
-      <section>
-        <h2>Before the net</h2>
-        <ol>
-          <li>Tune the radio. If the frequency changed, press <span class="btn">Change</span> and enter it.</li>
-          <li>Schedule it once: <span class="btn">Nets</span> → <span class="btn">+ Add a net</span>: name, radio, start, length, frequency, <b>net control</b> and how it <b>Repeats</b> (every Tuesday, 1st and 3rd Sunday, last Friday…). <b>Skip</b> or <b>Move…</b> one date without changing the rest.</li>
-          <li><b>5 minutes before</b>, a yellow alert: “set FTM-150R to 146.940 MHz FM”. Tune, then <span class="btn">Radio is set</span> (or <span class="btn">Remind me in 1 min</span>, <span class="btn">Skip this net</span>). 🔔 mutes the chime.</li>
-          <li>Optional: <span class="btn">Nets</span> → <b>Schedule</b> → <b>Listen only during scheduled nets</b>: on 1 minute before, off 5 minutes after.</li>
-        </ol>
-      </section>
-
-      <section>
-        <h2>During the net</h2>
-        <ul>
-          <li>Each net gets its own header, named after the net: time, frequency, stations.</li>
-          <li>A red <b>Urgent</b> box (emergency nets): injury, fire, flood, missing person… Press <span class="btn">Handled</span> when it is dealt with.</li>
-          <li>Red dot on <b>Coach</b>: open it for the steps.</li>
-          <li>Identify every 10 minutes and at the end (FCC §97.119); the tab reminds you.</li>
-        </ul>
-      </section>
-
-      <section>
-        <h2>Buttons on each radio</h2>
-        <table>
-          <tr><th><span class="btn">⏸ Pause</span></th><td>Stop listening (nets still record).</td></tr>
-          <tr><th><span class="btn">Clear log…</span></th><td>Clear the screen. Files stay on the PC.</td></tr>
-          <tr><th><span class="btn">Test transcription…</span></th><td>Read a text on the air; <b>Score</b> = % of words wrong.</td></tr>
-        </table>
-      </section>
-    </div>
-
-    <div>
-      <section>
-        <h2>After the net: Winlink messages</h2>
-        <ol>
-          <li>When net control closes the net (the header says <b>Closed</b>; 2 min for the 73s) or you press <span class="btn">End net</span>, recording stops and the accurate pass runs. Wait for <span class="btn">Winlink messages ready</span>, or go ahead. <span class="btn">Not closed</span> undoes it.</li>
-          <li>Press it (or <span class="btn">Winlink messages…</span>) on the net's header. You get an <b>ICS-309</b> communications log and an <b>ICS-213</b> summary for that net.</li>
-          <li>Check the <b>To:</b> list. Stations the callbook can't confirm start unticked.</li>
-          <li>Read and edit the messages.</li>
-          <li><b>Close Winlink Express</b>, then press <span class="btn">Put in Winlink Express Outbox</span>.</li>
-          <li>Open Winlink Express and connect. They go out with your next session.</li>
-        </ol>
-        <p class="small">First time: set your name, grid and Winlink Express account in <span class="btn">Settings</span>.</p>
-      </section>
-
-      <section>
-        <h2>Nets, minutes and search</h2>
-        <table>
-          <tr><th><span class="btn">Minutes</span></th><td>Drafted from what was said: attendance, announcements, actions, decisions, traffic, urgent. Edit; <b>Not right</b> hides one.</td></tr>
-          <tr><th>Still open</th><td>Read out at the start: what is still valid or open.</td></tr>
-          <tr><th>History · Analysis</th><td>Every time the net met; regulars, newcomers, who ran it.</td></tr>
-          <tr><th>Search box</th><td>Anything ever said, any callsign, net or minute item.</td></tr>
-        </table>
-      </section>
-
-      <section>
-        <h2>When something looks wrong</h2>
-        <table>
-          <tr><th>No text</th><td>Is the radio <b>Paused</b>? Does <b>Signal</b> move? Is the squelch opening on traffic?</td></tr>
-          <tr><th>Signal red</th><td>Too loud: turn the data level down. None: check the cable and <span class="mono">device</span> in station.yaml.</td></tr>
-          <tr><th>Lots of <i>noise</i></th><td>Raise the squelch a little.</td></tr>
-          <tr><th>Wrong speaker</th><td>Use <span class="btn">Who?</span>.</td></tr>
-          <tr><th>Wrong words or call</th><td>Use <span class="btn">✎ Fix</span>. Low SNR means more mistakes.</td></tr>
-          <tr><th>Outbox refused</th><td>Winlink Express is still open. Close it.</td></tr>
-          <tr><th>Phone won't open it</th><td>Same Wi-Fi as the PC (or Tailscale on)? Use the address under the code.</td></tr>
-          <tr><th>Page won't open</th><td>Sign in to Windows on the PC. The station starts at sign-in.</td></tr>
-        </table>
-      </section>
-
-      <section class="box tint">
-        <b>This station</b><br>
-        Address <span class="fill" style="min-width:2.3in"></span><br>
-        Radios <span class="fill" style="min-width:2.4in"></span><br>
-        Net control <span class="fill" style="min-width:2.1in"></span>
-      </section>
-    </div>
+<div class="card card-back">
+  <div>
+    <p class="card-role">HamNet Station</p>
+    <span class="card-side back">Back · side 2 of 2</span>
+    <h2 class="card-title">Running a Net</h2>
   </div>
-  <footer class="small"><span>HamNet Station · full manual: README.md in the install folder</span><span>Logs: data\logs · recordings: data\recordings</span></footer>
-</article>
+
+  <p class="card-part">Before the net</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Tune the radio</b> to the net. Frequency changed? <span class="k">Change</span> on the card<small>A radio with CAT tunes itself for each of its nets and is put back after. A net counts only on its own frequency.</small></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><b>5 minutes before</b>, a yellow alert says what to set. Tune, then <span class="k">Radio is set</span></div></div>
+  </div>
+
+  <p class="card-part">Reading the log</p>
+  <table class="tier-table">
+    <tr><td><span class="grey">Grey words</span></td><td>Rough text while the station is still talking</td></tr>
+    <tr><td><span class="edge">improving…</span></td><td>Better text is on its way; the line updates by itself (the accurate pass)</td></tr>
+    <tr><td><b>K7ABC</b> · <span class="grey">≈ K7NET</span></td><td>Who is talking: bold = gave its own call; grey ≈ = probably net control; blank = not known</td></tr>
+    <tr><td><span class="call">K7ABC</span></td><td>Tap for the station's card (licence, name, grid). <b>K7ABC?</b> = no callbook confirms it</td></tr>
+    <tr><td><span class="k">▶ 4 s</span></td><td>Play that transmission</td></tr>
+    <tr><td><span class="k">Who?</span> · <span class="k">✎ Fix</span></td><td>Wrong speaker, wrong words or call: fix it. The station learns from your fixes</td></tr>
+  </table>
+
+  <p class="card-part">After the net: Winlink messages</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">3</div><div class="step-text"><b>Net closed</b> (or press <span class="k">End net</span>): recording stops and the accurate pass re-reads the net</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><span class="k">Winlink messages…</span> on the net's header: an <b>ICS-309</b> communications log and an <b>ICS-213</b> summary<small>Check the To: list (unconfirmed calls start unticked). Read and edit.</small></div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-text"><b>Close Winlink Express</b> → <span class="k">Put in Winlink Express Outbox</span> → open Winlink Express and connect</div></div>
+  </div>
+
+  <div class="phrase-box"><b>Identify</b> every 10 minutes and at the end (FCC §97.119). <b>Minutes</b>, <b>History</b> and <b>Search</b> (press <b>/</b>) keep every net: attendance, announcements, actions, traffic.</div>
+
+  <p class="card-part">When something looks wrong</p>
+  <table class="tier-table">
+    <tr><td>No text</td><td>Radio <b>Paused</b>? Does the meter move? Does the squelch open on traffic? Run <b>Set level…</b></td></tr>
+    <tr><td>Meter red / none</td><td>Too loud: turn the volume down. None: check the cable and the radio's input in <b>Radios…</b></td></tr>
+    <tr><td>Wrong net name</td><td>Is the card's frequency what the radio is on? <span class="k">Change</span> it</td></tr>
+    <tr><td>Outbox refused</td><td>Winlink Express is still open: close it, then try again</td></tr>
+    <tr><td>Page won't open</td><td>Sign in to Windows on the PC (the station starts at sign-in). Phone: same Wi-Fi or Tailscale</td></tr>
+  </table>
+
+  <div class="note-box" style="font-size:14px">This station: <span class="fill"></span><br>Radios / nets: <span class="fill" style="min-width:2.6in"></span></div>
+  <p class="card-disclaimer">HamNet Station is an independent volunteer project (MIT License), a companion to the Church of Jesus Christ EMCOMM forms. Machine transcription: the operator reviews every message before it is sent. The station never transmits unless you switch Transmit on for a radio. Full manual: README.md in the install folder.</p>
+</div>
+
+</div>
+</body>
+</html>

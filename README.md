@@ -1,28 +1,60 @@
-# ham-net-speech-to-text
+# HamNet Station — ham net speech-to-text
 
-Live speech-to-text for amateur-radio voice nets and contacts, on a Windows 11 PC connected to one
-or more radios. It shows who said what as it happens, explains Q-codes and prowords, looks up each
-callsign, suggests what a newer operator can say next (check-in, relay, emergency traffic), and
-recognizes what kind of net is on the air. It works with **no network** (portable station), and
-when the home network is there it also hands recordings to a bigger machine for a more accurate
-second pass and net reports (ICS-309 / ICS-213).
+Live speech-to-text for **amateur radio voice nets**, on a Windows PC connected to one or more radios.
 
-> **Status (2026-11-05): early build, in use on two station PCs.** What works today is listed under "Status" below; this README
-> is updated as each piece lands.
+> **An independent volunteer project** (MIT License), offered freely to any amateur radio club, ARES (Amateur Radio Emergency Service) group or EOC (Emergency Operations Center) that can use it. A companion to the [Church of Jesus Christ EMCOMM forms](https://github.com/travislhilton/church-emcomm-wnlk-forms): the station writes the net's ICS (Incident Command System) 309 and 213 messages for Winlink, and can read an EOC's situation report out on a voice net. Machine transcription: the operator reviews everything before it is sent.
 
-## Install on a Windows 10 or 11 PC
+HamNet Station listens to your radio and writes down every transmission a few seconds after the station unkeys. It shows who is talking, looks up every callsign in the FCC (Federal Communications Commission) database, explains Q-codes and prowords, coaches a newer operator through check-ins, relays and emergency traffic, and keeps each net's log, minutes and history. After the net it builds the **ICS-309** communications log and **ICS-213** summary for Winlink Express. It works with **no internet** once installed; a bigger home computer, when there is one, can re-read the net more accurately.
 
-1. Open **https://github.com/travislhilton/ham-net-speech-to-text**, press the green **Code** button, then
-   **Download ZIP**, and extract it anywhere (right-click → Extract all).
-2. Open the extracted folder → `install\windows` → double-click **`install.cmd`** and allow
-   administrator access.
-3. Type your callsign when asked. The first run downloads about 4 GB (Python packages, Whisper
-   models, the FCC license database) and takes 10–20 minutes. Re-run `install.cmd` after every update.
-4. **Your area's local names (optional):** if someone in your area shares an **area pack** (`area-pack.json`: the
-   local clubs, repeaters and web sites, see [Local names](#local-names)), save it beside `install.cmd` before
-   step 2 and the installer imports it, or import it later in **Settings → Local names**.
+## Find your role
 
-What the installer does (`install/windows/install.ps1`, safe to re-run). Nothing needs to be installed beforehand:
+| You are | Start here |
+|---|---|
+| Setting up a station PC for the first time | [Install](#install) — then [After installing — what to do](#after-installing--what-to-do) |
+| An operator or net control logging a net | [Quick Reference Card](#quick-reference-card) and [Using it](#using-it) |
+| Sending the net's log to an EOC or your ARES group | [After the net: Winlink messages](#after-the-net-winlink-messages) |
+| Reading an EOC's situation report out on a voice net | [Incident read-out](#incident-read-out-situation-report-on-a-voice-net) |
+| Connecting a radio (handheld, mobile, HF rig) | [Connecting a radio](#connecting-a-radio) |
+| An instructor giving a class | [Quick Reference Card](#quick-reference-card) — print one per student |
+| A developer | [Contributing](#contributing--developing-this-project) |
+
+## Which computer can I use?
+
+| What you are doing | What you need |
+|---|---|
+| **Running the station** (it records and transcribes the radio) | **A Windows 10 or 11 PC**, 64-bit, about 8 GB free; a laptop works |
+| Watching the log, fixing a line, reading the minutes | Any phone, tablet or computer with a browser, on the same Wi-Fi or Tailscale |
+| Sending the net's messages by Winlink | The station PC, with Winlink Express |
+
+**Why Windows:** the station runs beside Winlink Express and VARA (the radio modem Winlink uses), which run only on Windows. Any other device joins by browser.
+
+## Download
+
+| | Best for | Link |
+|---|---|---|
+| **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip)** |
+| **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Download the PDF](https://github.com/travislhilton/ham-net-speech-to-text/raw/master/docs/HamNet_Station_Quick_Reference_Card.pdf)** |
+
+The same ZIP is on this page under the green **Code** button → **Download ZIP**.
+
+---
+
+## Install
+
+1. **Download** the [ZIP package](https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip) and save it anywhere.
+2. **Unblock** — right-click the ZIP → Properties → tick **Unblock** → OK *(skip it if there is no Unblock box)*.
+3. **Extract** — right-click the ZIP → **Extract All** → Extract.
+4. **Run the installer** — in the extracted folder open `install` → `windows` and double-click **`install.cmd`**. Press **Yes** when Windows asks for administrator rights. If Windows shows "Windows protected your PC", click **More info** → **Run anyway**.
+5. **Type your callsign** when asked. Press **Enter** to skip the QRZ.com question if you don't use QRZ (you can add it later).
+6. **Wait for `== Done`.** The first install downloads about 4 GB (Python packages, Whisper speech models, the FCC license database) and takes 10–20 minutes. It ends by listing the sound inputs this PC can record from: note your radio's.
+
+**Internet is needed for the first install only.** The station itself works with none.
+
+**To update:** download the ZIP again and run `install.cmd` again. Your settings, radios, nets and logs are kept.
+
+### What the installer does
+
+`install/windows/install.ps1`, safe to re-run. Nothing needs to be installed beforehand:
 - checks the PC first (64-bit Windows 10/11, about 8 GB free, internet for the first install) and says what is missing;
 - installs the Microsoft Visual C++ runtime if it is missing (OpenVINO, PyTorch and faster-whisper need it);
 - installs Python 3.12 for all users (winget, or straight from python.org when winget is missing) and a private
@@ -72,6 +104,61 @@ final text at 0.07x real time anyway. Set once on the laptop itself:
   processor to ~0.5 GHz);
 - Settings → System → Power & battery → Presence sensing: **Turn off my screen when I leave** off;
 - in your own plan, never **hibernate** while plugged in (a hibernated PC cannot start the station for a net).
+
+---
+
+## After installing — what to do
+
+1. **Open the dashboard:** double-click **HamNet Station** on the desktop (or browse to `http://localhost:8091/`).
+   The station starts by itself whenever you sign in to Windows.
+2. **Add your radio:** **Radios…** at the top → **+ Add a radio** → a name, its **sound input**, where its audio comes
+   from (*speaker / earphone jack or SSB*, or *FM data jack*), mode and frequency → **Save and restart the station**.
+   An Icom IC-705: also choose its **CAT port** (computer control), so the station reads the frequency and tunes the
+   radio for its nets. Details: [Connecting a radio](#connecting-a-radio).
+3. **Set the level:** **Set level…** on the radio's card walks you through the radio's volume and squelch until the
+   station hears it cleanly.
+4. **Add your nets:** **Nets** → **+ Add a net**: name, radio, start, length, frequency, net control and how it
+   repeats (every Tuesday, 1st and 3rd Sunday…). Five minutes before each one a yellow alert tells you what to set.
+   A transmission counts as the net's only when the radio is on the net's frequency.
+5. **Open it on your phone** (optional): **Open on phone** at the top → point the phone's camera at the code (same
+   Wi-Fi as the PC, or Tailscale).
+6. **Settings** (optional): your name, grid and Winlink Express account (for the Winlink messages), a QRZ.com login,
+   your area's local names, and an xAI API key for **Sidekick**, a station assistant that drafts what your station
+   could say on the net and never transmits.
+7. **Print the [Quick Reference Card](#quick-reference-card)** and keep it by the radio.
+
+### After the net: Winlink messages
+
+When net control closes the net (or you press **End net**) recording stops and the accurate pass re-reads the net.
+Press **Winlink messages…** on the net's header: you get an **ICS-309** communications log and an **ICS-213**
+summary, titled with the net's name. Check the To: list (stations the callbook can't confirm start unticked), read
+and edit the messages, **close Winlink Express**, press **Put in Winlink Express Outbox**, then open Winlink Express
+and connect. They go out with your next session.
+
+## Quick Reference Card
+
+Two sides on one sheet: **Install and Get Started** on the front, **Running a Net** on the back. Same layout as the
+Church of Jesus Christ EMCOMM quick reference cards. Print it double-sided ("flip on long edge"), laminate it, and
+keep it by the radio. Works in black and white.
+
+**[Download the PDF](https://github.com/travislhilton/ham-net-speech-to-text/raw/master/docs/HamNet_Station_Quick_Reference_Card.pdf)** ·
+[view it on GitHub](https://github.com/travislhilton/ham-net-speech-to-text/blob/master/docs/HamNet_Station_Quick_Reference_Card.pdf) ·
+on the station: **Help** (top right of the dashboard) opens the same card; the browser's Print prints it.
+
+The card's QR code opens this download page. A club handing out its own copy sets `download_url:` in
+`config\station.yaml` and the card the station prints carries that address instead. To rebuild the PDF after
+editing `station/static/card.html`: `python -m tools.build_ref_card` (needs Google Chrome; it fails when a side no
+longer fits one page).
+
+## Requirements
+
+| Requirement | Notes |
+|---|---|
+| **Windows 10 or 11, 64-bit** | The station PC. About 8 GB free; a laptop works (keep it plugged in) |
+| **A sound input per radio** | A USB sound card or interface (Digirig, SignaLink, a data-jack cable) — never the one VARA or Winlink uses. An IC-705 on Wi-Fi uses Icom Remote Utility's virtual sound input |
+| **Internet, the first time** | About 4 GB for the install. Afterwards the station works with none |
+| **Winlink Express** | Only to send the net's messages by Winlink · [winlink.org](https://winlink.org) |
+| **Intel or NVIDIA graphics** (optional) | Faster text with a current driver; the CPU works too. The installer measures this PC and picks |
 
 ## Your own settings stay on your PC
 
@@ -851,7 +938,11 @@ returns to well under 1 GB. `GET /health` shows `whisper_loaded`, `idle_s` and t
 (default 4) caps what MLX may keep between decodes. Before this the cache was never returned: a server with no
 restart grew to 43 GB in 12 hours of final passes; six replayed final passes now stay at 4.5 GB, no slower.
 
-## Development
+## Support, feedback and bug reports
+
+Found a problem, or have an idea? Anyone with a GitHub account can **[open an issue](https://github.com/travislhilton/ham-net-speech-to-text/issues/new)**: say what you did, what you saw, the radio and interface, and the time of the transmission. Please don't post recordings of other operators' transmissions or their personal details.
+
+## Contributing — developing this project
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r transcribe/requirements.txt -r analyze/requirements.txt -r requirements-dev.txt
@@ -861,6 +952,11 @@ Design: `docs/ARCHITECTURE.md`, including which settings live in which local con
 server addresses, keys and logins go only in those files (`config/station.yaml`, `config/local.yaml`,
 `config/secrets.env`, `capture/config.yaml`, `~/.config/emcomm-stt/env`); git ignores them.
 
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Use it, change it and share it, for your club, ARES group or EOC.
+
+## About
+
+HamNet Station was created as a volunteer contribution to the amateur radio and EMCOMM (emergency communications) community, in the same family as the [Church of Jesus Christ EMCOMM forms](https://github.com/travislhilton/church-emcomm-wnlk-forms). It is offered freely to any club, ARES group or EOC that can use it. It is an independent project, not an official product of any church, club or agency.
