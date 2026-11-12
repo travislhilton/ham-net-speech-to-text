@@ -122,3 +122,15 @@ def test_the_operator_sets_how_long_and_six_weeks_is_the_default(tmp_path):
     assert st.keep_weeks() == 3                                  # Settings wins
     st._save({"operator": {"keep_weeks": 500}})
     assert st.keep_weeks() == retention.MAX_WEEKS
+
+
+def test_a_file_in_use_is_skipped_quietly(tmp_path, monkeypatch):
+    rec = tmp_path / "recordings" / "20261101"
+    rec.mkdir(parents=True)
+    (rec / "a.wav").write_bytes(b"x")
+
+    def refuse(p, *a, **k):
+        raise PermissionError(13, "Access is denied")
+    monkeypatch.setattr(retention.shutil, "rmtree", refuse)
+    res = retention.sweep(tmp_path, 6, today=TODAY)
+    assert res["in use"] == 1 and "errors" not in res and res["recordings"]["n"] == 0 and rec.exists()

@@ -92,6 +92,9 @@ def sweep(data: Path, keep_weeks: float = KEEP_WEEKS, history=None, agent=None, 
             if not dry_run:
                 shutil.rmtree(p) if p.is_dir() else p.unlink()
             r["n"] += 1
+        except PermissionError:                  # open (a compiled model the engine has loaded): next time
+            r["bytes"] -= _size(p) if p.exists() else 0
+            out["in use"] = out.get("in use", 0) + 1
         except OSError as e:
             out.setdefault("errors", []).append(f"{p.name}: {e}")
 
