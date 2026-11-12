@@ -213,6 +213,7 @@ class Station:
         self._recent_finals = deque(maxlen=3)   # (text, audio seconds): a stuck engine repeats itself
         self._engine_check = False                     # a dashboard just opened: check the live engine when idle
         self._engine_reload_at = 0.0
+        self._engine_checked_at = 0.0
         self._partial_reload = False
         if self.awake_mode not in AWAKE_MODES:
             self.awake_mode = AWAKE_DEFAULT
@@ -225,6 +226,7 @@ class Station:
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
         self._final_factory, self._partial_factory = final_engine_factory, partial_engine_factory
+        self._cpu_factory = None           # the same live model on the CPU (__main__): when the graphics engine is stuck
         self.engines = {"final": None, "partial": None, "status": "loading"}
         self._final_busy = False
         self.accurate_spec = None          # engine.yaml `accurate:` (set by __main__): what this PC can run locally
@@ -1798,6 +1800,7 @@ class Station:
     VIEWER_GRACE_S = 120        # a reload or a dropped connection is not "closed"
     SUSPECT_S = 3.0             # a transmission this long that reads as one word or nothing is suspect
     RELOAD_EVERY_S = 300        # at most one engine reload per 5 minutes
+    CHECK_EVERY_S = 60          # at most one reference check a minute (noise reads as "Over." on some stations)
 
     def viewer(self, opened: bool):
         """server.py: a browser opened (True) or closed (False) the dashboard's event stream."""
@@ -1829,19 +1832,33 @@ class Station:
         same = [d for x, d in self._recent_finals if x == t]
         return bool(t) and len(same) >= 2 and max(same + [audio_s]) - min(same + [audio_s]) > 0.5
 
+    def _stuck_texts(self) -> set:
+        """Texts the engine wrote for at least three recent transmissions of different lengths."""
+        out = set()
+        for x in {x for x, _ in self._recent_finals if x}:
+            d = [d for y, d in self._recent_finals if y == x]
+            if len(d) >= 3 and max(d) - min(d) > 0.5:
+                out.add(x)
+        return out
+
     def _engine_broken(self, eng) -> bool:
         """Re-read the reference transmission: a live engine that read it well and now cannot is broken."""
+        return self._reference_reading(eng) in ("short", "stuck")
+
+    def _reference_reading(self, eng) -> str:
+        """How `eng` reads the reference: "ok", "short" (one word or none: maybe a noisy reference), "stuck" (the
+        same words it wrote for other transmissions, or ".9.9.9": the engine, not the reference), or "none"."""
         if self._canary is None:
-            return False
+            return "none"
         audio, words, prompt = self._canary            # read it as it was read: without its prompt a noisy reference
         try:                                           # fell to one word on a good engine (8 false reloads on one station)
-            got = eng.transcribe(audio, prompt=prompt)
-            text = got.get("text") or ""
-            return (self._words(text) <= 1 < words or bool(self.STUCK_DIGITS.search(text))
-                    or any(re.sub(r"\W+", " ", text.lower()).strip() == x for x, _ in self._recent_finals
-                           if self._stuck(x, -1.0)))
+            text = eng.transcribe(audio, prompt=prompt).get("text") or ""
         except Exception:  # noqa: BLE001
-            return True
+            return "stuck"
+        t = re.sub(r"\W+", " ", text.lower()).strip()
+        if self.STUCK_DIGITS.search(text) or (t and t in self._stuck_texts()):
+            return "stuck"
+        return "short" if self._words(text) <= 1 < words else "ok"
 
     def _reload_final(self, eng, why: str):
         """A fresh live engine (and the partial one at its next run). Measured 2026-11-07: after Modern Standby the
@@ -1854,27 +1871,48 @@ class Station:
         except Exception as e:  # noqa: BLE001
             print(f"live engine: reload failed: {type(e).__name__}: {e}", flush=True)
             return eng
-        if self._engine_broken(new):                   # the fresh engine cannot read it either: the reference is bad
+        how = self._reference_reading(new)
+        health = {"state": "reloaded", "at": datetime.now().isoformat(timespec="seconds"), "why": why}
+        if how == "stuck" and self._cpu_factory:       # 2026-11-11: a restart did not fix it either (graphics driver state)
+            print("live engine: a fresh graphics engine is stuck too; the live text moves to the CPU (slower)", flush=True)
+            try:
+                cpu = self._cpu_factory()
+                self._warm(cpu)
+                del new
+                new = cpu
+                health.update(state="cpu")
+            except Exception as e:  # noqa: BLE001
+                print(f"live engine: CPU engine failed: {type(e).__name__}: {e}", flush=True)
+                health.update(state="stuck")
+        elif how == "stuck":
+            health.update(state="stuck")
+        elif how == "short":                           # the fresh engine cannot read it either: the reference is bad
             print("live engine: a fresh engine fails the reference too; the reference is dropped, the engine was fine",
                   flush=True)
             self._canary = None
+            health.update(state="ok")
         del eng
         self._partial_reload = True
-        self.engines.update(final=new.name, status="ready", reloaded=datetime.now().isoformat(timespec="seconds"))
+        self.engines.update(final=new.name, status="ready", reloaded=health["at"], health=health)
         self.bus.publish("engines", self.engines)
         return new
 
     def _maybe_recover(self, eng, audio, res: dict, prompt: str):
-        """-> (engine, result). Only while a dashboard is open (owner): a suspect final -> check the engine on the
-        reference; broken -> reload and read the transmission again. A good final becomes the new reference."""
+        """-> (engine, result). Every transmission (owner 2026-11-12, after a 4-hour stuck engine with no dashboard
+        open on 11-11): a suspect final -> check the engine on the reference; broken -> reload and read the
+        transmission again. A good final becomes the new reference."""
         n, secs = self._words(res.get("text")), len(audio) / SR
         stuck = self._stuck(res.get("text"), secs, bool(res.get("looped")))
         self._recent_finals.append((re.sub(r"\W+", " ", (res.get("text") or "").lower()).strip(), secs))
         if n >= 4 and len(audio) <= 15 * SR and not stuck:      # never a stuck output as the reference
             self._canary = (audio, n, prompt)
             return eng, res
-        if ((n > 1 and not stuck) or len(audio) < self.SUSPECT_S * SR or not self.dashboard_open()
-                or time.time() - self._engine_reload_at < self.RELOAD_EVERY_S or not self._engine_broken(eng)):
+        if ((n > 1 and not stuck) or (len(audio) < self.SUSPECT_S * SR and not stuck)
+                or time.time() - self._engine_reload_at < self.RELOAD_EVERY_S
+                or time.time() - self._engine_checked_at < self.CHECK_EVERY_S):
+            return eng, res
+        self._engine_checked_at = time.time()
+        if not self._engine_broken(eng):
             return eng, res
         eng = self._reload_final(eng, f"read {len(audio) / SR:.1f} s as {res.get('text')!r} and failed the reference")
         try:

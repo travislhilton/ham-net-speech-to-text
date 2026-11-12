@@ -318,10 +318,28 @@ NEXT_STATION = re.compile(r"\b(next|first|another) station,? (please|go ahead)\b
 # net control working through a list of places or named stations (not this station's turn)
 ROLL_CALL = re.compile(r"\b(now calling|calling (for )?the|log(ged)? in as well|(next|now) (city|county|town|eoc|"
                        r"station on the list)|moving (on )?to|let'?s go (now )?to|now going to|we'?ll go to)\b", re.I)
-OPEN_TO_ALL = re.compile(r"\b(any station,? any ?where|any and all|all stations|any station)\b", re.I)
+OPEN_TO_ALL = re.compile(r"\b(any station,? any ?where|any and all|all stations|any station|with or without traffic)\b"
+                         r"(?!,?\s+(holding|with traffic|having|that (has|have|is|are)|who (has|have|is|are)|in|from|located))",
+                         re.I)
+# net control saying check-ins come LATER (an HF preamble is often lost: "Before I start taking check-ins, ...")
+NOT_YET = re.compile(r"\b(before (i|we) (start|begin|take|open|go to)|(i'?ll|i will|we'?ll|we will|i'?m going to|we'?re going to)"
+                     r" (be )?(start|begin|take|open|call|go)\w*|in (a|just a) (moment|minute|few minutes)|shortly|"
+                     r"after (the|this) (preamble|announcements?|bulletins?|traffic))\b", re.I)
+# "please call now" alone: who is called was said earlier (maybe not heard). A check-in word must be near it.
+BARE_CALL = re.compile(r"^\W*(please,? )?(call|come) (now|in)\W*$|^\W*(please,? )?call now with your call\W*$", re.I)
+CHECKIN_WORD = re.compile(r"\bcheck[- ]?ins?\b|\bvisitors?\b|\bstations?\b|\btakers\b", re.I)
+US_PLACES = ("alabama alaska arizona arkansas california colorado connecticut delaware florida georgia hawaii idaho "
+             "illinois indiana iowa kansas kentucky louisiana maine maryland massachusetts michigan minnesota "
+             "mississippi missouri montana nebraska nevada ohio oklahoma oregon pennsylvania tennessee texas "
+             "vermont virginia washington wisconsin wyoming").split() + [
+    "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", "rhode island",
+    "south carolina", "south dakota", "west virginia", "puerto rico", "british columbia", "alberta", "ontario"]
+PLACE = re.compile(r"\b(" + "|".join(sorted((re.escape(p) for p in US_PLACES), key=len, reverse=True)) + r")\b", re.I)
+
 # kinds of station a fixed home station is not (said in the sentence that calls for check-ins)
 RESTRICTED = re.compile(
     r"\b(maritime|mobiles?( only)?|members? only|(only )?stations? with (formal |listed )?traffic|traffic only|"
+    r"holding (any )?(formal |listed |emergency |priority )?traffic|stations? with traffic|"
     r"liaison|emergency (stations?|traffic) only|priority (stations?|traffic) only|short[- ]?time|"
     r"(emergency|medical|priority|formal|health|welfare|listed)[^.?!]{0,30}\btraffic|relays?\b|"
     r"(city|county|state|agency|hospital|shelter|school) stations?|(emergency )?operations? cent(er|re)s?|eocs?|"
@@ -334,24 +352,91 @@ def _sentence_at(text: str, i: int) -> str:
     return text[a:(min(ends) + 1) if ends else len(text)]
 
 
-def checkin_invited(rows: list[dict]) -> tuple[bool, str]:
-    """(invited, why) from the latest transmission, with the open check-ins before it (last 10 transmissions)."""
+def _sentences_before(text: str, i: int, n: int = 2) -> str:
+    """The `n` sentences before position i (net control says who is called, then "check in now")."""
+    parts = [x for x in re.split(r"(?<=[.?!…])\s+", text[:i]) if re.search(r"\w", x)]
+    return " ".join(parts[-n:])
+
+
+def _gap_s(a: dict, b: dict) -> float | None:
+    """Seconds from the end of transmission a to the start of b."""
+    try:
+        end = datetime.fromisoformat(str(a["start"])) + timedelta(seconds=float(a.get("duration_s") or 0))
+        return (datetime.fromisoformat(str(b["start"])) - end).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _scope(rows: list[dict], idx: int, at: int) -> str:
+    """Who net control called: the calling sentence and the sentence before it; when the call opens its transmission,
+    the transmission before too if it ended under 10 s earlier (a pause cut the sentence in two). Wider than that,
+    an earlier "he relays Arizona" was read as a restriction on the next call (12th Region roll call, 11-12)."""
+    text = rows[idx].get("text") or ""
+    before = _sentences_before(text, at, 1)
+    out = before + " " + _sentence_at(text, at)
+    if idx > 0 and not before.strip():
+        g = _gap_s(rows[idx - 1], rows[idx])
+        if g is not None and g < 10:
+            out = _sentences_before(rows[idx - 1].get("text") or "", len(rows[idx - 1].get("text") or ""), 1) + " " + out
+    return out
+
+
+def _restriction(scope: str, sent: str, region: str, net_name: str = "") -> str:
+    """Why this station is not the one called ("" = it is)."""
+    if NOT_YET.search(sent):
+        return "net control will take check-ins later"
+    if OPEN_TO_ALL.search(sent):
+        return ""
+    near = re.sub(re.escape(net_name), " ", scope, flags=re.I) if net_name else scope   # a net named after its state is not a roll call
+    named = {m.group(0).lower() for m in PLACE.finditer(near)}
+    if named:                                          # a roll call by place: "Stations Colorado. Check in now."
+        if {p for p in named if p in (region or "").lower()}:
+            return ""
+        where = ", ".join(sorted(x.title() for x in named))
+        return (f"check-ins called for stations in {where}" +
+                ("" if region else " (set this station's region in Settings → Station agent to answer a call for it)"))
+    if RESTRICTED.search(scope):
+        return "check-ins called for a kind of station this one is not"
+    if BARE_CALL.match(sent.strip()) and not CHECKIN_WORD.search(scope.replace(sent, "")):
+        return "a call with no word of who is called (the start of it was not heard)"
+    return ""
+
+
+def checkin_invited(rows: list[dict], region: str = "", net_name: str = "") -> tuple[bool, str]:
+    """(invited, why) from the latest transmission, with the open check-ins before it (last 10 transmissions).
+    Who is called is read around the call, not only in its sentence (2026-11-12 review: "Any station holding traffic,
+    traffic only. Check in now." drafted a check-in from a station with none)."""
     text = (rows[-1].get("text") or "") if rows else ""
     m = CHECKIN_CALL.search(text)
     if m:
-        sent = _sentence_at(text, m.start())
-        if RESTRICTED.search(sent) and not OPEN_TO_ALL.search(sent):
-            return False, "check-ins called for a kind of station this one is not"
-        return True, "net control called for check-ins"
+        why = _restriction(_scope(rows, len(rows) - 1, m.start()), _sentence_at(text, m.start()), region, net_name)
+        return (False, why) if why else (True, "net control called for check-ins")
     if NEXT_STATION.search(text):
-        for t in reversed(rows[-10:-1]):
+        for k in range(len(rows) - 2, max(-1, len(rows) - 11), -1):
+            t = rows[k]
             mm = CHECKIN_CALL.search(t.get("text") or "")
             if mm:
-                sent = _sentence_at(t["text"], mm.start())
-                if RESTRICTED.search(sent) and not OPEN_TO_ALL.search(sent):
-                    return False, "open check-ins are for a kind of station this one is not"
+                why = _restriction(_scope(rows, k, mm.start()), _sentence_at(t["text"], mm.start()), region, net_name)
+                if why:
+                    return False, "open check-ins: " + why
                 return True, "net control asked for the next station during open check-ins"
     return False, ""
+
+
+# net control acknowledging this station ("W9XYZ, thank you, you're in the log"): a check-in taken, not a call to answer
+ACK = re.compile(r"\b(thank(s| you)|got (you|ya|it)|(you'?re|you are) (in the log|logged|on the list|in)|logged|welcome|"
+                 r"good (morning|afternoon|evening|to hear you)|copy|roger|noted|appreciate)\b", re.I)
+ASKS = re.compile(r"\?|\b(go ahead|do you (have|copy)|are you|can you|could you|would you|what|how|where|when|"
+                  r"anything (for|further)|traffic for|comments?)\b", re.I)
+
+
+def acknowledged(text: str) -> bool:
+    """Net control named this station to acknowledge it, not to ask it anything."""
+    return bool(ACK.search(text or "")) and not ASKS.search(text or "")
+
+
+# emergency or priority traffic on ANY net (97.101(c)), not only on nets flagged as emergency nets
+BREAK = re.compile(r"\b(break,? break|emergency traffic|priority traffic|mayday|may day|this is an emergency)\b", re.I)
 
 # net control giving the floor: "any comments", "anything further for the net", "anyone else", "questions?"
 INPUT_CALL = re.compile(
@@ -491,7 +576,7 @@ class Agent:
         self.per_hour = per_hour
         self.lock = threading.Lock()
         self.cfg = {"enabled": False,                    # owner 11-10: off by default; the operator turns it on
-                    "name": DEFAULT_NAME, "checkin": "", "operator": "", "station": "", "license_class": "",
+                    "name": DEFAULT_NAME, "checkin": "", "operator": "", "station": "", "region": "", "license_class": "",
                     "model": DEFAULT_MODEL, "deep_model": DEEP_MODEL, "compare": [], "radios": {},
                     "voice": "", "speed": 1.0}                   # the voice the operator chose (station/tts.py)
         saved = None
@@ -522,7 +607,7 @@ class Agent:
         for rid, s in (raw or {}).items():
             if not isinstance(s, dict):
                 continue
-            d = {k: s[k] for k in ("disclosed", "checked_in") if s.get(k)}
+            d = {k: s[k] for k in ("disclosed", "checked_in", "checked_in_at", "checked_in_how", "muted") if s.get(k)}
             if isinstance(s.get("pending"), dict) and s["pending"].get("state") in ("ready", "announced", "failed"):
                 d["pending"] = s["pending"]                     # work in flight is lost with the process: not kept
             try:
@@ -535,7 +620,8 @@ class Agent:
 
     def _save_state(self):
         doc = {rid: {k: (v.isoformat(timespec="seconds") if isinstance(v, datetime) else v) for k, v in s.items()
-                     if k in ("last_id", "disclosed", "checked_in", "pending")} for rid, s in self.state.items()}
+                     if k in ("last_id", "disclosed", "checked_in", "checked_in_at", "checked_in_how", "muted", "pending")}
+               for rid, s in self.state.items()}
         try:
             tmp = self.state_path.with_suffix(".tmp")
             tmp.write_text(json.dumps(doc, indent=1), encoding="utf-8")
@@ -555,9 +641,9 @@ class Agent:
 
     def settings(self, body: dict) -> dict:
         with self.lock:
-            for k in ("name", "checkin", "operator", "station"):
+            for k in ("name", "checkin", "operator", "station", "region"):
                 if k in body:
-                    v = re.sub(r"\s+", " ", str(body[k] or "")).strip()[:120 if k in ("checkin", "station") else 24]
+                    v = re.sub(r"\s+", " ", str(body[k] or "")).strip()[:120 if k in ("checkin", "station", "region") else 24]
                     if k == "name":
                         v = v or DEFAULT_NAME
                         why = name_problem(v, self.st.me or "")
@@ -620,7 +706,21 @@ class Agent:
                            for m, v in MODELS.items()],
                 "online": {p: o.view() for p, o in self.online.items()},
                 "pending": {rid: s["pending"] for rid, s in self.state.items() if s.get("pending")},
-                "classes": list(PHONE), "drafts": list(self.drafts)}
+                "classes": list(PHONE), "drafts": list(self.drafts),
+                "turn": {rid: self.turn(rid) for rid in self.st.radios if self.mode(rid) == "draft"},
+                "mode_now": self._mode_now(keys)}
+
+    def _mode_now(self, keys: dict) -> dict:
+        """How Sidekick writes its drafts now, in plain words: with the model, or with its offline rules and why."""
+        prov = MODELS.get(self.cfg.get("model") or DEFAULT_MODEL, {}).get("provider", "xai")
+        if not keys.get(prov):
+            return {"how": "rules", "why": "no xAI key", "say": "Offline rules: no xAI key on this PC. Sidekick checks in "
+                    "when check-ins are open to it and acknowledges a call; it cannot answer questions."}
+        o = self.online.get(prov)
+        if o is not None and o.online is False:
+            return {"how": "rules", "why": "offline", "say": f"Offline rules: xAI not reachable ({o.last_error}). "
+                    "Sidekick checks in and acknowledges a call; questions wait for the operator. It tries again by itself."}
+        return {"how": "model", "why": "", "say": ""}
 
     # ----- hearing -----
     def on_final(self, tx: dict):
@@ -693,11 +793,18 @@ class Agent:
         last_id = st.get("last_id")
         id_due = not last_id or now - last_id >= timedelta(minutes=ID_EVERY_MIN)
         first = st.get("disclosed") != contact
-        emergency = bool(net.get("emergency")) and bool(re.search(r"\b(emergency|priority|break break)\b",
-                                                                  " ".join(t.get("text", "") for t in rows[-3:]), re.I))
+        recent = " ".join(t.get("text", "") for t in rows[-3:])
+        emergency = ((bool(net.get("emergency")) and bool(re.search(r"\b(emergency|priority|break break)\b", recent, re.I)))
+                     or bool(BREAK.search(recent)))           # 97.101(c): on every net, flagged or not
         busy = bool(r.get("carrier"))                      # a signal on the frequency right now
         ln, entries, lrules = self._local_names(net.get("name"))
-        invited, inv_why = checkin_invited(rows)
+        invited, inv_why = checkin_invited(rows, self.cfg.get("region") or "", net.get("name") or "")
+        if invited and net.get("checkins") == "none":
+            invited, inv_why = False, "this net is set to never check in (Nets → the net → Sidekick)"
+        lastrow0 = rows[-1] if rows else {}
+        if (rows and call in (lastrow0.get("callsigns") or []) and acknowledged(lastrow0.get("text", ""))
+                and st.get("checked_in") != contact):            # net control logged this station: checked in
+            self._checked_in(st, contact, now, "net control acknowledged " + call)
         lines = []
         for t in rows:
             who = t.get("speaker") or (t.get("callsigns") or ["?"])[0]
@@ -733,6 +840,8 @@ class Agent:
         system = SYSTEM.format(name=name, call=call, op=op, kinds="/".join(KINDS))
         lastrow = rows[-1] if rows else {}
         addressed = bool(rows) and (call in (lastrow.get("callsigns") or []) or name_in(lastrow.get("text", ""), name))
+        if addressed and acknowledged(lastrow.get("text", "")) and not name_in(lastrow.get("text", ""), name):
+            addressed = False                                  # "W9XYZ, thank you": logged, not asked anything
         ctx = {"call": call, "name": name, "op": op, "first": first, "id_due": id_due, "emergency": emergency,
                "busy": busy, "freq_mhz": r.get("freq_mhz") or lastrow.get("freq_mhz"), "mode": r.get("mode"),
                "license_class": self.cfg.get("license_class"), "addressed": addressed, "asked": asked,
@@ -743,6 +852,10 @@ class Agent:
         models = [main_model] + list(self.cfg.get("compare") or [])
         results = {}
         allowed, gate_why = allowed_kinds(ctx, st.get("checked_in") == contact, st.get("pending"), lastrow.get("text", ""))
+        if allowed == ["none"] and inv_why and not invited and not emergency:
+            gate_why = inv_why                                 # say whom net control called, not just "not called"
+        if st.get("muted") == contact and not asked:
+            allowed, gate_why = ["none"], "muted for this net"
         if allowed == ["none"]:
             # not this station's turn (not called, no check-ins open to it, no answer waiting): silent at once, no model
             models, rate_ok = [], False
@@ -770,6 +883,7 @@ class Agent:
             main["fallback"] = fb
         main = self._protocol(main, st.get("pending"), ctx)
         d = {"id": uuid.uuid4().hex[:10], "radio": rid, "at": now.isoformat(timespec="seconds"), "after": after,
+             "invited": bool(invited), "invite_why": inv_why, "contact": contact,
              "heard": lines[-1] if lines else "", "net": net.get("name"), "addressed": bool(addressed),
              "asked": asked, "trigger": why or ("asked" if asked else "heard"), **main,
              "alts": [results[m] | {"model": m} for m in models[1:] if m in results]}
@@ -779,7 +893,7 @@ class Agent:
             if re.search(r"\bautomat\w*\b", d.get("say", ""), re.I) and re.search(r"control operator", d.get("say", ""), re.I):
                 st["disclosed"] = contact
             if d.get("kind") == "check_in":
-                st["checked_in"] = contact
+                self._checked_in(st, contact, now, "drafted a check-in")
             self._advance(rid, st, d, rows, now, ctx, contact, lines, user)
             self._save_state()
         with self.lock:
@@ -789,8 +903,63 @@ class Agent:
                     fh.write(json.dumps(d) + "\n")
             except OSError:
                 pass
-        self.st.bus.publish("agent", {"draft": d})
+        keys = {p: secrets.status(self.st.root, k)["set"] for p, (k, _) in self.providers.items()}
+        self.st.bus.publish("agent", {"draft": d, "turn": {rid: self.turn(rid)}, "mode_now": self._mode_now(keys)})
         return d
+
+    def _checked_in(self, st, contact, now, how):
+        st["checked_in"], st["checked_in_at"], st["checked_in_how"] = contact, now.isoformat(timespec="seconds"), how
+        self._save_state()
+
+    def contact_now(self, rid) -> str:
+        now = self.st.clock()
+        net = self._net(rid, now, self._context(rid, now))
+        return net.get("key") or f"{rid}@{now:%Y-%m-%d}"
+
+    def turn(self, rid) -> dict:
+        """The radio's turn state for the dashboard (YOUR TURN chip)."""
+        st, contact = self.state.get(rid) or {}, self.contact_now(rid)
+        L = [d for d in self.drafts if d.get("radio") == rid]
+        last = L[-1] if L else None
+        speaking = [d for d in L if d.get("speak")]
+        out = {"checked_in": st.get("checked_in") == contact, "checked_in_at": st.get("checked_in_at")
+               if st.get("checked_in") == contact else None, "checked_in_how": st.get("checked_in_how")
+               if st.get("checked_in") == contact else None, "muted": st.get("muted") == contact,
+               "silent": sum(1 for d in L if not d.get("speak")), "last_speak": speaking[-1] if speaking else None}
+        if out["muted"]:
+            out.update(state="muted", say="Muted for this net")
+        elif last and last.get("speak") and last.get("addressed"):
+            out.update(state="called", say="CALLED: " + (last.get("heard") or "")[-90:])
+        elif last and last.get("speak") and last.get("kind") in ("ready", "answer"):
+            out.update(state="answer", say="Answer ready")
+        elif last and last.get("invited") and not out["checked_in"]:
+            out.update(state="open", say="Check-ins open to you")
+        elif out["checked_in"]:
+            out.update(state="in", say="Checked in")
+        else:
+            out.update(state="listening", say="Listening" + (f": {last['invite_why']}" if last and last.get(
+                "invite_why") and not last.get("invited") else ""))
+        return out
+
+    def mark(self, rid, what: str) -> dict:
+        """The operator: "checked_in" (I checked in myself), "not_checked_in", "mute", "unmute" for this net."""
+        if rid not in self.st.radios:
+            raise ValueError(f"no radio called {rid!r}")
+        st, contact, now = self.state.setdefault(rid, {}), self.contact_now(rid), self.st.clock()
+        if what == "checked_in":
+            self._checked_in(st, contact, now, "the operator checked in")
+        elif what == "not_checked_in":
+            st.pop("checked_in", None); st.pop("checked_in_at", None); st.pop("checked_in_how", None)
+        elif what == "mute":
+            st["muted"] = contact
+        elif what == "unmute":
+            st.pop("muted", None)
+        else:
+            raise ValueError("checked_in, not_checked_in, mute or unmute")
+        self._save_state()
+        v = self.view()
+        self.st.bus.publish("agent", {"turn": {rid: self.turn(rid)}})
+        return v
 
     # ----- the prepared answer (two speeds) -----
     def _pending_lines(self, p, why, rows, now) -> list[str]:
@@ -1023,7 +1192,7 @@ class Agent:
     def post(self, path: str, body: dict) -> dict:
         """POST /api/agent/settings, /api/agent/radio/<rid> {"mode"}, /api/agent/ask/<rid> (draft now),
         /api/agent/rate/<draft id> {"good", "note"}."""
-        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate)(?:/([\w-]+))?", path)
+        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark)(?:/([\w-]+))?", path)
         if not m:
             raise ValueError("unknown agent request")
         what, arg = m.groups()
@@ -1031,6 +1200,8 @@ class Agent:
             return self.settings(body)
         if what == "radio":
             return self.set_radio(arg, str(body.get("mode") or "off"))
+        if what == "mark":
+            return self.mark(arg, str(body.get("what") or ""))
         if what == "ask":
             if not self.cfg.get("enabled"):
                 raise ValueError("the station agent is off (Settings → Station agent)")

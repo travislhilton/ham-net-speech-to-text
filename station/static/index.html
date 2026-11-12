@@ -225,6 +225,10 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 #scanDlg table{width:100%;border-collapse:collapse;font-size:13px}#scanDlg td,#scanDlg th{padding:3px 6px;border-bottom:1px solid var(--line);text-align:left}
 #scanDlg td button{all:unset;cursor:pointer;color:var(--accent);margin-right:8px}
 /* the station agent, Draft mode (station/agent.py): what it would say, checked against FCC Part 97 in code */
+.turn{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0;background:var(--chip);font-size:14px}
+.turn.ok{background:var(--ok);color:var(--on);border-color:var(--ok)}.turn.bad{background:var(--bad);color:var(--on);border-color:var(--bad)}
+.turn.in{border-color:var(--ok)}.turn.in b{color:var(--ok)}.turn.mute{opacity:.75}.turn span{font-weight:400}
+.warnband{background:color-mix(in srgb,var(--warn) 14%,var(--panel));color:var(--ink);border:1px solid var(--warn);border-radius:8px;padding:6px 10px;margin:6px 0}
 .echo{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:6px 9px;font-size:13px;flex:none}
 .echo .eh{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .echo .eh .sp{flex:1}.echo .eh button{all:unset;cursor:pointer;color:var(--accent);text-transform:none;letter-spacing:0;font-size:12.5px}
@@ -1515,7 +1519,10 @@ function renderWl(){
 // tooltip (an operator needs "ready" / "home server not reachable", not "whisper-large-v3-turbo-int8-ov@GPU").
 let ENG=null;
 function renderEngine(e){if(e)ENG=e;e=ENG;if(!e)return;
-  const live=e.status==="ready"?`<span class="st ok" title="Live text: ${esc(e.final||"")}">● Live text</span>`
+  const h=e.health||{},hat=h.at?new Date(h.at).toLocaleTimeString([],TOPT()):"";
+  const live=e.status==="ready"&&h.state==="cpu"?`<span class="st warn" title="The graphics engine got stuck (${esc(h.why||"")}) at ${hat}: the live text runs on the processor, slower. Restart the PC after the net to get the graphics engine back.">● Live text on CPU</span>`
+    :e.status==="ready"&&h.state==="stuck"?`<span class="st bad" title="The live engine is stuck (${esc(h.why||"")}) at ${hat}: restart the station (sign out and in) or the PC. The accurate pass still reads every transmission.">● Live text stuck</span>`
+    :e.status==="ready"?`<span class="st ok" title="Live text: ${esc(e.final||"")}${h.state==="reloaded"?` (reloaded ${hat}: it had stopped reading)`:""}">● Live text</span>`
     :e.status==="loading"?'<span class="st warn" title="Loading the speech models (about a minute after a start)">◌ Loading speech…</span>'
     :`<span class="st bad" title="${esc(e.final_error||e.status||"")}">● Live text stopped</span>`;
   const sv=S.accurate_server,w=S.accurate_where;let acc="";
@@ -1606,7 +1613,9 @@ function connect(){
   es.addEventListener("tx",e=>upsertTx(JSON.parse(e.data)));
   es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
     if(m.pending){const p=m.pending;AG.pending=AG.pending||{};if(p.state==="none")delete AG.pending[p.radio];else AG.pending[p.radio]=p;renderEcho(p.radio);return}
-    const d=m.draft;if(!d)return;AG.drafts=[...(AG.drafts||[]).filter(x=>x.id!==d.id),d].slice(-60);renderEcho(d.radio)});
+    if(m.turn){AG.turn=Object.assign(AG.turn||{},m.turn)}if(m.mode_now)AG.mode_now=m.mode_now;
+    const d=m.draft;if(!d){for(const rid of Object.keys(m.turn||{}))renderEcho(rid);return}
+    AG.drafts=[...(AG.drafts||[]).filter(x=>x.id!==d.id),d].slice(-60);renderEcho(d.radio)});
   loadAgent();
   es.addEventListener("tx_drop",e=>{const id=JSON.parse(e.data).id;S.tx=S.tx.filter(t=>t.id!==id);const el=$("tx-"+id);if(el)el.remove()});
   es.addEventListener("hints",e=>{S.hints=JSON.parse(e.data);renderHints()});
@@ -1738,6 +1747,7 @@ function netForm(n){
    <label>Reach (km) <input name="reach_km" type="number" min="50" max="5000" step="10" value="${esc(n.reach_km??"")}" placeholder="the station's"><span class="hint">a linked system or intertie: how far its stations can be (a call licensed farther is set aside as probably misheard)</span></label>
    <label>Alert, minutes before <input name="alert_min" type="number" min="0" max="120" value="${esc(n.alert_min??5)}"><span class="hint">0 = no alert</span></label>
    <label class="chk wide"><input type="checkbox" name="emergency"${n.emergency?" checked":""}> Emergency or priority net: keep an Urgent board for it</label>
+   <label class="wide">Sidekick on this net <select name="checkins"><option value=""${n.checkins!=="none"?" selected":""}>May check in when check-ins are open to this station</option><option value="none"${n.checkins==="none"?" selected":""}>Never checks in (a members-, mobiles- or traffic-only net)</option></select></label>
    <fieldset class="wide rep"><legend>Repeats</legend>
     <div class="seg" role="radiogroup" aria-label="Repeats">${[["once","Once"],["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["yearly","Yearly"]].map(([v,l])=>`<label><input type="radio" name="rfreq" value="${v}"${v===f?" checked":""}><span>${l}</span></label>`).join("")}</div>
     <div class="rline" data-for="daily weekly monthly yearly">Every <input name="interval" type="number" min="1" max="99" value="${esc(r.interval||1)}" class="num"> <span class="unit"></span></div>
@@ -1765,7 +1775,7 @@ function collectNet(f,saved){
   if(f.starts.value)rule.starts=f.starts.value;
   if(freq!=="once"){if(f.ends.value==="on")rule.until=f.until.value;if(f.ends.value==="after")rule.count=f.count.value}
   const b={name:f.name.value,radio:f.radio.value,start:f.start.value,duration_min:f.duration_min.value,freq_mhz:f.freq_mhz.value,
-    mode:f.mode.value,ncs:f.ncs.value,alert_min:f.alert_min.value,emergency:f.emergency.checked,repeat:rule,
+    mode:f.mode.value,ncs:f.ncs.value,alert_min:f.alert_min.value,emergency:f.emergency.checked,checkins:f.checkins.value,repeat:rule,
     reach_km:f.reach_km.value};
   if(saved&&saved.exceptions)b.exceptions=saved.exceptions;
   return b}
@@ -2250,7 +2260,7 @@ function draftHtml(d,alt){
   const who=d.speak?`<div class="say${d.ok?"":" no"}">“${esc(d.say)}”</div>`:`<div class="say muted">(stays silent)</div>`;
   const src=d.model==="rules"?`offline rules${d.fallback?` (${esc(d.fallback)})`:""}`:`${esc(lab)} ${d.latency_s}s`;
   return `${who}<div class="meta">${esc(KINDL[d.kind]||d.kind)}${d.speak?` · after ${d.silence_s}s of quiet`:""} · ${src}${d.why?" · "+esc(d.why):""}${d.speak&&d.say&&d.id&&!alt?` <button class="quiet" data-tts="${esc(d.id)}" title="Plays here only, in this browser. Never on the radio.">▶ Hear it</button>`:""}</div>`
-    +(d.speak?`<div class="fcc">${fails.length?`<span class="x">Would not send</span>: `+fails.map(c=>`<span title="${esc(c.note)}">${esc(c.rule)}: ${esc(c.note)}</span>`).join("; "):`<span class="ok" title="${esc((d.fcc||[]).map(c=>c.rule+": "+c.note).join("\n"))}">✓ FCC Part 97 checks pass (${(d.fcc||[]).length})</span>`}</div>`:"")}
+    +(d.speak?`<div class="fcc">${fails.length?`<span class="x">Would not send</span>: `+fails.map(c=>`<span title="${esc(c.note)}">${esc(c.rule)}: ${esc(c.note)}</span>`).join("; "):`<span class="ok" title="${esc((d.fcc||[]).map(c=>c.rule+": "+c.note).join("\n"))}">✓ Words pass the Part 97 content checks (${(d.fcc||[]).length}); whose turn it is: see above</span>`}</div>`:"")}
 let MODELN={};
 function renderEcho(rid){
   const box=document.getElementById("echo-"+rid);if(!box)return;
@@ -2260,12 +2270,23 @@ function renderEcho(rid){
   box.hidden=false;
   const pd=((AG||{}).pending||{})[rid],PS={working:"working on",ready:"answer ready for",announced:"announced the answer for",failed:"could not answer"};
   const pend=pd?`<div class="meta">📝 ${esc(PS[pd.state]||pd.state)}: “${esc(pd.question||"")}” (${esc(pd.asker||"")}, ${esc((pd.at||"").slice(11,16))}${pd.took_s?`, ${pd.took_s}s ${esc(MODELN[pd.model]||pd.model||"")}`:""})${pd.answer?`<div class="say">“${esc(pd.answer)}”</div>`:""}${pd.error?` <span class="bad">${esc(pd.error)}</span>`:""}</div>`:"";
-  box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span><span class="sp"></span><button data-agask="${esc(rid)}">What would you say now?</button></div>`+pend
-    +(d?`<div class="meta">After: ${esc(d.heard||"")}</div>${draftHtml(d)}
-      <div class="rate meta">Good draft? <button data-agrate="${esc(d.id)}" data-v="1" class="${(d.rating||{}).good===true?"on":""}">👍</button><button data-agrate="${esc(d.id)}" data-v="0" class="${(d.rating||{}).good===false?"on":""}">👎</button> · ${L.length} draft${L.length>1?"s":""} so far</div>`
-      +(d.alts||[]).map(a=>`<div class="alt">${draftHtml(a,true)}</div>`).join(""):`<div class="meta">Listening. A draft appears after each transmission (when ${esc(agName())} would speak, and when it would stay silent).</div>`)}
+  const T=((AG||{}).turn||{})[rid]||{state:"listening",say:"Listening"},mn=(AG||{}).mode_now||{};
+  const TC={called:"bad",open:"ok",answer:"ok",in:"in",muted:"mute",listening:""}[T.state]||"";
+  const show=T.last_speak||null,sp=(L.filter(x=>x.speak)).length;
+  const ago=x=>{const m=Math.round((Date.now()-new Date(x.at))/60000);return m<1?"just now":m+" min ago"};
+  const chip=`<div class="turn ${TC}" role="status"><b>${T.state==="called"?"YOUR TURN · ":T.state==="open"?"YOUR TURN · ":""}${esc(T.say||"")}</b>${T.checked_in_at?` <span>✓ ${esc(new Date(T.checked_in_at).toLocaleTimeString([],TOPT()))}${T.checked_in_how?` (${esc(T.checked_in_how)})`:""}</span>`:""}</div>`;
+  const btns=`<div class="row small" style="margin:4px 0">${T.checked_in?`<button data-agmark="${esc(rid)}" data-v="not_checked_in" title="Sidekick will check in again when check-ins are open to it">Not checked in</button>`:`<button data-agmark="${esc(rid)}" data-v="checked_in" title="You checked in yourself: Sidekick won't draft a check-in on this net">I checked in myself</button>`} <button data-agmark="${esc(rid)}" data-v="${T.muted?"unmute":"mute"}">${T.muted?"Unmute":"Mute for this net"}</button> <button data-agask="${esc(rid)}">What would you say now?</button></div>`;
+  box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span></div>`
+    +(mn.how==="rules"?`<div class="okband warnband small" role="note">${esc(mn.say)}${mn.why==="no xAI key"?' <button class="linkish" data-goto-settings="agent">Add a key</button>':""}</div>`:"")
+    +chip+btns+pend
+    +(show?`<div class="meta">Last time it would have spoken (${esc(ago(show))}), after: ${esc(show.heard||"")}</div>${draftHtml(show)}
+      <div class="rate meta">Right call? <button data-agrate="${esc(show.id)}" data-v="1" class="${(show.rating||{}).good===true?"on":""}" aria-label="Good draft">👍</button><button data-agrate="${esc(show.id)}" data-v="0" class="${(show.rating||{}).good===false?"on":""}" aria-label="Bad draft">👎</button></div>`
+      +(show.alts||[]).map(a=>`<div class="alt">${draftHtml(a,true)}</div>`).join(""):"")
+    +`<div class="meta">${sp} time${sp===1?"":"s"} it would have spoken · stayed silent ${T.silent||0} time${T.silent===1?"":"s"}${d&&!d.speak?` · last: ${esc(d.why||"")}`:""}</div>`}
 document.addEventListener("click",e=>{
   const a=e.target.closest("[data-agask]");if(a){a.textContent="Thinking…";agPost(`/api/agent/ask/${enc(a.dataset.agask)}`,{});return}
+  const mk=e.target.closest("[data-agmark]");if(mk){agPost(`/api/agent/mark/${enc(mk.dataset.agmark)}`,{what:mk.dataset.v});return}
+  const gs=e.target.closest("[data-goto-settings]");if(gs){$("openSettings").click();setTimeout(()=>{const k=$("keySet");if(k)k.scrollIntoView({block:"center"})},300);return}
   const r=e.target.closest("[data-agrate]");if(r){agPost(`/api/agent/rate/${enc(r.dataset.agrate)}`,{good:r.dataset.v==="1"});return}
   const h=e.target.closest("[data-tts]");if(h){playClip(`/api/tts/draft/${enc(h.dataset.tts)}.mp3`,h);return}
   const v=e.target.closest("[data-aud]");if(v){playClip(`/api/tts/audition/${enc(v.dataset.aud)}.mp3`,v);return}});
@@ -2275,7 +2296,12 @@ async function playClip(url,btn){const was=btn.textContent;btn.textContent="…"
   try{const r=await fetch(url);if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"not available")}
     const b=await r.blob();if(VCLIP)VCLIP.pause();VCLIP=new Audio(URL.createObjectURL(b));btn.textContent="■";
     VCLIP.onended=()=>{btn.textContent=was};await VCLIP.play();if(TTS&&btn.dataset.aud){TTS.auditioned[btn.dataset.aud]=true}}
-  catch(e){btn.textContent=was;alert(e.message)}}
+  catch(e){btn.textContent=was;
+    const d=btn.dataset.tts&&((AG||{}).drafts||[]).find(x=>x.id===btn.dataset.tts);
+    if(d&&d.say&&"speechSynthesis" in window){                      // no key or no internet: this PC's own voice
+      const u=new SpeechSynthesisUtterance(d.say);u.rate=((AG||{}).settings||{}).speed||1;speechSynthesis.cancel();speechSynthesis.speak(u);
+      btn.title=`Played with this computer's own voice: ${e.message}`;btn.insertAdjacentHTML("afterend",`<span class="muted small"> (this PC's voice: ${esc(e.message)})</span>`);return}
+    alert(e.message)}}
 async function loadVoice(){try{TTS=await api("/api/tts")}catch(e){TTS=null}renderVoice()}
 function renderVoice(msg){
   const box=$("voiceSet");if(!box)return;if(!TTS){box.innerHTML='<span class="muted">Not available.</span>';return}
@@ -2365,12 +2391,13 @@ function renderAgentSet(){
     <label for="agOp">Your first name</label><input id="agOp" value="${esc(s.operator||"")}" maxlength="24" placeholder="(said as control operator)">
     <label for="agCheck">Your check-in line</label><input id="agCheck" value="${esc(s.checkin||"")}" maxlength="120" placeholder="This is ${esc(AG.call||"N0CALL")}, …">
     <label for="agSta">This station is</label><input id="agSta" value="${esc(s.station||"")}" maxlength="120" placeholder="a fixed home station on land (not mobile, not maritime), no traffic">
+    <label for="agReg">Your region</label><span><input id="agReg" value="${esc(s.region||"")}" maxlength="120" placeholder="state, county (for a roll call by place)"><br><span class="muted">When net control calls stations by state (“Stations Colorado, check in now”), ${esc(agName())} checks in only when the place is in this list. Empty: it never answers a call by place.</span></span>
     <label for="agClass">License class</label><select id="agClass">${opt("","(not set: privileges not checked)",!s.license_class)}${(AG.classes||[]).map(c=>opt(c,c[0].toUpperCase()+c.slice(1),s.license_class===c)).join("")}</select>
     <label for="agModel">Model</label><select id="agModel">${(AG.models||[]).map(m=>opt(m.id,m.label+(m.ready?"":" (no key)"),s.model===m.id)).join("")}</select>
     <label for="agDeep">Thinking model</label><select id="agDeep">${(AG.models||[]).map(m=>opt(m.id,m.label+(m.ready?"":" (no key)"),(s.deep_model||"grok-4.5")===m.id)).join("")}</select>
     <span>Compare with</span><span class="cmp">${(AG.models||[]).filter(m=>m.id!==s.model).map(m=>`<label><input type="checkbox" data-agcmp="${esc(m.id)}"${(s.compare||[]).includes(m.id)?" checked":""}${m.ready?"":" disabled"}> ${esc(m.label)}${m.ready?"":" (no key)"}</label>`).join("")}</span>
   </div><button type="button" id="agSave">Save agent settings</button> <span class="muted">Spoken ID: ${esc(AG.call||"")} (${esc(AG.phonetic||"")})</span>`;
-  $("agSave").onclick=()=>agPost("/api/agent/settings",{enabled:$("agOn").checked,name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,license_class:$("agClass").value,model:$("agModel").value,deep_model:$("agDeep").value,
+  $("agSave").onclick=()=>agPost("/api/agent/settings",{enabled:$("agOn").checked,name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,region:$("agReg").value,license_class:$("agClass").value,model:$("agModel").value,deep_model:$("agDeep").value,
     compare:[...box.querySelectorAll("[data-agcmp]:checked")].map(x=>x.dataset.agcmp)})}
 async function renderKeys(msg){
   const box=$("keySet");let d;try{d=await api("/api/secrets")}catch(e){box.textContent=e.message;return}

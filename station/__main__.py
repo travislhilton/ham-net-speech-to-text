@@ -61,6 +61,8 @@ def main(argv=None):
     st = Station(cfg, final, partial, callbook=Callbook(qrz=qrz))
     if a.engine != "fake":
         st.accurate_spec = choice.get("accurate")         # the accurate pass on this PC (tools/pick_accurate.py)
+        if (choice["final"].get("device") or "CPU").upper() != "CPU":   # a stuck graphics engine: the same model on the CPU
+            st._cpu_factory = lambda: engine.make({**choice["final"], "device": "CPU"})
     st.start(listen=not (a.no_listen or a.simulate))
     port = a.port or cfg["port"]
     srv = serve(st, cfg["bind"], port)

@@ -1,5 +1,5 @@
-"""Owner 2026-11-07: while a dashboard is open, keep the PC awake and check the live engine (a laptop that slept in
-Modern Standby came back writing "The." for every transmission until the engine was reloaded)."""
+"""Owner 2026-11-07: while a dashboard is open, keep the PC awake. The live engine is checked on every transmission
+(owner 2026-11-12; before, only with a dashboard open: a laptop station wrote the same words for ~4 h unnoticed)."""
 import copy
 import time
 
@@ -25,7 +25,9 @@ class Eng:
 
 def station(tmp_path):
     Eng.made = 0
-    return Station(copy.deepcopy(CFG), Eng, data_dir=tmp_path)
+    st = Station(copy.deepcopy(CFG), Eng, data_dir=tmp_path)
+    st.CHECK_EVERY_S = 0                      # every suspect is checked here; the once-a-minute limit has its own test
+    return st
 
 
 def test_a_dashboard_holds_the_pc_awake_while_a_radio_listens():
@@ -58,13 +60,14 @@ def test_a_broken_engine_is_reloaded_and_the_transmission_read_again(tmp_path):
     assert st.engines["final"] == new.name
 
 
-def test_no_reload_without_a_dashboard_for_real_noise_or_too_often(tmp_path):
+def test_checked_with_no_dashboard_but_not_for_real_noise_or_too_often(tmp_path):
     st = station(tmp_path)
     eng, audio = Eng(), np.zeros(5 * SR, np.float32)
     st._maybe_recover(eng, audio, eng.transcribe(audio), "p")
     eng.broken = True
-    assert st._maybe_recover(eng, audio, {"text": "The."}, "p")[0] is eng            # nobody watching
-    st.viewer(True); eng.broken = False
+    new = st._maybe_recover(eng, audio, {"text": "The."}, "p")[0]
+    assert new is not eng and st.engines["health"]["state"] == "reloaded"          # nobody watching: checked anyway
+    eng = new; st._engine_reload_at = 0
     assert st._maybe_recover(eng, audio, {"text": "......"}, "p")[0] is eng          # noise: the engine passes the check
     eng.broken = True; st._engine_reload_at = time.time()
     assert st._maybe_recover(eng, audio, {"text": "The."}, "p")[0] is eng            # reloaded under 5 minutes ago
@@ -112,3 +115,46 @@ def test_digit_runs_and_looped_decodes_are_stuck(tmp_path):
     assert not st._stuck("K7ABC, you're in the log, 73.", 4.0)
     st._recent_finals.extend([("thank you", 2.0), ("thank you", 2.1)])
     assert not st._stuck("Thank you.", 2.2)                                    # short "thank you"s of one length: real
+
+
+def test_the_reference_is_checked_at_most_once_a_minute(tmp_path):
+    st = station(tmp_path); st.CHECK_EVERY_S = 60
+    eng, audio = Eng(), np.zeros(5 * SR, np.float32)
+    st._maybe_recover(eng, audio, eng.transcribe(audio), "p")
+    calls = []
+    eng.transcribe = lambda a, prompt=None: calls.append(1) or {"text": GOOD}
+    for _ in range(5):
+        st._maybe_recover(eng, audio, {"text": "Over."}, "p")                  # noise: one check, not five
+    assert len(calls) == 1
+
+
+def test_a_stuck_graphics_engine_moves_the_live_text_to_the_cpu(tmp_path, capsys):
+    st = station(tmp_path)
+    eng = StuckEng()
+    a5, a7, a9 = (np.zeros(s * SR, np.float32) for s in (5, 7, 9))
+    st._maybe_recover(eng, a5, eng.transcribe(a5), "p")
+    class StuckGPU(StuckEng):
+        def __init__(self):
+            super().__init__(); self.broken = True                             # a fresh GPU engine is stuck too
+    st._final_factory = StuckGPU
+    st._cpu_factory = lambda: Eng()
+    eng.broken = True
+    for a in (a7, a9, a7):
+        eng, res = st._maybe_recover(eng, a, eng.transcribe(a), "p")
+    assert not isinstance(eng, StuckEng) and res["text"] == GOOD
+    assert st.engines["health"]["state"] == "cpu" and "moves to the CPU" in capsys.readouterr().out
+
+
+def test_no_cpu_to_fall_back_to_says_stuck(tmp_path):
+    st = station(tmp_path)
+    eng = StuckEng()
+    a5, a7, a9 = (np.zeros(s * SR, np.float32) for s in (5, 7, 9))
+    st._maybe_recover(eng, a5, eng.transcribe(a5), "p")
+    class StuckGPU(StuckEng):
+        def __init__(self):
+            super().__init__(); self.broken = True
+    st._final_factory = StuckGPU
+    eng.broken = True
+    for a in (a7, a9, a7):
+        eng, res = st._maybe_recover(eng, a, eng.transcribe(a), "p")
+    assert st.engines["health"]["state"] == "stuck"

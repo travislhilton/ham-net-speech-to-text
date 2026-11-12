@@ -206,7 +206,7 @@ def make_handler(station):
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net
             sec = re.fullmatch(r"/api/secrets/([A-Z_]+)(/test)?", u.path)                               # Settings: a key
-            agent = re.fullmatch(r"/api/agent/(settings|radio|ask|rate)(/[\w-]+)?", u.path)               # station agent
+            agent = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark)(/[\w-]+)?", u.path)               # station agent
             scan = re.fullmatch(r"/api/scan/[\w-]+(/antenna)?", u.path)                                   # HF scan
             rdo = re.fullmatch(r"/api/readout/(fetch|load|approve|read|url)", u.path)                      # read-out
             grk = re.fullmatch(r"/api/grokstt/(settings|run)", u.path)                                     # Grok STT

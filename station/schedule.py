@@ -113,7 +113,8 @@ def validate(body: dict, radios: dict) -> dict:
            "repeat": rule, "exceptions": recur.normalize_exceptions(body.get("exceptions"), MODES) or None,
            "alert_min": alert, "emergency": True if body.get("emergency") else None,
            "offset_mhz": offset, "tone_hz": tone, "reach_km": int(reach) if reach else None,             # CAT: set on the radio with the frequency (station/cat.py)
-           "beats": sorted(set(beats)) or None}               # clashes settled: these nets lose to this one
+           "beats": sorted(set(beats)) or None,              # clashes settled: these nets lose to this one
+           "checkins": "none" if body.get("checkins") == "none" else None}   # Sidekick: never check in (members/mobiles/traffic only)
     return {k: v for k, v in out.items() if v is not None}
 
 
@@ -129,7 +130,8 @@ def item(n: dict, o: dict) -> dict:
             "key": recur.key(n.get("id"), o["date"]), "start": o["start"].isoformat(timespec="minutes"),
             "end": o["end"].isoformat(timespec="minutes"), "freq_mhz": o.get("freq_mhz"), "mode": o.get("mode"),
             "ncs": n.get("ncs"), "note": o.get("note"), "moved": o.get("moved", False),
-            "emergency": bool(n.get("emergency")), "offset_mhz": n.get("offset_mhz"), "tone_hz": n.get("tone_hz")}
+            "emergency": bool(n.get("emergency")), "offset_mhz": n.get("offset_mhz"), "tone_hz": n.get("tone_hz"),
+            "checkins": n.get("checkins")}
 
 
 def may_be_on(n: dict, rid: str) -> bool:
