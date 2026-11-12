@@ -201,6 +201,10 @@ def _keeper(data: Path):
     """The screen + system power request, and the HamNet plan unless the station already has it on (then the
     station owns the plan: switching back here would undo its hold mid-net)."""
     from .awake import HAMNET_PLAN, KeepAwake, PowerPlan
+    if not station_running():
+        # The installer stopped it: share its file, so a plan it left on (killed while holding) is put back first
+        # and the operator's own plan is the one restored afterwards.
+        return KeepAwake(reason="HamNet Station is measuring this PC", snapshot=data / "power_snapshot.json")
     snap = data / "power_snapshot_measure.json"
     try:
         if sys.platform == "win32" and PowerPlan(snap).active() == HAMNET_PLAN and not snap.exists():
@@ -208,6 +212,15 @@ def _keeper(data: Path):
     except Exception:  # noqa: BLE001
         snap = None
     return KeepAwake(reason="HamNet Station is measuring this PC", snapshot=snap)
+
+
+def station_running(port: int = 8091) -> bool:
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            return True
+    except OSError:
+        return False
 
 
 def _rtfs(engine_yaml: Path) -> dict:

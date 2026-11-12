@@ -234,10 +234,14 @@ if (-not $SkipModels) {
   $eng = "$InstallDir\config\engine.yaml"
   if ($Remeasure -or -not (Test-Path $eng) -or -not (Select-String -Path $eng -Pattern '^accurate:' -Quiet)) {
     Step "Measuring this PC at full speed (screen held on; ~3-8 min, leave the PC plugged in)"
-    Stop-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue   # it shares the graphics; started again below
+    # The station shares the graphics and switches power plans: off for the measurement. Its task is DISABLED, not
+    # only stopped: the 2-minute watchdog trigger started it again mid-measurement (2026-11-12, a test install).
+    $task = Get-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue
+    if ($task) { Disable-ScheduledTask -TaskName 'HamNet Station' | Out-Null; Stop-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue }
     Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*-m station*' -and $_.CommandLine -notlike '*pccheck*' } |
       ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Run { & $vpy -m station.pccheck measure --data "$InstallDir\data" --models "$InstallDir\models" --out $eng }
+    try { Run { & $vpy -m station.pccheck measure --data "$InstallDir\data" --models "$InstallDir\models" --out $eng } }
+    finally { if ($task) { Enable-ScheduledTask -TaskName 'HamNet Station' | Out-Null } }   # re-registered + started below
   } else {
     Step "This PC was measured before (kept; -Remeasure or Settings -> This PC measures again)"
   }
