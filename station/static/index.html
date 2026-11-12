@@ -1367,7 +1367,7 @@ function renderPC(d){
   const rt=x=>x==null?"?":Number(x).toFixed(2)+" s";
   let h=`<div><b>What the station changes:</b></div><ul>${(d.explain||[]).map(x=>`<li>${esc(x.replace(/^\s*-\s*/,""))}</li>`).join("")}</ul>`;
   h+=`<div>Right now: ${d.holding?"<b>holding the screen on and full speed</b> ("+esc(d.why)+")":"your own power settings"+(d.why?" ("+esc(d.why)+")":"")}.</div>`;
-  h+=m.measured_at?`<div>Measured ${esc(m.measured_at.replace("T"," "))}: live text ${rt(f.rtf)} per second of audio (${esc(f.device||"")}${f.model?" "+esc(f.model):""}); accurate pass ${esc(a.mode||"none")}${a.model?" "+esc(a.model)+" "+rt(a.rtf):""}. Processor ${m.perf_held??"?"}% of its speed while measuring${m.slowed?" — <b>slowed: measure again</b>":""}.</div>`
+  h+=m.measured_at?`<div>Measured ${esc(m.measured_at.replace("T"," "))}: live text ${rt(f.rtf)} per second of audio (${esc(f.device||"")}${f.model?" "+esc(f.model):""}); accurate pass ${esc({both:"during and after each net",final_only:"after each net",none:"not on this PC"}[a.mode||"none"]||a.mode)}${a.model&&a.mode!=="none"?" ("+esc(a.model)+", "+rt(a.rtf)+")":""}. Processor ${m.perf_held??"?"}% of its speed while measuring${m.slowed?" — <b>slowed: measure again</b>":""}.</div>`
     :`<div>Not measured with the screen held on yet.</div>`;
   const cs=d.checks||[];
   if(cs.length)h+=`<ul>${cs.map(c=>`<li class="${c.ok?"":"bad"}">${c.ok?"✓":"⚠"} ${esc(c.say)}${!c.ok&&c.fix?`<div class="fix">${esc(c.fix)}</div>`:""}</li>`).join("")}</ul>`;
