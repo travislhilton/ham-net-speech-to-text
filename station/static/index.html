@@ -403,6 +403,10 @@ ol.mtx .fixer button{font-size:13px;padding:4px 12px}
 .lrn .pair{flex:1 1 12em;min-width:0;overflow-wrap:anywhere}.lrn .pair s{color:var(--muted)}.lrn button{font-size:12px;padding:2px 8px}
 table.acc{border-collapse:collapse;font-size:13px;margin-top:4px}table.acc td,table.acc th{padding:2px 8px;border-bottom:1px solid var(--line);text-align:left}table.acc td.n{text-align:right;font-variant-numeric:tabular-nums}
 table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding-top:6px}
+#pcNote .pcn{margin:6px 12px;padding:8px 12px;border:1px solid var(--accent);border-radius:8px;font-size:13px}
+#pcNote .pcn.slow{border-color:#c0392b;background:rgba(192,57,43,.08)}
+#pcNote .pcn button{margin-left:8px}
+#pcSet ul{margin:4px 0 6px 18px;padding:0}#pcSet li.bad{color:#c0392b}#pcSet .fix{color:var(--muted)}
 #openSettings .badge{font-size:11px;padding:0 6px;margin-left:4px;background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 </head>
@@ -425,6 +429,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
 </header>
 <nav id="today" class="today" aria-label="Nets today"></nav>
 <div id="alerts" aria-live="polite"></div>
+<div id="pcNote" aria-live="polite"></div>
 <nav id="rtabs" role="tablist" aria-label="Radios"></nav>
 <main>
   <div id="radios"></div>
@@ -446,6 +451,7 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
     <option value="always">Always, while the station runs</option>
     <option value="off">Never (my power settings only)</option></select></label>
   <div class="small muted">Laptops run several times slower once the screen goes dark. “During nets and traffic” switches to full speed for a scheduled net, for every transmission (from its first moment) and for 10 minutes after the last one; the rest of the time your own power plan, screen and sleep settings apply, and the radio still listens.</div>
+  <h4>This PC</h4><div id="pcSet" class="small"></div>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <h4>Local names</h4><div id="lnSet" class="small"></div>
@@ -1335,7 +1341,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();loadVoice();loadGrok();$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";loadPC();renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();loadVoice();loadGrok();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -1344,6 +1350,34 @@ $("setSave").onclick=async e=>{
   const d=await r.json();if(!r.ok){$("setErr").textContent=d.error||"not saved";return}
   OP=d;$("me").textContent=d.callsign+" station";$("settings").close();
 };
+// ---------- This PC (station/pccheck.py): speed, power settings, what the station changes ----------
+function renderPCNote(){
+  const pc=S.pc||{},el=$("pcNote");let h="";
+  if(pc.slow)h+=`<div class="pcn slow">⚠ ${esc(pc.slow.say)} <button onclick="$('openSettings').click()">This PC…</button></div>`;
+  if(pc.notice)h+=`<div class="pcn"><b>While it transcribes, this station changes your PC's power settings.</b>
+    During nets and traffic it keeps the screen on and switches to its own “HamNet Station” power plan at Best performance,
+    then puts your own plan back (laptops run several times slower with the screen off).
+    <button onclick="$('openSettings').click()">See or change it</button><button onclick="pcSeen()">OK</button></div>`;
+  el.innerHTML=h;
+}
+async function pcSeen(){await fetch("/api/pc/seen",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});S.pc=Object.assign(S.pc||{},{notice:false});renderPCNote()}
+async function loadPC(){try{renderPC(await (await fetch("/api/pc")).json())}catch(e){$("pcSet").textContent="Not available."}}
+function renderPC(d){
+  const m=d.measured||{},f=m.final||{},a=m.accurate||{};
+  const rt=x=>x==null?"?":Number(x).toFixed(2)+" s";
+  let h=`<div><b>What the station changes:</b></div><ul>${(d.explain||[]).map(x=>`<li>${esc(x.replace(/^\s*-\s*/,""))}</li>`).join("")}</ul>`;
+  h+=`<div>Right now: ${d.holding?"<b>holding the screen on and full speed</b> ("+esc(d.why)+")":"your own power settings"+(d.why?" ("+esc(d.why)+")":"")}.</div>`;
+  h+=m.measured_at?`<div>Measured ${esc(m.measured_at.replace("T"," "))}: live text ${rt(f.rtf)} per second of audio (${esc(f.device||"")}${f.model?" "+esc(f.model):""}); accurate pass ${esc(a.mode||"none")}${a.model?" "+esc(a.model)+" "+rt(a.rtf):""}. Processor ${m.perf_held??"?"}% of its speed while measuring${m.slowed?" — <b>slowed: measure again</b>":""}.</div>`
+    :`<div>Not measured with the screen held on yet.</div>`;
+  const cs=d.checks||[];
+  if(cs.length)h+=`<ul>${cs.map(c=>`<li class="${c.ok?"":"bad"}">${c.ok?"✓":"⚠"} ${esc(c.say)}${!c.ok&&c.fix?`<div class="fix">${esc(c.fix)}</div>`:""}</li>`).join("")}</ul>`;
+  else if(d.checked_at)h+=`<div>Power settings checked: nothing to report.</div>`;
+  if(d.slow)h+=`<div class="err">${esc(d.slow.say)}</div>`;
+  const ms=d.measuring||{};
+  h+=`<div class="row"><button type="button" id="pcMeasure"${ms.state==="running"?" disabled":""}>Measure this PC again</button> <span class="muted" id="pcMsg">${ms.state==="running"?"measuring (2–8 minutes; the station restarts after)…":ms.state?esc(ms.state+": "+(ms.say||"")):"2–8 minutes, between nets; the station restarts after to use the result."}</span></div>`;
+  $("pcSet").innerHTML=h;
+  $("pcMeasure").onclick=async()=>{const r=await fetch("/api/pc/measure",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});const x=await r.json();if(!r.ok){$("pcMsg").textContent=x.error||"not started";return}renderPC(x)};
+}
 // ---------- Winlink ----------
 let WL=null;
 async function wlPreview(body){
@@ -1483,7 +1517,7 @@ function connect(){
   const es=new EventSource("/events");
   es.onopen=()=>{$("conn").textContent="● live";$("conn").className="ok"};
   es.onerror=()=>{$("conn").textContent="● reconnecting…";$("conn").className="bad"};
-  es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HamNet Station";renderEngine(d.engines);all()});
+  es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HamNet Station";renderEngine(d.engines);all();renderPCNote()});
   es.addEventListener("tx",e=>upsertTx(JSON.parse(e.data)));
   es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
     if(m.pending){const p=m.pending;AG.pending=AG.pending||{};if(p.state==="none")delete AG.pending[p.radio];else AG.pending[p.radio]=p;renderEcho(p.radio);return}
@@ -1496,6 +1530,7 @@ function connect(){
   es.addEventListener("radios",e=>{const d=JSON.parse(e.data);S.radios=d.radios;S.net=d.net;renderRadios();renderNet()});
   es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
+  es.addEventListener("pc",e=>{const d=JSON.parse(e.data);S.pc=Object.assign(S.pc||{},{slow:d.slow});renderPCNote();if($("settings").open&&d.checks)renderPC(d)});
   es.addEventListener("schedule",e=>{const d=JSON.parse(e.data);S.schedule=d.schedule;S.net=d.net;renderRadios();renderNet();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(false)});
   es.addEventListener("alerts",e=>{S.alerts=JSON.parse(e.data).alerts;renderAlerts()});
   es.addEventListener("urgent",e=>{S.urgent=JSON.parse(e.data).urgent;renderUrgent()});

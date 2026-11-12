@@ -212,6 +212,10 @@ class Station:
         if self.awake_mode not in AWAKE_MODES:
             self.awake_mode = AWAKE_DEFAULT
         self.awake_mode = (self._saved().get("operator") or {}).get("keep_awake") or self.awake_mode
+        self.awake_why = ""
+        from .pccheck import SlowWatch          # a live transcription several times slower than this PC measured
+        self.slowwatch = SlowWatch(self._measured_rtf())
+        self.pc_measuring = None
         self.final_q: queue.Queue = queue.Queue()
         self.partial_slot: dict[str, tuple] = {}
         self.partial_ev = threading.Event()
@@ -241,6 +245,8 @@ class Station:
         if self.cat.cfg:
             threading.Thread(target=self.cat.run, args=(self.stop,), daemon=True, name="cat").start()
         threading.Thread(target=self._ticker, daemon=True, name="ticker").start()
+        if listen:
+            self.pc_check_soon()                      # this PC's power settings, for Settings → This PC
         from .accurate import AccuratePass
         from . import accurate_local
         local = getattr(self, "_accurate_local", None) or accurate_local.make(self, self.cfg.get("accurate"),
@@ -345,6 +351,7 @@ class Station:
             want, why = wanted(self.awake_mode, radios, acc.status() if acc else [], busy=busy,
                                quiet_s=None if self.last_traffic is None else time.time() - self.last_traffic,
                                net_on=net, quiet_min=self.awake_quiet_min, viewer=self.dashboard_open())
+            self.awake_why = why
             if self.awake.set(want):
                 print(f"{datetime.now():%H:%M:%S} keep awake: {'on' if want else 'off'} ({why})", flush=True)
         except Exception as e:  # noqa: BLE001 — power management never stops the station
@@ -1907,6 +1914,12 @@ class Station:
                       noise=probably_noise(text, calls),
                       model=res.get("model"), looped=res.get("looped", False), took_s=took_s,
                       hint_keys=[c["key"] for c in h["cards"]], partial="", **fix)
+            was = self.slowwatch.state()
+            slow = self.slowwatch.add(took_s, float(tx.get("duration_s") or 0), rid)
+            if bool(slow) != bool(was):
+                print(f"{datetime.now():%H:%M:%S} this PC: {slow['say'] if slow else 'transcribing at its measured speed again'}",
+                      flush=True)
+                self.bus.publish("pc", {"slow": slow})
             new = []
             for c in calls:
                 e = self.heard.setdefault(c, {"call": c, "count": 0, "first": tx["start"], "card": None})
@@ -2021,6 +2034,80 @@ class Station:
                 self.hinters.setdefault(tx.get("radio"), Hinter(self.me)).on_transmission(
                     tx.get("text", ""), tx.get("callsigns", []), at=datetime.fromisoformat(tx["start"]))
 
+    # ---------- this PC: speed, power settings, what the station changes (station/pccheck.py) ----------
+    def _measured_rtf(self) -> float | None:
+        try:
+            import yaml
+            e = yaml.safe_load((self.root / "config" / "engine.yaml").read_text(encoding="utf-8")) or {}
+            return float((e.get("final") or {}).get("rtf") or 0) or None
+        except Exception:  # noqa: BLE001
+            return None
+
+    def pc_view(self) -> dict:
+        from . import pccheck
+        d = pccheck.load(self.data)
+        op = self._saved()
+        return {"checks": d.get("checks") or [], "checked_at": d.get("checked_at"), "measured": d.get("measured"),
+                "facts": {k: (d.get("facts") or {}).get(k) for k in ("maker", "model", "modern_standby", "on_battery")},
+                "mode": self.awake_mode, "modes": pccheck.MODES, "explain": pccheck.explain(self.awake_mode),
+                "holding": bool(getattr(self.awake, "held", False)), "why": self.awake_why,
+                "slow": self.slowwatch.state(), "measuring": self.pc_measuring,
+                "notice_seen": bool((op.get("pc") or {}).get("notice_seen"))}
+
+    def pc_check_soon(self):
+        """Read this PC's power settings again (a few seconds of PowerShell), in the background."""
+        from . import pccheck
+
+        def go():
+            try:
+                pccheck.check(self.data)
+            except Exception as e:  # noqa: BLE001
+                print(f"this PC: check: {type(e).__name__}: {e}", flush=True)
+        threading.Thread(target=go, daemon=True, name="pc-check").start()
+
+    def pc_seen(self) -> dict:
+        with self.lock:
+            saved = self._saved()
+            saved.setdefault("pc", {})["notice_seen"] = datetime.now().isoformat(timespec="seconds")
+            self._save(saved)
+        return self.pc_view()
+
+    def pc_measure(self) -> dict:
+        """Settings → This PC → Measure this PC again: both benchmarks at full speed in a child process (never
+        during a net or traffic: it shares the graphics with the live engine), then a restart to use the result."""
+        if self.pc_measuring and self.pc_measuring.get("state") == "running":
+            raise ValueError("already measuring")
+        if (self.schedule_now().get("current") or {}).get("name"):
+            raise ValueError("a net is on the air: measure after it")
+        if self.live_busy() or (self.last_traffic and time.time() - self.last_traffic < 120):
+            raise ValueError("a radio is busy: measure when the frequency has been quiet for 2 minutes")
+        acc = getattr(self, "accurate", None)
+        if acc and any(j.get("state") in ("queued", "running") for j in acc.status()):
+            raise ValueError("the accurate pass is working: measure after it")
+        import subprocess
+        import sys as _sys
+        self.pc_measuring = {"state": "running", "since": datetime.now().isoformat(timespec="seconds")}
+
+        def go():
+            try:
+                p = subprocess.run([_sys.executable.replace("pythonw.exe", "python.exe"), "-m", "station.pccheck",
+                                    "measure", "--data", str(self.data), "--models", str(self.root / "models"),
+                                    "--out", str(self.root / "config" / "engine.yaml")],
+                                   cwd=str(self.root), capture_output=True, text=True, timeout=1800,
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                tail = (p.stdout or p.stderr or "").strip().splitlines()[-1:] or [""]
+                self.pc_measuring = {"state": "done" if p.returncode == 0 else "failed", "say": tail[0][:300],
+                                     "at": datetime.now().isoformat(timespec="seconds")}
+            except Exception as e:  # noqa: BLE001
+                self.pc_measuring = {"state": "failed", "say": f"{type(e).__name__}: {e}"}
+            print(f"{datetime.now():%H:%M:%S} this PC measured: {self.pc_measuring}", flush=True)
+            self.pc_check_soon()
+            self.bus.publish("pc", self.pc_view())
+            if self.pc_measuring.get("state") == "done":
+                self.restart_soon()                       # the live engine chosen again is loaded at start
+        threading.Thread(target=go, daemon=True, name="pc-measure").start()
+        return self.pc_view()
+
     def snapshot(self) -> dict:
         with self.lock:
             return {"callsign": self.me, "radios": list(self.radios.values()), "tx": self._recent_tx(),
@@ -2030,4 +2117,6 @@ class Station:
                     "accurate": self.accurate.status() if getattr(self, "accurate", None) else [],
                     "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False,
                     "accurate_where": self.accurate.where if getattr(self, "accurate", None) and self.accurate.enabled else None,
-                    "accurate_rate": round(self.accurate.rate, 2) if getattr(self, "accurate", None) else None}
+                    "accurate_rate": round(self.accurate.rate, 2) if getattr(self, "accurate", None) else None,
+                    "pc": {"slow": self.slowwatch.state(),
+                           "notice": not (self._saved().get("pc") or {}).get("notice_seen"), "mode": self.awake_mode}}

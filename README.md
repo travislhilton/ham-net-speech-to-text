@@ -46,11 +46,16 @@ The same ZIP is on this page under the green **Code** button → **Download ZIP*
 3. **Extract** — right-click the ZIP → **Extract All** → Extract.
 4. **Run the installer** — in the extracted folder open `install` → `windows` and double-click **`install.cmd`**. Press **Yes** when Windows asks for administrator rights. If Windows shows "Windows protected your PC", click **More info** → **Run anyway**.
 5. **Type your callsign** when asked. Press **Enter** to skip the QRZ.com question if you don't use QRZ (you can add it later).
-6. **Wait for `== Done`.** The first install downloads about 4 GB (Python packages, Whisper speech models, the FCC license database) and takes 10–20 minutes. It ends by listing the sound inputs this PC can record from: note your radio's.
+6. **Keep the PC plugged in and leave it alone while it measures.** The installer measures how fast this PC transcribes, with the screen held on (a laptop with its screen off runs several times slower and would get a slower setup).
+7. **Choose when the station may change your power settings** (it asks once; press **Enter** for the recommended choice). While it transcribes, the station keeps the screen on and switches to its own **HamNet Station** power plan at Best performance, then puts your own plan back. Settings → *Full speed and screen on* changes it later.
+8. **Wait for `== Done`.** The first install downloads about 4 GB (Python packages, Whisper speech models, the FCC license database) and takes 10–30 minutes. It ends with **This PC**: anything in your power settings that would slow the station (on battery, power-saving mode, hibernate, an old graphics driver, a quiet fan profile), each with its fix. Then it lists the sound inputs this PC can record from: note your radio's.
 
 **Internet is needed for the first install only.** The station itself works with none.
 
-**To update:** download the ZIP again and run `install.cmd` again. Your settings, radios, nets and logs are kept.
+**To update:** download the ZIP again and run `install.cmd` again. Everything you set is kept: radios, net schedule,
+settings, local names, learned fixes, keys, QRZ login, logs and history (they live in `data\` and the station's own
+config files, which an update never overwrites). The earlier speed measurement is kept too; `install.cmd -Remeasure`
+or **Settings → This PC → Measure this PC again** measures again (after new graphics drivers or a new PC).
 
 ### What the installer does
 
@@ -90,6 +95,15 @@ nets costs nothing. **Settings → Full speed and screen on**: *during nets and 
 whole time a radio listens* (`listening`: with a radio always on and no schedule, that is around the clock — the
 owner's laptop stayed lit all evening that way), *always*, *never* (`off`); `keep_awake:` in `station.yaml` is the
 starting value, `keep_awake_quiet_min:` (10) the minutes after traffic.
+**Settings → This PC** (`station/pccheck.py`) says what the station changes and whether it is holding right now (and
+why), shows the speeds this PC measured and the processor's speed while it measured, lists the power settings that
+slow it (on battery, Best power efficiency, hibernate on mains power, Modern Standby, a graphics driver over 18 months
+old, a processor held back even at full power = the maker's quiet / fan profile, with the maker's app named) and has
+**Measure this PC again** (between nets; the station restarts to use the result). The installer measures with the
+screen and system held awake on the HamNet plan (`python -m station.pccheck measure`), asks the *Full speed and
+screen on* question once (`-KeepAwake traffic|listening|always|off` answers it unattended) and ends with the same
+**This PC** list. The dashboard shows a one-time notice of what the station changes, and a warning when live
+transcription runs over 4× slower than measured (screen off, battery, a quiet profile).
 **While the dashboard is open in a browser** (any tab, and for 2 minutes after the last one closes) the default
 also holds the whole time a radio listens, and the station checks its live engine: when a transmission of 3 s or more
 comes back as one word or nothing, it re-reads a recent transmission that read well; if the engine cannot read that
@@ -732,6 +746,7 @@ The station can read an EOC's situation report on a voice net — from the compa
 | Home server GPU on demand: Whisper loaded on the first request, its memory released after each one, the model unloaded after 10 idle minutes (`transcribe/gpu.py`, `/health` shows it) | working (replayed final passes: 4.5 GB flat instead of growing to 20+ GB; idle: 0.77 GB) |
 | Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | working on both station PCs (i5-12600H desktop: final text only; Core Ultra laptop: large-v3 on the GPU at 0.34× real time), see "The accurate pass on this PC" |
 | Live engine checked while a dashboard is open: a clear transmission read as one word re-checks the engine on a recent good read and reloads it if broken (`station/core.py`) | working (a fake engine in the tests; the failure seen once after Modern Standby) |
+| This PC: measured at full speed (screen held on, the processor's speed recorded, a slowed measurement marked), power settings checked with fixes (installer end + Settings), the keep-awake choice asked once at install, a one-time dashboard notice of what changes, a warning when live transcription runs >4× slower than measured, Measure this PC again (`station/pccheck.py`) | working, 2026-11-12 |
 | Full speed while transcribing on laptops: your power plan + mode saved, the installer's HamNet Station plan + Best performance + the screen held on during nets and traffic (+10 min; Settings: or the whole time a radio listens / always / never) or while the accurate pass has work, all put back after (and at the next start after a crash; left on the HamNet plan with nothing saved, it goes back to Windows' Balanced plan and your power mode) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
 | Compiled-model cache for the live engine (`data/ov-cache`, shared with the accurate pass) | working; test laptop: turbo on the GPU 36 s → 16 s to load, small.en on the NPU 555 s → 11 s |
 | Over-the-air transcription test with word-error score and history | working |

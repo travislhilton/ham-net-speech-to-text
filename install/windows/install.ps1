@@ -6,6 +6,8 @@ Python packages, four Whisper models, the FCC license database; more with an NVI
   install.cmd                              (double-click; elevates and runs this)
   install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz] [-SkipVoice]
               [-AreaPack <file or https address>]   (else an area-pack.json beside install.cmd is imported)
+              [-KeepAwake traffic|listening|always|off]   (answers the power-settings question)
+              [-Remeasure]                         (measure this PC again on an update)
 #>
 param(
   [string]$InstallDir = 'C:\ham-net-speech-to-text',
@@ -14,7 +16,9 @@ param(
   [switch]$SkipCallbook,
   [switch]$SkipQrz,
   [switch]$SkipVoice,
-  [string]$AreaPack = ''
+  [string]$AreaPack = '',
+  [ValidateSet('', 'traffic', 'listening', 'always', 'off')][string]$KeepAwake = '',
+  [switch]$Remeasure
 )
 $ErrorActionPreference = 'Stop'
 $Src = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -134,12 +138,6 @@ if (-not $SkipModels) {
     Run { & $vpy -c "from huggingface_hub import snapshot_download as s; s('Systran/faster-whisper-large-v3', local_dir=r'$InstallDir\models\faster-whisper-large-v3')" }
     Write-Host '  faster-whisper-large-v3 ok (accurate pass on the NVIDIA card)'
   }
-  Step "Choosing the transcription engine for this PC (benchmark, ~1-3 min)"
-  Run { & $vpy "$InstallDir\tools\pick_engine.py" --models "$InstallDir\models" --out "$InstallDir\config\engine.yaml" }
-  # The accurate second pass on this PC's spare compute (when the home server is not there): what can it
-  # sustain? Both stages / the final text after each net only / none. Written to engine.yaml `accurate:`.
-  Step "Measuring the accurate pass on this PC (benchmark, ~2-6 min)"
-  Run { & $vpy "$InstallDir\tools\pick_accurate.py" --models "$InstallDir\models" --out "$InstallDir\config\engine.yaml" }
 }
 
 if (-not $SkipVoice) {
@@ -229,6 +227,44 @@ foreach ($v in $hnSet) {
 $ErrorActionPreference = $old
 Write-Host '  ready (your own power plan stays active; set it for battery life as you like)'
 
+if (-not $SkipModels) {
+  # Both benchmarks with the screen and system held awake on the HamNet plan (station/pccheck.py): a laptop measured
+  # with its screen off runs at a quarter of its speed and would get a slower engine than it can run (2026-11-12).
+  # An update keeps the earlier measurement unless -Remeasure or there is none yet.
+  $eng = "$InstallDir\config\engine.yaml"
+  if ($Remeasure -or -not (Test-Path $eng) -or -not (Select-String -Path $eng -Pattern '^accurate:' -Quiet)) {
+    Step "Measuring this PC at full speed (screen held on; ~3-8 min, leave the PC plugged in)"
+    Stop-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue   # it shares the graphics; started again below
+    Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*-m station*' -and $_.CommandLine -notlike '*pccheck*' } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Run { & $vpy -m station.pccheck measure --data "$InstallDir\data" --models "$InstallDir\models" --out $eng }
+  } else {
+    Step "This PC was measured before (kept; -Remeasure or Settings -> This PC measures again)"
+  }
+}
+
+Step "What the station changes on this PC while it transcribes"
+Push-Location $InstallDir
+$asked = $false
+& $vpy -m station.pccheck asked --data "$InstallDir\data" 2>$null; if ($LASTEXITCODE -eq 0) { $asked = $true }
+$mode = $KeepAwake
+if (-not $mode -and -not $asked) {
+  Write-Host '  Laptops run several times slower once the screen goes dark, so while the station transcribes it can keep'
+  Write-Host '  the screen on and switch to its own "HamNet Station" power plan at Best performance, then put your own'
+  Write-Host '  plan back. When should it do that?'
+  Write-Host '    1  During nets and traffic (recommended)'
+  Write-Host '    2  The whole time a radio listens'
+  Write-Host '    3  Always, while the station runs'
+  Write-Host '    4  Never (my power settings only; transcription may be slow with the screen off)'
+  $ans = ''
+  if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) { $ans = Read-Host '  Choose 1-4 [1]' }
+  $mode = @{ '2' = 'listening'; '3' = 'always'; '4' = 'off' }[$ans.Trim()]
+  if (-not $mode) { $mode = 'traffic' }
+}
+if ($mode) { Run { & $vpy -m station.pccheck consent --data "$InstallDir\data" --mode $mode } }
+& $vpy -m station.pccheck explain --data "$InstallDir\data" | ForEach-Object { Write-Host "  $_" }
+Pop-Location
+
 Step "Daily callbook update (scheduled task, 04:15)"
 $act = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.fcc update' -WorkingDirectory $InstallDir
 $act2 = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.dxcc update' -WorkingDirectory $InstallDir
@@ -273,5 +309,7 @@ $gpu = (Get-CimInstance Win32_VideoController | ForEach-Object { "$($_.Name) (dr
 Write-Host "  Graphics: $gpu"
 Write-Host '  (Intel or NVIDIA graphics are used only with a current driver: update it from Windows Update or the maker if'
 Write-Host '   config\engine.yaml chose the CPU; then run: .\.venv\Scripts\python.exe tools\pick_engine.py)'
+Step "This PC (power settings that slow transcription; Settings -> This PC shows the same)"
+Push-Location $InstallDir; & $vpy -m station.pccheck check --data "$InstallDir\data"; Pop-Location
 Write-Host "Installed in $InstallDir. Audio inputs this station can record from:"
 Run { & $vpy "$InstallDir\capture\recorder.py" --list-devices }
