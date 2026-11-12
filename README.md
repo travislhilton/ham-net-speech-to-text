@@ -186,6 +186,21 @@ console.x.ai → API Keys after adding a little credit under Billing; optionally
 to compare Claude Haiku with Grok); the QRZ.com password in Windows Credential Manager; SSH public keys for remote
 management in `deploy\windows\ssh-keys.txt`. The server keeps its settings in `~/.config/emcomm-stt/env`.
 
+## How long recordings and net history are kept
+
+**6 weeks by default; Settings → Keep recordings and net history for … weeks** (1–104; `keep_weeks:` in
+`station.yaml` is the starting value, the dashboard's choice wins). A busy two-radio station records about 130 MB a
+day. Every 6 hours (and 10 minutes after the station starts; never while a radio is receiving or transcribing) the
+station deletes whole days older than that (`station/retention.py`): the recordings (`data\recordings\<day>`), the
+day logs (`data\logs`), those days' nets, transmissions, who took part, minutes and items in the history database
+(then compacted), voiceprints, the station agent's drafts and Grok comparisons. A net that started before the first day
+kept goes whole. Shortening the time asks first and deletes about a minute after you save. It also keeps two
+caches in check: a removed radio's leftover raw audio (over a day old) and OpenVINO's compiled models (over 3 GB, the
+least recently used over 2 days old go; every re-measure adds about 1.8 GB), and cuts `data\station.log` to its last
+2 MB at start once it passes 10 MB. **Never deleted:** settings, radios, the net schedule, local names, learned
+fixes, keys and the callbook. Settings → This PC shows the disk used, the oldest day kept and the last cleanup.
+`python -m station.retention --dry-run` lists what would go.
+
 ## Connecting a radio
 
 Each radio needs its receive audio on a PC sound input of its own (never the one a digital mode
@@ -746,6 +761,7 @@ The station can read an EOC's situation report on a voice net — from the compa
 | Home server GPU on demand: Whisper loaded on the first request, its memory released after each one, the model unloaded after 10 idle minutes (`transcribe/gpu.py`, `/health` shows it) | working (replayed final passes: 4.5 GB flat instead of growing to 20+ GB; idle: 0.77 GB) |
 | Accurate pass ON THIS PC when there is no home server (other operators, other networks, offline): OpenVINO large-v3 on the Intel GPU/CPU or faster-whisper on NVIDIA, chosen by an install-time benchmark; held while the live text needs the PC | working on both station PCs (i5-12600H desktop: final text only; Core Ultra laptop: large-v3 on the GPU at 0.34× real time), see "The accurate pass on this PC" |
 | Live engine checked while a dashboard is open: a clear transmission read as one word re-checks the engine on a recent good read and reloads it if broken (`station/core.py`) | working (a fake engine in the tests; the failure seen once after Modern Standby) |
+| Recordings and net history kept 6 weeks by default (Settings: 1–104 weeks), swept every 6 hours: recordings, day logs, history database rows (then VACUUM), voiceprints, agent drafts, Grok comparisons; stale raw audio, OpenVINO cache over 3 GB, station.log over 10 MB (`station/retention.py`) | working, 2026-11-12 |
 | This PC: measured at full speed (screen held on, the processor's speed recorded, a slowed measurement marked), power settings checked with fixes (installer end + Settings), the keep-awake choice asked once at install, a one-time dashboard notice of what changes, a warning when live transcription runs >4× slower than measured, Measure this PC again (`station/pccheck.py`) | working, 2026-11-12 |
 | Full speed while transcribing on laptops: your power plan + mode saved, the installer's HamNet Station plan + Best performance + the screen held on during nets and traffic (+10 min; Settings: or the whole time a radio listens / always / never) or while the accurate pass has work, all put back after (and at the next start after a crash; left on the HamNet plan with nothing saved, it goes back to Windows' Balanced plan and your power mode) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
 | Compiled-model cache for the live engine (`data/ov-cache`, shared with the accurate pass) | working; test laptop: turbo on the GPU 36 s → 16 s to load, small.en on the NPU 555 s → 11 s |

@@ -91,6 +91,19 @@ def test_keep_awake_is_a_dashboard_setting(station):  # noqa: F811
         station.set_operator({"callsign": "W9XYZ", "keep_awake": "sometimes"})
 
 
+def test_how_long_history_is_kept_is_a_dashboard_setting(station):  # noqa: F811
+    assert station.operator()["keep_weeks"] == 6                              # owner 2026-11-12: 6 weeks by default
+    calls = []
+    station.sweeper = type("S", (), {"soon": lambda self: calls.append(1)})()
+    assert station.set_operator({"callsign": "W9XYZ", "keep_weeks": "10"})["keep_weeks"] == 10
+    assert calls == []                                                       # longer: nothing to delete now
+    assert station.set_operator({"callsign": "W9XYZ", "keep_weeks": 4})["keep_weeks"] == 4
+    assert calls == [1]                                                      # shorter: sweep soon
+    for bad in (0, 500, "long"):
+        with pytest.raises(ValueError, match="keep history"):
+            station.set_operator({"callsign": "W9XYZ", "keep_weeks": bad})
+
+
 def test_a_driver_update_that_renamed_the_input_is_explained():
     from station.radios import why_missing
     eps = [{"name": "Digirig Lite NET-REC", "port": "USB\\A", "present": False},

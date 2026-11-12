@@ -28,6 +28,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.log or sys.stdout is None:                       # pythonw has no console: sys.stdout is None
         log = Path(a.log or ROOT / "data" / "station.log"); log.parent.mkdir(parents=True, exist_ok=True)
+        from .retention import trim_log                  # over 10 MB: keep its last 2 MB
+        trim_log(log)
         sys.stdout = sys.stderr = open(log, "a", buffering=1, encoding="utf-8")
         import datetime as _dt; print(f"--- start {_dt.datetime.now().isoformat(timespec='seconds')}")
 

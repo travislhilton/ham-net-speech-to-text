@@ -247,6 +247,8 @@ class Station:
         threading.Thread(target=self._ticker, daemon=True, name="ticker").start()
         if listen:
             self.pc_check_soon()                      # this PC's power settings, for Settings → This PC
+            from .retention import Sweeper            # recordings + net history kept 6 weeks (station/retention.py)
+            self.sweeper = Sweeper(self, self.keep_weeks)
         from .accurate import AccuratePass
         from . import accurate_local
         local = getattr(self, "_accurate_local", None) or accurate_local.make(self, self.cfg.get("accurate"),
@@ -381,6 +383,7 @@ class Station:
         op = {"callsign": self.me, "name": "", "grid": "", "winlink_dir": "", "winlink_account": "",
               "reach_km": self.reach_km(), "keep_awake": self.awake_mode} | \
              {k: v for k, v in (self._saved().get("operator") or {}).items() if v is not None}
+        op["keep_weeks"] = self.keep_weeks()
         op["callsign"] = self.me
         installs = winlink.find_installs([op["winlink_dir"]] if op["winlink_dir"] else [])
         if not op["winlink_dir"] and installs:
@@ -399,6 +402,18 @@ class Station:
         except (TypeError, ValueError):
             v = REACH_KM
         return v
+
+    def keep_weeks(self) -> int:
+        """How long recordings and net history are kept (Settings, then station.yaml `keep_weeks`, else 6 weeks;
+        station/retention.py deletes what is older)."""
+        from .retention import KEEP_WEEKS, MAX_WEEKS
+        for v in ((self._saved().get("operator") or {}).get("keep_weeks"), self.cfg.get("keep_weeks")):
+            try:
+                if v not in (None, ""):
+                    return max(1, min(MAX_WEEKS, int(float(v))))
+            except (TypeError, ValueError):
+                continue
+        return KEEP_WEEKS
 
     def set_operator(self, body: dict) -> dict:
         """The operator's own settings, set on the dashboard: callsign (hints, IDs, Winlink sender), name,
@@ -421,9 +436,22 @@ class Station:
                 raise ValueError("VHF/UHF reach must be a number of km")
             if not 50 <= reach <= 5000:
                 raise ValueError("VHF/UHF reach must be between 50 and 5000 km")
+        from .retention import MAX_WEEKS
+        weeks = body.get("keep_weeks")
+        if weeks not in (None, ""):
+            try:
+                weeks = int(float(weeks))
+            except (TypeError, ValueError):
+                raise ValueError("keep history: a number of weeks")
+            if not 1 <= weeks <= MAX_WEEKS:
+                raise ValueError(f"keep history: between 1 and {MAX_WEEKS} weeks")
+        shorter = False
         with self.lock:
             saved = self._saved()
             op = saved.get("operator") or {}
+            if weeks not in (None, ""):
+                shorter = weeks < self.keep_weeks()
+                op["keep_weeks"] = weeks
             if reach not in (None, ""):
                 if reach != op.get("reach_km"):
                     self.__dict__.pop("_agreed", None)          # re-run today's agreement with the new reach
@@ -440,6 +468,8 @@ class Station:
             self._apply_callsign(call)
         if ka:
             threading.Thread(target=self._keep_awake_tick, daemon=True).start()
+        if shorter and getattr(self, "sweeper", None):          # kept for less time: delete what is now too old
+            self.sweeper.soon()
         return self.operator()
 
     def _apply_callsign(self, call: str):
@@ -2052,7 +2082,18 @@ class Station:
                 "mode": self.awake_mode, "modes": pccheck.MODES, "explain": pccheck.explain(self.awake_mode),
                 "holding": bool(getattr(self.awake, "held", False)), "why": self.awake_why,
                 "slow": self.slowwatch.state(), "measuring": self.pc_measuring,
-                "notice_seen": bool((op.get("pc") or {}).get("notice_seen"))}
+                "notice_seen": bool((op.get("pc") or {}).get("notice_seen")),
+                "storage": self._storage()}
+
+    def _storage(self) -> dict:
+        from . import retention
+        try:
+            u = retention.usage(self.data)
+        except OSError:
+            u = {}
+        sw = getattr(self, "sweeper", None)
+        return {**u, "keep_weeks": self.keep_weeks(),
+                "last": sw.last if sw else None}
 
     def pc_check_soon(self):
         """Read this PC's power settings again (a few seconds of PowerShell), in the background."""

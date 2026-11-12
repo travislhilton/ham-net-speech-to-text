@@ -451,6 +451,8 @@ table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;l
     <option value="always">Always, while the station runs</option>
     <option value="off">Never (my power settings only)</option></select></label>
   <div class="small muted">Laptops run several times slower once the screen goes dark. “During nets and traffic” switches to full speed for a scheduled net, for every transmission (from its first moment) and for 10 minutes after the last one; the rest of the time your own power plan, screen and sleep settings apply, and the radio still listens.</div>
+  <label>Keep recordings and net history for <input name="keep_weeks" type="number" min="1" max="104" step="1" style="width:5em"> weeks</label>
+  <div class="small muted" id="keepNote">Older recordings, day logs, net history, minutes and voiceprints are deleted (checked every 6 hours). Settings, radios, the net schedule and local names are always kept.</div>
   <h4>This PC</h4><div id="pcSet" class="small"></div>
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
@@ -1338,7 +1340,7 @@ function fillAccounts(f){
 }
 $("openSettings").onclick=async()=>{
   const op=await loadSettings(),f=$("setForm");
-  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";
+  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";f.keep_weeks.value=op.keep_weeks||6;f.keep_weeks.dataset.was=op.keep_weeks||6;
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
   fillAccounts(f);$("setErr").textContent="";loadPC();renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();loadVoice();loadGrok();$("settings").showModal();
@@ -1346,7 +1348,9 @@ $("openSettings").onclick=async()=>{
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
   e.preventDefault();const f=$("setForm");
-  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value,reach_km:f.reach_km.value,keep_awake:f.keep_awake.value})});
+  const kw=+f.keep_weeks.value,was=+f.keep_weeks.dataset.was||6;
+  if(kw&&kw<was&&!confirm(`Keep recordings and net history for ${kw} weeks instead of ${was}?\n\nEverything older than ${kw} weeks (recordings, logs, net history and minutes) will be deleted in about a minute. This cannot be undone.`))return;
+  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value,reach_km:f.reach_km.value,keep_awake:f.keep_awake.value,keep_weeks:f.keep_weeks.value})});
   const d=await r.json();if(!r.ok){$("setErr").textContent=d.error||"not saved";return}
   OP=d;$("me").textContent=d.callsign+" station";$("settings").close();
 };
@@ -1372,6 +1376,8 @@ function renderPC(d){
   const cs=d.checks||[];
   if(cs.length)h+=`<ul>${cs.map(c=>`<li class="${c.ok?"":"bad"}">${c.ok?"✓":"⚠"} ${esc(c.say)}${!c.ok&&c.fix?`<div class="fix">${esc(c.fix)}</div>`:""}</li>`).join("")}</ul>`;
   else if(d.checked_at)h+=`<div>Power settings checked: nothing to report.</div>`;
+  const st=d.storage||{},gb=b=>(b/1073741824).toFixed(b>=1073741824?1:2)+" GB";
+  if(st.bytes)h+=`<div>Disk used: recordings ${gb(st.bytes.recordings||0)}, net history ${gb((st.bytes["day logs"]||0)+(st.bytes.history||0))}, compiled models ${gb(st.bytes["OpenVINO cache"]||0)}${st.oldest_day?"; oldest day kept "+esc(st.oldest_day):""}. Kept ${st.keep_weeks} weeks${st.last?"; last cleanup "+esc(st.last.at.replace("T"," ")):""}.</div>`;
   if(d.slow)h+=`<div class="err">${esc(d.slow.say)}</div>`;
   const ms=d.measuring||{};
   h+=`<div class="row"><button type="button" id="pcMeasure"${ms.state==="running"?" disabled":""}>Measure this PC again</button> <span class="muted" id="pcMsg">${ms.state==="running"?"measuring (2–8 minutes; the station restarts after)…":ms.state?esc(ms.state+": "+(ms.say||"")):"2–8 minutes, between nets; the station restarts after to use the result."}</span></div>`;

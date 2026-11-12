@@ -9,6 +9,7 @@ consensus: true             # one station, one call across a net: variants merge
 morse: true                 # find and decode Morse code (CW) on every radio; per radio `morse: false` turns one off
 # keep_awake: traffic        # laptops: full speed + screen on during nets and traffic (+10 min); listening / always / off
 #                             # (README "On a laptop"; also Settings on the dashboard, which wins)
+# keep_weeks: 6              # recordings and net history older than this are deleted (station/retention.py)
 # VHF/UHF reach (300 km by default) is set in the dashboard: Settings → VHF/UHF reach.
 # A schedule entry can say its name as net control says it, for the fix-ups (station/fixups.py):
 #   spoken: [Springfield County ARES net]

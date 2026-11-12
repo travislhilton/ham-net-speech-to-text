@@ -161,6 +161,50 @@ class History:
     def _net(self, nid: str) -> dict | None:
         return next((n for n in self.nets() or [] if n.get("id") == nid), None)
 
+    def forget_before(self, day: str, log_names=(), dry_run: bool = False) -> int:
+        """Delete the nets and transmissions from before `day` (YYYY-MM-DD; station/retention.py, 6 weeks): their
+        transmissions, who took part, minutes and items (and the full-text rows), plus the indexed-length marks of
+        the day logs deleted with them. A net or conversation that started before `day` goes whole, with any of its
+        transmissions after midnight. Returns the number of rows deleted (or that would be). VACUUMs after."""
+        with self.lock:
+            insts = [r["key"] for r in self.con.execute("SELECT key FROM inst WHERE start < ?", (day,))]
+            ph = lambda xs: ",".join("?" * len(xs))   # noqa: E731
+            tx_rows = [r["rowid"] for r in self.con.execute(
+                "SELECT rowid FROM tx WHERE start < ?" + (f" OR inst IN ({ph(insts)})" if insts else ""),
+                (day, *insts))]
+            items = [r["id"] for r in self.con.execute(
+                "SELECT id FROM item WHERE (inst IS NULL AND created < ?)" + (f" OR inst IN ({ph(insts)})" if insts
+                                                                             else ""), (day, *insts))]
+            n = len(insts) + len(tx_rows) + len(items)
+            if dry_run or not n:
+                return n
+            self.con.execute("BEGIN")
+            try:
+                for i in range(0, len(tx_rows), 500):
+                    chunk = tx_rows[i:i + 500]
+                    if self.fts:
+                        self.con.execute(f"DELETE FROM tx_fts WHERE rowid IN ({ph(chunk)})", chunk)
+                    self.con.execute(f"DELETE FROM tx WHERE rowid IN ({ph(chunk)})", chunk)
+                for i in range(0, len(items), 500):
+                    chunk = items[i:i + 500]
+                    if self.fts:
+                        self.con.execute(f"DELETE FROM item_fts WHERE rowid IN ({ph(chunk)})", chunk)
+                    self.con.execute(f"DELETE FROM item WHERE id IN ({ph(chunk)})", chunk)
+                for i in range(0, len(insts), 500):
+                    chunk = insts[i:i + 500]
+                    for t in ("part", "minutes"):
+                        self.con.execute(f"DELETE FROM {t} WHERE inst IN ({ph(chunk)})", chunk)
+                    self.con.execute(f"DELETE FROM inst WHERE key IN ({ph(chunk)})", chunk)
+                for name in log_names:
+                    self.con.execute("DELETE FROM meta WHERE k=?", (f"off:{name}",))
+                self.con.execute("COMMIT")
+            except Exception:
+                self.con.execute("ROLLBACK")
+                raise
+            self.con.execute("VACUUM")
+            self.con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            return n
+
     # ---------- indexing ----------
     def _begin(self) -> bool:
         if self.con.in_transaction:
