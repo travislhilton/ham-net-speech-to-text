@@ -30,7 +30,7 @@ header button,header .helpbtn{background:rgba(255,255,255,.12);border:1px solid 
 header button:hover,header .helpbtn:hover{background:rgba(255,255,255,.22)}
 header button:focus-visible,header a:focus-visible,header input:focus-visible{outline:2px solid #fff;outline-offset:1px}
 header #q{background:#fff;color:#0f172a;border-color:transparent}header a{color:#fff}header .muted{color:var(--hdr-fg);opacity:.8}
-header .st{color:var(--hdr-fg)}header .st.ok,header .ok{color:var(--hdr-ok)}header .st.warn{color:var(--hdr-warn)}header .st.bad,header .bad{color:var(--hdr-bad)}
+header .st{color:var(--hdr-fg)}header .linkish{color:#fff;text-decoration:underline}header .st.ok,header .ok{color:var(--hdr-ok)}header .st.warn{color:var(--hdr-warn)}header .st.bad,header .bad{color:var(--hdr-bad)}
 header #nettype{background:rgba(255,255,255,.14);color:#fff;border-color:transparent}
 header #nightBtn[aria-pressed=true]{background:#fff;color:var(--hdr)}
 .net{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.net b{font-size:16px}
@@ -1232,7 +1232,9 @@ function renderRtabs(){
 }
 function renderRadios(){
   const box=$("radios");
-  if(!S.radios.length){box.innerHTML='<div class="radio">No radios set up yet. Add one to <code>config\\station.yaml</code> (see README, "Connecting a radio").</div>';return}
+  if(!S.radios.length){const n=(S.schedule||[]).length;
+    box.innerHTML=`<div class="radio firstradio"><h2 style="margin:0 0 6px;font-size:18px;color:var(--ink)">No radio yet</h2><p>Connect the radio's audio to this PC (a USB sound card or interface such as a Digirig), then add it here. Each radio needs its own sound input, never the one VARA or Winlink uses.</p>${n?`<p class="muted">${n} net${n>1?"s are":" is"} scheduled and will be recorded once a radio that can hear ${n>1?"them":"it"} is added.</p>`:""}<p><button class="primary" id="addFirstRadio">+ Add a radio</button></p></div>`;
+    $("addFirstRadio").onclick=()=>$("openRadios").click();return}
   box.querySelectorAll(":scope>.radio").forEach(x=>x.remove());
   const ids=new Set(S.radios.map(r=>r.id));box.querySelectorAll(".rcol").forEach(x=>{if(!ids.has(x.id.slice(4)))x.remove()});
   renderRtabs();
@@ -1306,6 +1308,7 @@ function renderNet(){
 // Today: one line per net still to come today (and the one on the air), the next one highlighted
 function renderToday(){
   const box=$("today"),bad=(S.schedule||[]).filter(n=>["none","cant"].includes((n.status||{}).kind)),uh=(S.schedule||[]).filter(n=>(n.heard||{}).flag);
+  if(!S.radios.length){box.innerHTML="";return}                 // no radio at all: the empty state says it once
   const parts=[];if(bad.length)parts.push(`${bad.length} net${bad.length>1?"s":""} can't be recorded (no radio, or the radio can't hear ${bad.length>1?"them":"it"})`);
   if(uh.length)parts.push(`${uh.length} net${uh.length>1?"s":""} not heard 3× in a row`);
   box.innerHTML=parts.length?`<div class="attn">⚠ <button data-attn>${parts.join(" · ")}: open Nets</button></div>`:"";
@@ -1334,7 +1337,7 @@ function renderHints(){
   if(emerg.length){al.style.display="block";al.textContent=`Emergency traffic heard on ${emerg.join(" and ")}. Keep the frequency clear unless you can help or net control calls you.`}else al.style.display="none";
   const types=Object.values(H).map(h=>h.net).filter(n=>n&&n.type&&n.type!=="unknown");
   const nt=$("nettype");nt.textContent=types.length===1?types[0].label:types.length>1?`${types.length} nets heard`:"Net type: listening…";
-  nt.className="badge "+(emerg.length?"emergency":types.length===1?types[0].type:"");
+  nt.className="badge "+(emerg.length?"emergency":types.length===1?types[0].type:"");nt.hidden=!S.radios.length;
   for(const r of S.radios)renderGuide(r.id);
   renderRadios();
 }
