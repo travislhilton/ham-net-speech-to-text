@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "emcomm-readout/1",
   "title": "EMCOMM incident read-out, version 1",
-  "description": "What an EOC (Emergency Operations Center) publishes for a voice net to read: counts, unit names and times only. It never carries people's names, phone numbers, email or street addresses, GPS coordinates, injuries or missionary status (owner decision 2026-11-10: those are not read on an open frequency, so they are not in the document at all). A value that could not be computed is null and is spoken as 'not reported', never 'zero'. Producer: church-emcomm-wnlk-forms (eoc/readout.py, GET /api/readout). Consumer: ham-net-speech-to-text (station/readout.py).",
+  "description": "What an EOC (Emergency Operations Center) publishes for a voice net to read: counts, unit names and times only. It never carries people's names, phone numbers, email or street addresses, GPS coordinates, injuries or missionary status (owner decision 2026-11-10: those are not read on an open frequency, so they are not in the document at all). A value that could not be computed is null and is spoken as 'not reported', never 'zero'. Producer: church-emcomm-wnlk-forms (eoc/readout.py, GET /api/readout). Consumer: HAM Sidekick Station (repository hamsidekick, station/readout.py).",
   "type": "object",
   "additionalProperties": true,
   "required": ["schema", "generated_at", "as_of", "fingerprint", "source", "approver", "pace", "incident", "reporting",
