@@ -224,7 +224,11 @@ def make_handler(station):
                 self.close_connection = True                   # its body is unread: never reuse the connection
                 return self._json({"error": "not found"}, 404)
             try:
-                n = min(int(self.headers.get("Content-Length") or 0), 512 * 1024)
+                cap = 28 * 1024 ** 2 if u.path == "/api/agent/library" else 512 * 1024   # a library file (base64)
+                n = int(self.headers.get("Content-Length") or 0)
+                if n > cap:
+                    self.close_connection = True
+                    return self._json({"error": f"too large (at most {cap // 1024 ** 2 or 0.5} MB)"}, 413)
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if agent:
                     return self._json(station.agent.post(u.path, body))

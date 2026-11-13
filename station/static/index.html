@@ -244,6 +244,11 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 .turn.ok{background:var(--ok);color:var(--on);border-color:var(--ok)}.turn.bad{background:var(--bad);color:var(--on);border-color:var(--bad)}
 .turn.in{border-color:var(--ok)}.turn.in b{color:var(--ok)}.turn.mute{opacity:.75}.turn span{font-weight:400}
 .warnband{background:color-mix(in srgb,var(--warn) 14%,var(--panel));color:var(--ink);border:1px solid var(--warn);border-radius:8px;padding:6px 10px;margin:6px 0}
+.skchat{display:flex;flex-direction:column;gap:8px}.skmsg{border:1px solid var(--line);border-radius:10px;padding:8px 10px;max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere}
+.skmsg.op{align-self:flex-end;background:color-mix(in srgb,var(--accent) 10%,var(--panel))}.skmsg.ai{align-self:flex-start}
+.skmsg .air{margin-top:6px;border-left:3px solid var(--accent);padding:4px 8px;background:color-mix(in srgb,var(--accent) 6%,var(--panel))}
+.skask{display:flex;gap:6px;align-items:flex-end;position:sticky;bottom:-18px;background:var(--panel);padding:8px 0}.skask textarea{flex:1;min-height:3.2em;resize:vertical}
+.skitem{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0}.skitem textarea,.skask textarea,#skBody textarea{width:100%;box-sizing:border-box;font:inherit;min-height:4.5em;max-width:none}.skitem .seg{margin:6px 0;display:block;max-width:none;width:100%}
 .sendband{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:2px solid var(--warn);border-radius:8px;padding:8px 10px;margin:6px 0;background:color-mix(in srgb,var(--warn) 16%,var(--panel));font-size:14px}
 .sendband.on_air{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 18%,var(--panel))}.sendband .cd{font-variant-numeric:tabular-nums}.sendband button{margin-left:auto}
 .echo{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:6px 9px;font-size:13px;flex:none}
@@ -547,6 +552,9 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamnet.display",JSO
 <nav id="netsTabs" class="ntabs" role="tablist" aria-label="Nets"><button role="tab" data-ntab="schedule">Schedule</button><button role="tab" data-ntab="history">History</button><button role="tab" data-ntab="analysis">Analysis</button><button role="tab" data-ntab="minutes">Minutes</button><button role="tab" data-ntab="open">Still open</button></nav>
 <div id="netsBody" class="dbody" role="tabpanel"></div></dialog>
 <dialog id="searchDlg" class="big" aria-labelledby="searchTitle"><div class="dhead"><h3 id="searchTitle">Search</h3><button id="searchClose" class="x" aria-label="Close">✕</button></div><div id="searchBody" class="dbody"></div></dialog>
+<dialog id="skDlg" class="big" aria-labelledby="skTitle"><div class="dhead"><h3 id="skTitle">Sidekick</h3><label class="small">Radio <select id="skRadio"></select></label><button id="skClose" class="x" aria-label="Close">✕</button></div>
+<div class="tabs" id="skTabs" style="padding:0 16px" role="tablist"><button data-sktab="chat" role="tab">Chat</button><button data-sktab="prep" role="tab">Prepared</button><button data-sktab="lib" role="tab">Library</button><button data-sktab="sites" role="tab">Sites</button></div>
+<div id="skBody" class="dbody"></div></dialog>
 <dialog id="phoneDlg"><div id="phoneBody"></div><div class="row"><button onclick="$('phoneDlg').close()">Close</button></div></dialog>
 <dialog id="whoDlg"><form id="whoForm">
   <h3>Who was talking?</h3><p class="small muted" id="whoText"></p><div class="row" id="whoPick"></div><div class="row small" id="whoVoice"></div>
@@ -1655,6 +1663,8 @@ function connect(){
   es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HamNet Station";renderEngine(d.engines);all();renderPCNote()});
   es.addEventListener("tx",e=>{const t=JSON.parse(e.data);upsertTx(t);if(t.status==="final")boardSoon(t.radio)});
   es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
+    if(m.chat){if(SK&&SK.rid===m.chat.radio){SK.chat=[...SK.chat.filter(x=>x.id!==m.chat.id),m.chat];if(m.chat.role==="assistant")SK.busy=false;if(SK.tab==="chat")skRender()}return}
+    if(m.topics){AG.topics=m.topics;if(SK)skRender();for(const rid of Object.keys(((AG||{}).settings||{}).radios||{}))renderEcho(rid);return}
     if(m.send){const o=m.send;AG.send=AG.send||{out:{}};AG.send.out=AG.send.out||{};AG.send.out[o.radio]=o;if(o.state==="counting"||o.state==="on_air")AG.send.present=true;renderEcho(o.radio);return}
     if(m.pending){const p=m.pending;AG.pending=AG.pending||{};if(p.state==="none")delete AG.pending[p.radio];else AG.pending[p.radio]=p;renderEcho(p.radio);return}
     if(m.turn){AG.turn=Object.assign(AG.turn||{},m.turn)}if(m.mode_now)AG.mode_now=m.mode_now;
@@ -2333,13 +2343,108 @@ function renderEcho(rid){
   const sendBand=!sending?"":SO&&["counting","on_air"].includes(SO.state)
     ?`<div class="sendband ${SO.state}" role="alert"><b>${SO.state==="counting"?`Sending in <span class="cd" data-cd="${esc(SO.at||"")}" data-s="${SO.countdown_s||3}">${Math.round(SO.countdown_s||3)}</span>…`:"● ON THE AIR"}</b> “${esc(SO.say||"")}” <button class="primary" data-agstop="${esc(rid)}">Stop (Esc)</button></div>`
     :`<div class="meta">${((AG||{}).send||{}).present?"✓ You are at the station: drafts that speak are sent after a 3 s countdown.":"⚠ You are not at the station: Draft only until you use the keyboard or mouse here."}${SO?` Last: ${esc(SN[SO.state]||SO.state)}${SO.why?` (${esc(SO.why)})`:""}.`:""}</div>`;
-  box.innerHTML=`<div class="eh"><span>${esc(agName())} · ${sending?"SEND: says it on the air, you are control operator":"draft only, never transmitted"}</span><a href="/help/sidekick" target="_blank" rel="noopener" style="margin-left:auto;text-transform:none;letter-spacing:0" title="Setting up and using ${esc(agName())}: the two-sided card (printable)">Card</a></div>`
+  box.innerHTML=`<div class="eh"><span>${esc(agName())} · ${sending?"SEND: says it on the air, you are control operator":"draft only, never transmitted"}</span><button class="linkish" data-skopen="${esc(rid)}" style="margin-left:auto;text-transform:none;letter-spacing:0" title="Chat with ${esc(agName())} about this net, prepare words and talks, its library and your sites">Chat &amp; prepared…</button> <a href="/help/sidekick" target="_blank" rel="noopener" style="text-transform:none;letter-spacing:0" title="Setting up and using ${esc(agName())}: the two-sided card (printable)">Card</a></div>`
+    +skArmedLine(rid)
     +(mn.how==="rules"?`<div class="warnband small" role="note">${esc(mn.say)}${mn.why==="no xAI key"?' <button class="linkish" data-goto-settings="agent">Add a key</button>':""}</div>`:"")
     +sendBand+chip+btns+pend
     +(show?`<div class="meta">Last time it would have spoken (${esc(ago(show))}), after: ${esc(show.heard||"")}</div>${draftHtml(show)}
       <div class="rate meta">Right call? <button data-agrate="${esc(show.id)}" data-v="1" class="${(show.rating||{}).good===true?"on":""}" aria-label="Good draft">👍</button><button data-agrate="${esc(show.id)}" data-v="0" class="${(show.rating||{}).good===false?"on":""}" aria-label="Bad draft">👎</button></div>`
       +(show.alts||[]).map(a=>`<div class="alt">${draftHtml(a,true)}</div>`).join(""):"")
     +`<div class="meta">${sp} time${sp===1?"":"s"} it would have spoken · stayed silent ${T.silent||0} time${T.silent===1?"":"s"}${d&&!d.speak?` · last: ${esc(d.why||"")}`:""}</div>`}
+// ---------- Sidekick workspace: chat, prepared words and talks, library, sites (station/chat.py, topics.py) ----------
+let SK=null;
+const skTop=()=>((AG||{}).topics)||{topics:[],sites:[],armed:{}};
+function skArmedLine(rid){const a=skTop().armed[rid];if(!a)return"";const t=skTop().topics.find(x=>x.id===a.topic);if(!t)return"";
+  return `<div class="meta">🎤 Ready to present “${esc(t.title)}”: part ${Math.min(a.next+1,t.segments.length)} of ${t.segments.length}${a.next>=t.segments.length?" (finished)":""}. Net control or you: “${esc(agName())}, present the topic”, then “continue”. <button class="linkish" data-skopen="${esc(rid)}" data-tab="prep">Prepared…</button></div>`}
+async function skOpen(rid,tab){
+  SK={rid,tab:tab||(SK&&SK.tab)||"chat",chat:[],busy:false,lib:null,msg:"",open:{}};
+  $("skRadio").innerHTML=Object.keys(S.radios||{}).map(r=>`<option value="${esc(r)}"${r===rid?" selected":""}>${esc((S.radios[r]||{}).name||r)}</option>`).join("");
+  $("skTitle").textContent=agName();skRender();if(!$("skDlg").open)$("skDlg").showModal();
+  try{const d=await post("/api/agent/chat",{radio:rid});SK.chat=d.chat;SK.busy=d.busy}catch(e){SK.msg=e.message}
+  try{AG.topics=(await post("/api/agent/topics",{action:"list"}).catch(()=>null)||{}).topics||AG.topics}catch(e){}
+  skRender()}
+$("skClose").onclick=()=>$("skDlg").close();
+$("skRadio").onchange=e=>skOpen(e.target.value,SK&&SK.tab);
+$("skTabs").onclick=e=>{const b=e.target.closest("[data-sktab]");if(!b)return;SK.tab=b.dataset.sktab;if(SK.tab==="lib"&&!SK.lib)skLib({action:"list"});skRender()};
+async function skLib(body){try{const d=await post("/api/agent/library",body);if(d.library)SK.lib=d.library;if(d.hits)SK.hits=d.hits;SK.msg=""}catch(e){SK.msg=e.message}skRender()}
+async function skTopics(body){try{const d=await post("/api/agent/topics",body);AG.topics=d.topics;SK.msg=d.send?`Sending: ${d.send.state}${d.send.why?" ("+d.send.why+")":""}`:""}catch(e){SK.msg=e.message}skRender();for(const r of Object.keys(S.radios||{}))renderEcho(r)}
+const skHear=(text,btn)=>playClip("/api/tts/say.mp3?text="+enc(text),btn);
+function skRender(){
+  if(!SK)return;const T=skTop(),rid=SK.rid,box=$("skBody"),mode=agMode(rid);
+  for(const b of document.querySelectorAll("#skTabs [data-sktab]"))b.classList.toggle("on",b.dataset.sktab===SK.tab);
+  const msg=SK.msg?`<p class="err small">${esc(SK.msg)}</p>`:"";
+  const hear=t=>`<button class="quiet" data-skhear="${esc(t)}" title="Plays here only, in this browser, in ${esc(agName())}'s voice. Never on the radio.">▶ Hear</button>`;
+  if(SK.tab==="chat"){
+    const keep=box.querySelector("#skQ")?box.querySelector("#skQ").value:"";
+    box.innerHTML=`<p class="muted small">Ask ${esc(agName())} anything, privately: it knows this radio's frequency and band, your privileges, the net on now (net control, who checked in, traffic), what was just said, this net's earlier sessions, its library and your sites. <b>Nothing here is transmitted.</b> Ask it for words to say and it writes them for the air, checked against Part 97: hear them, then save them to <b>Prepared</b>.</p>${msg}
+      <div class="skchat">${SK.chat.map(m=>m.role==="operator"?`<div class="skmsg op">${esc(m.text)}</div>`
+        :`<div class="skmsg ai">${m.error?`<span class="bad">${esc(m.error)}</span>`:esc(m.text)}${m.say?`<div class="air"><b>Words for the air${m.title?": "+esc(m.title):""}</b><div>“${esc(m.say)}”</div>
+          ${(m.check||[]).filter(c=>!c.ok).length?`<div class="small bad">Would not send: ${(m.check||[]).filter(c=>!c.ok).map(c=>esc(c.rule+": "+c.note)).join("; ")}</div>`:`<div class="small ok">✓ Passes the Part 97 content checks</div>`}
+          <div class="row small">${hear(m.say)} <button data-sksave="${esc(m.id)}">Save to Prepared</button></div></div>`:""}<div class="small muted">${esc((MODELN[m.model]||m.model||""))}${m.took_s?` · ${m.took_s}s`:""}</div></div>`).join("")||`<p class="muted">Try: “Who has checked in so far?”, “What is the best simplex frequency plan for a Winlink gateway at the EOC?”, “Write me a short check-in that says I have a training topic.”</p>`}
+        ${SK.busy?`<div class="skmsg ai muted">Thinking…</div>`:""}</div>
+      <div class="skask"><textarea id="skQ" placeholder="Ask ${esc(agName())}… (Enter sends, Shift+Enter for a new line)">${esc(keep)}</textarea>
+        <span><label class="small" title="The thinking model: slower (up to a minute), for analysis and longer answers"><input type="checkbox" id="skDeep" style="width:auto"${SK.deep?" checked":""}> Think</label><br><button class="primary" id="skSend"${SK.busy?" disabled":""}>Ask</button> <button class="quiet small" id="skClear" title="Start a new chat (the old one is kept on this PC)">New chat</button></span></div>`;
+    const q=$("skQ"),go=async()=>{const t=q.value.trim();if(!t||SK.busy)return;SK.busy=true;SK.deep=$("skDeep").checked;q.value="";
+      try{await post("/api/agent/chat",{radio:rid,message:t,deep:SK.deep})}catch(e){SK.busy=false;SK.msg=e.message;q.value=t}skRender()};
+    $("skSend").onclick=go;q.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();go()}};
+    $("skClear").onclick=async()=>{if(!confirm("Start a new chat on this radio?"))return;await post("/api/agent/chat",{radio:rid,clear:true});SK.chat=[];skRender()};
+    const c=box.querySelector(".skchat");if(c&&c.lastElementChild)c.lastElementChild.scrollIntoView({block:"end"});q.focus();return}
+  if(SK.tab==="prep"){
+    const armed=T.armed[rid];
+    box.innerHTML=`<p class="muted small">Words you have reviewed, ready to say: saved chat answers and prepared talks. <b>▶ Hear</b> plays them here first (never on the radio). A part is said on the air only when it is <b>approved</b> (editing un-approves it) and this radio's ${esc(agName())} is on <b>Send</b>${mode==="send"?"":` (now: ${esc(mode)}; Send needs the radio's Transmit switch)`}: “Send now”, or arm a talk and let net control call for it.</p>${msg}
+      <details${SK.open.new?" open":""} data-skdet="new"><summary><b>New talk…</b> (a training topic for a net)</summary>
+        <label class="small">What to explain, in your words</label><textarea id="skReq" placeholder="Explain this project to the net: what it does, how to install it, and how a station uses it during an emergency."></textarea>
+        <div class="row small"><label>Minutes <input id="skMin" type="number" min="1" max="15" value="4" style="width:4em"></label>
+          ${T.sites.length?`<span>Sites for a path analysis: ${T.sites.map(x=>`<label><input type="checkbox" data-sksite="${esc(x.name)}" style="width:auto"> ${esc(x.name)}</label>`).join(" ")}</span>`:`<span class="muted">(add places on Sites to have radio paths analysed)</span>`}</div>
+        <button class="primary" id="skNew">Write it</button> <span class="muted small">The thinking model writes it from the Library (a minute or two); you review, edit, hear and approve it.</span></details>
+      ${T.topics.slice().reverse().map(t=>{const ok=!!t.approved,isA=armed&&armed.topic===t.id;
+        return `<div class="skitem"><div class="row"><b>${esc(t.title)}</b> <span class="small ${ok?"ok":"muted"}">${t.preparing?"writing…":ok?"✓ approved":t.segments.length?"not approved":"no script yet"}</span>${isA?` <span class="small">🎤 armed on this radio: ${armed.next>=t.segments.length?"all parts said":`next part ${armed.next+1}`}</span>`:""}
+          <span style="margin-left:auto" class="small"><button class="quiet" data-skdel="${esc(t.id)}">Delete</button></span></div>
+          ${t.error?`<div class="small bad">${esc(t.error)}</div>`:""}${t.request&&t.request!=="(saved from the chat)"?`<div class="small muted">${esc(t.request)}</div>`:""}
+          ${t.segments.map((g,i)=>`<div class="seg"><div class="small muted">Part ${i+1} of ${t.segments.length} · ${g.split(/\s+/).length} words, about ${Math.round(g.split(/\s+/).length/2.4)} s</div>
+            <textarea data-skseg="${esc(t.id)}" data-i="${i}">${esc(g)}</textarea>
+            <div class="row small">${hear(g)}${ok?` <button data-sksendnow="${esc(t.id)}" data-i="${i}"${mode==="send"?"":" disabled"} title="Says this part on the air after the 3 s countdown (Esc stops)">Send now</button>`:""}</div></div>`).join("")}
+          <div class="row small">${t.segments.length?`<button data-sksaveseg="${esc(t.id)}">Save edits</button> <button data-skhearall="${esc(t.id)}" class="quiet">▶ Hear all</button> `:""}
+            ${t.request&&t.request!=="(saved from the chat)"?`<button data-skprep="${esc(t.id)}" class="quiet"${t.preparing?" disabled":""}>${t.segments.length?"Rewrite":"Write it"}</button> `:""}
+            ${t.segments.length?(ok?`<button data-skappr="${esc(t.id)}" data-v="0" class="quiet">Un-approve</button> `:`<button data-skappr="${esc(t.id)}" data-v="1" class="primary">Approve these words</button> `):""}
+            ${ok&&t.segments.length?(isA?`<button data-skarm="">Disarm</button>`:`<button data-skarm="${esc(t.id)}">Arm on this radio</button>`):""}</div></div>`}).join("")||'<p class="muted">Nothing prepared yet: save words from the Chat, or write a talk.</p>'}`;
+    return}
+  if(SK.tab==="lib"){
+    const L=SK.lib||[];
+    box.innerHTML=`<p class="muted small">What ${esc(agName())} reads before it answers, writes a talk or chats: this station's own manual and cards (built in), and anything you add (kept on this PC only, never in the project). Add your EOC plans, shelter lists, band plans, club procedures, equipment manuals, web pages.</p>${msg}
+      <div class="row"><input id="skUrl" placeholder="https://… a web page or PDF" style="flex:1"> <button id="skAddUrl">Add page</button></div>
+      <div class="row"><label class="small">A file (.pdf .docx .md .txt .html .csv, up to 20 MB) <input type="file" id="skFile" accept=".pdf,.docx,.md,.txt,.html,.htm,.csv" style="width:auto"></label></div>
+      <details><summary>Write a note</summary><input id="skNT" placeholder="Title"><textarea id="skNX" placeholder="What Sidekick should know" style="width:100%;min-height:6em"></textarea><button id="skAddNote">Save note</button></details>
+      <div class="row"><input id="skS" placeholder="Try a question: what would it find?" style="flex:1"> <button id="skSearch" class="quiet">Search</button></div>
+      ${(SK.hits||[]).map(h=>`<div class="small" style="margin:4px 0"><b>${esc(h.name)}</b> › ${esc(h.section||"")}: ${esc((h.text||"").slice(0,240))}…</div>`).join("")}
+      <table class="small" style="width:100%;margin-top:8px"><tr><th align="left">Source</th><th>Kind</th><th>Parts</th><th></th></tr>${L.map(x=>`<tr><td>${esc(x.name)}${x.error?` <span class="bad">${esc(x.error)}</span>`:""}</td><td>${esc(x.kind)}</td><td align="center">${x.chunks||0}</td>
+        <td>${x.kind==="hamnet"?"":`${x.kind==="url"?`<button class="quiet" data-skref="${esc(x.source)}">Refresh</button>`:""} <button class="quiet" data-skrm="${esc(x.source)}">Remove</button>`}</td></tr>`).join("")}</table>`;
+    $("skAddUrl").onclick=()=>skLib({action:"url",url:$("skUrl").value.trim()});
+    $("skAddNote").onclick=()=>skLib({action:"note",title:$("skNT").value,text:$("skNX").value});
+    $("skSearch").onclick=()=>skLib({action:"search",q:$("skS").value});
+    $("skFile").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>skLib({action:"file",name:f.name,data:String(r.result).split(",")[1]});r.readAsDataURL(f)};
+    return}
+  box.innerHTML=`<p class="muted small">Places you care about: your EOC, shelters, repeaters, gateways. One a line: <code>Name | lat, lon | antenna height | note</code> (height in ft unless you write m). Kept on this PC only. Name two of them in a chat question or a talk and ${esc(agName())} computes the terrain path between them first (elevation data, Fresnel clearance, path loss) and uses those numbers.</p>${msg}
+    <textarea id="skSites" style="width:100%;min-height:12em" placeholder="County EOC | 39.80, -89.65 | 40 ft | EOC, Winlink gateway&#10;North Church | 39.85, -89.60 | 20 ft | shelter">${esc(T.sites_text||"")}</textarea>
+    <button class="primary" id="skSaveSites">Save sites</button> <span class="small muted">${T.sites.length} saved</span>`;
+  $("skSaveSites").onclick=()=>skTopics({action:"sites",text:$("skSites").value})}
+$("skBody").addEventListener("click",e=>{
+  const g=k=>e.target.closest(`[data-${k}]`);let b;
+  if(b=g("skhear"))return skHear(b.dataset.skhear,b);
+  if(b=g("skhearall")){const t=skTop().topics.find(x=>x.id===b.dataset.skhearall);b.dataset.say=t.segments.join(" ");return skHear(b.dataset.say,b)}
+  if(b=g("sksave")){const m=SK.chat.find(x=>x.id===b.dataset.sksave);return skTopics({action:"save_say",title:m.title,text:m.say}).then(()=>{SK.tab="prep";skRender()})}
+  if(b=g("skdel")){if(confirm("Delete it?"))skTopics({action:"remove",id:b.dataset.skdel});return}
+  if(b=g("skappr"))return skTopics({action:b.dataset.v==="1"?"approve":"unapprove",id:b.dataset.skappr});
+  if(b=g("skarm"))return skTopics({action:"arm",radio:SK.rid,id:b.dataset.skarm||null});
+  if(b=g("skprep"))return skTopics({action:"prepare",id:b.dataset.skprep});
+  if(b=g("sksendnow"))return skTopics({action:"send",radio:SK.rid,id:b.dataset.sksendnow,seg:Number(b.dataset.i)});
+  if(b=g("sksaveseg")){const id=b.dataset.sksaveseg;return skTopics({action:"save",id,segments:[...$("skBody").querySelectorAll(`[data-skseg="${id}"]`)].map(x=>x.value)})}
+  if(b=g("skrm")){if(confirm("Remove it from the library?"))skLib({action:"remove",source:b.dataset.skrm});return}
+  if(b=g("skref"))return skLib({action:"refresh",source:b.dataset.skref});
+  if(b=e.target.closest("#skNew")){const req=$("skReq").value.trim();if(!req)return;
+    return post("/api/agent/topics",{action:"save",request:req,minutes:Number($("skMin").value)||4,sites:[...$("skBody").querySelectorAll("[data-sksite]:checked")].map(x=>x.dataset.sksite)})
+      .then(d=>{AG.topics=d.topics;const t=d.topics.topics[d.topics.topics.length-1];SK.open.new=false;return skTopics({action:"prepare",id:t.id})}).catch(err=>{SK.msg=err.message;skRender()})}});
+$("skBody").addEventListener("toggle",e=>{const d=e.target.closest&&e.target.closest("[data-skdet]");if(d)SK.open[d.dataset.skdet]=d.open},true);
 const agLive=()=>Object.values((((AG||{}).send)||{}).out||{}).some(o=>o.state==="counting"||o.state==="on_air");
 const agStop=()=>fetch("/api/agent/stop/all",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});
 // the control operator's hand on the switch: Esc, Stop or ANY click on the page while Sidekick is sending drops it
@@ -2353,6 +2458,7 @@ for(const ev of ["pointermove","pointerdown","keydown","wheel","touchstart"])doc
 setInterval(()=>{for(const el of document.querySelectorAll(".sendband .cd")){const left=Math.max(0,Number(el.dataset.s)-(Date.now()-Number(el.dataset.t||(el.dataset.t=Date.now())))/1000);el.textContent=Math.ceil(left)}},200);
 document.addEventListener("click",e=>{
   const st=e.target.closest("[data-agstop]");if(st){agStop();return}
+  const so=e.target.closest("[data-skopen]");if(so){skOpen(so.dataset.skopen,so.dataset.tab);return}
   const a=e.target.closest("[data-agask]");if(a){a.textContent="Thinking…";agPost(`/api/agent/ask/${enc(a.dataset.agask)}`,{});return}
   const mk=e.target.closest("[data-agmark]");if(mk){agPost(`/api/agent/mark/${enc(mk.dataset.agmark)}`,{what:mk.dataset.v});return}
   const gs=e.target.closest("[data-goto-settings]");if(gs){$("openSettings").click();setTimeout(()=>{const k=$("keySet");if(k)k.scrollIntoView({block:"center"})},300);return}
@@ -2366,7 +2472,7 @@ async function playClip(url,btn){const was=btn.textContent;btn.textContent="…"
     const b=await r.blob();if(VCLIP)VCLIP.pause();VCLIP=new Audio(URL.createObjectURL(b));btn.textContent="■";
     VCLIP.onended=()=>{btn.textContent=was};await VCLIP.play();if(TTS&&btn.dataset.aud){TTS.auditioned[btn.dataset.aud]=true}}
   catch(e){btn.textContent=was;
-    const d=btn.dataset.tts&&((AG||{}).drafts||[]).find(x=>x.id===btn.dataset.tts);
+    const d=btn.dataset.tts?((AG||{}).drafts||[]).find(x=>x.id===btn.dataset.tts):btn.dataset.skhear||btn.dataset.skhearall?{say:btn.dataset.say||btn.dataset.skhear}:null;
     if(d&&d.say&&"speechSynthesis" in window){                      // no key or no internet: this PC's own voice
       const u=new SpeechSynthesisUtterance(d.say);u.rate=((AG||{}).settings||{}).speed||1;speechSynthesis.cancel();speechSynthesis.speak(u);
       btn.title=`Played with this computer's own voice: ${e.message}`;btn.insertAdjacentHTML("afterend",`<span class="muted small"> (this PC's voice: ${esc(e.message)})</span>`);return}

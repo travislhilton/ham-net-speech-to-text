@@ -52,7 +52,7 @@ CHUNK_MIN, CHUNK_TARGET, CHUNK_MAX, OVERLAP = 800, 1000, 1200, 150
 SCHEMA = 1
 
 
-class LibraryError(Exception):
+class LibraryError(ValueError):                 # a 400 with its message on the dashboard
     """A request the library refuses (too large, unsupported type, a page that cannot be fetched...)."""
 
 

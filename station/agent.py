@@ -1061,6 +1061,7 @@ class Agent:
             self._checked_in(st, contact, now, how)
         if d.get("kind") == "present":
             self.topics.said(rid, d.get("topic"), d.get("seg"))
+            self.st.bus.publish("agent", {"topics": self.topics.view()})
         self._advance(rid, st, d, rows, now, ctx, contact, lines, user)
         self._save_state()
 
@@ -1074,6 +1075,7 @@ class Agent:
             m = re.fullmatch(r"prep-(\w+)-(\d+)", str(rec.get("draft") or ""))
             if m:
                 self.topics.said(rid, m.group(1), int(m.group(2)))
+                self.st.bus.publish("agent", {"topics": self.topics.view()})
             self._save_state()
             return
         _, d, rows, _, ctx, contact, lines, user = args
@@ -1458,7 +1460,9 @@ class Agent:
         """{"action": save|prepare|approve|unapprove|arm|remove|sites, ...}"""
         a = str(body.get("action") or "")
         T = self.topics
-        if a == "sites":
+        if a == "list":
+            pass
+        elif a == "sites":
             T.set_sites(str(body.get("text") or ""))
         elif a == "save":
             body = dict(body)
@@ -1499,7 +1503,11 @@ class Agent:
                 raise ValueError("no such part")
             self.sender.presence()                              # the operator's own click
             r = self.st.radios.get(rid) or {}
-            d = {"id": f"prep-{tid}-{i}", "kind": "present", "say": t["segments"][i], "topic": tid, "seg": i}
+            words = t["segments"][i]
+            if i == 0 and not re.search(r"\bautomat", words, re.I):     # 97.113-style disclosure, as on the air
+                words = (f"This is {self.st.me or 'N0CALL'}, {self.name}, an automated assistant; "
+                         f"{self.cfg.get('operator') or 'the operator'} is control operator. " + words)
+            d = {"id": f"prep-{tid}-{i}", "kind": "present", "say": words, "topic": tid, "seg": i}
             T.armed.setdefault(rid, {"topic": tid, "next": i})
             return {"send": self.sender.offer(rid, d, {"freq_mhz": r.get("freq_mhz"), "emergency": False}),
                     "topics": T.view()}

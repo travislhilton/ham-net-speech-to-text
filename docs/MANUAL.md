@@ -297,6 +297,21 @@ you chose is remembered. Each column shows:
     opens. Outside those the station drafts "silent" itself, at once, without asking a model; when it asks, the model
     is offered only the moves that turn allows (replays of four real nets: the quick model, offered every move, tried
     to check in on 29 turns of one roll call).
+  - **Chat & prepared…** (the link on Sidekick's card) opens a window with four tabs:
+    - **Chat**: ask Grok anything, privately; nothing in the chat is transmitted. It is told this radio's frequency,
+      band and your license privileges, the net on now (net control, who checked in with names and towns, traffic,
+      regulars not heard yet), the last transmissions heard, the last session of the same net, Sidekick's Library and,
+      when you name two of your Sites, the terrain path between them. Tick **Think** for analysis (the thinking model,
+      up to a minute). Ask it for words to say and it writes them for the air, checked against Part 97: **▶ Hear**
+      them, then **Save to Prepared**.
+    - **Prepared**: words ready to say. **New talk…** writes a training topic from the Library (a minute or two),
+      split into parts that each fit one transmission and end "Back to net control" with your call. Read it, edit it,
+      **▶ Hear** it (on this PC only), then **Approve these words** (an edit un-approves). With the radio on **Send**,
+      **Send now** says one part after the countdown, or **Arm on this radio** and on the net say "Sidekick, present
+      the topic", then "continue" for each next part: Sidekick says exactly the approved words.
+    - **Library**: what Sidekick reads: this station's manual and cards, plus your files, notes and web pages (kept on
+      this PC only). **Search** shows what it would find for a question.
+    - **Sites**: your EOC, shelters, repeaters, gateways, one a line: `Name | lat, lon | antenna height | note`.
   - **Send (says it on the air)**: a radio whose **Transmit** switch is on (Radios… → Transmit; off by default) gets a
     third position on its Sidekick switch, **Send**. A draft that would speak (and passed every check) is shown with
     **Sending in 3… Stop (Esc)**; the voice clip is made during the countdown. It is sent only while you are at the
