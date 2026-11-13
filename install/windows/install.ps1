@@ -74,8 +74,26 @@ if ($vc -and $vc.Installed -eq 1 -and $vc.Major -ge 14 -and $vc.Minor -ge 40) {
 }
 
 Step "Python 3.12"
-$py = 'C:\Program Files\Python312\python.exe'
-if (-not (Test-Path $py)) {
+# Where Python 3.12 is, wherever it was installed (machine or user, winget or python.org, the py launcher): the first 64-bit
+# 3.12 found. A clean build machine put it somewhere other than C:\Program Files\Python312 although winget said it had succeeded.
+function Find-Python312 {
+  $c = @('C:\Program Files\Python312\python.exe')
+  foreach ($hive in 'HKLM:\SOFTWARE\Python\PythonCore\3.12', 'HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore\3.12', 'HKCU:\SOFTWARE\Python\PythonCore\3.12') {
+    $k = Get-ItemProperty "$hive\InstallPath" -ErrorAction SilentlyContinue
+    if ($k) { if ($k.ExecutablePath) { $c += $k.ExecutablePath }; if ($k.'(default)') { $c += (Join-Path $k.'(default)' 'python.exe') } }
+  }
+  $pyl = Get-Command py -ErrorAction SilentlyContinue
+  if ($pyl) { $o = & $pyl.Source -3.12 -c "import sys; print(sys.executable)" 2>$null; if ($LASTEXITCODE -eq 0 -and $o) { $c += "$o".Trim() } }
+  foreach ($x in $c) {
+    if ($x -and (Test-Path $x)) {
+      $v = & $x -c "import sys, struct; print(sys.version_info[0], sys.version_info[1], struct.calcsize('P') * 8)" 2>$null
+      if ("$v".Trim() -eq '3 12 64') { return $x }
+    }
+  }
+  return $null
+}
+$py = Find-Python312
+if (-not $py) {
   # Windows on ARM (a Parallels or Surface PC): the station's packages (OpenVINO, PyTorch, hidapi) ship x64 wheels only, and
   # winget would install the ARM64 Python. Use the x64 Python from python.org: Windows 11 runs it by emulation.
   $arm = $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64'
@@ -83,15 +101,17 @@ if (-not (Test-Path $py)) {
   if (-not $arm -and (Get-Command winget -ErrorAction SilentlyContinue)) {
     Run { & winget install --id Python.Python.3.12 -e --source winget --scope machine --silent `
       --accept-source-agreements --accept-package-agreements --disable-interactivity }
+    $py = Find-Python312
   }
-  if (-not (Test-Path $py)) {                        # no winget (some fresh or LTSC installs): python.org directly
+  if (-not $py) {                                    # no winget (some fresh or LTSC installs): python.org directly
     $exe = "$env:TEMP\python-3.12.10-amd64.exe"
     Download 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe' $exe
     $p = Start-Process $exe -ArgumentList '/quiet', 'InstallAllUsers=1', 'PrependPath=0', 'Include_test=0', `
       'TargetDir="C:\Program Files\Python312"' -Wait -PassThru
     if ($p.ExitCode -ne 0) { throw "Python install failed (exit $($p.ExitCode))" }
+    $py = Find-Python312
   }
-  if (-not (Test-Path $py)) { throw "Python did not install to $py" }
+  if (-not $py) { throw "Python 3.12 (64-bit) did not install: not found in C:\Program Files\Python312, the registry or the py launcher" }
 }
 Run { & $py --version }
 
