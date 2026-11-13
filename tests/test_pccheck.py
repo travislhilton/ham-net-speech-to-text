@@ -92,3 +92,13 @@ def test_perf_reads_typeperf():
     out = ('"(PDH-CSV 4.0)","\\\\PC\\Processor Information(_Total)\\% Processor Performance"\n'
            '"11/12/2026 07:40:01.000","24.9"\n"11/12/2026 07:40:02.000","187.3"\n')
     assert pccheck.perf_pct(run=lambda *a, **k: SimpleNamespace(stdout=out)) == 187
+
+
+def test_short_clips_never_read_as_slow():
+    """A GPU engine costs ~2 s per clip whatever its length: 3-4 s clips are not a slow PC (a station, 2026-11-12)."""
+    w = pccheck.SlowWatch(0.22)
+    for took, audio in ((4.0, 3.1), (2.0, 4.3), (3.8, 3.1), (2.0, 3.4)):
+        assert w.add(took, audio) is None
+    for _ in range(3):
+        s = w.add(10.0, 10.0)                             # long clips at 1.0 s per s: 4.5x what it measured
+    assert s and s["rtf"] == 1.0

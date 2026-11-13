@@ -152,11 +152,24 @@ def _bare_only(s: str) -> bool:
             if NEGATED.search(s[max(0, m.start() - 30):m.start()]):
                 continue
             w = m.group(0)
-            if k == "fire" and _fire_is_a_name(s, m):
+            if k == "fire" and (_fire_is_a_name(s, m) or _fire_not_a_fire(s, m)):
                 continue
             if not BARE.fullmatch(w.strip()):
                 return False
     return True
+
+
+def _bare_reported(s: str) -> bool:
+    """A bare alarm word in `s` is reported as happening: the report is next to the word itself."""
+    for k, rx in URGENT_RES.items():
+        for m in rx.finditer(s):
+            if NEGATED.search(s[max(0, m.start() - 30):m.start()]):
+                continue
+            if k == "fire" and (_fire_is_a_name(s, m) or _fire_not_a_fire(s, m)):
+                continue
+            if _reported_near(s, m):
+                return True
+    return False
 
 
 def _fire_is_a_name(s: str, m: re.Match) -> bool:
@@ -164,6 +177,53 @@ def _fire_is_a_name(s: str, m: re.Match) -> bool:
         if n.start() <= m.start() < n.end() or n.start() <= m.end() - 1 < n.end():
             return True
     return False
+
+
+# "fire" that is not a fire (2026-11-12, a station's urgent board: "a nice big old fire tower in his backyard", "a fire
+# transducer would show 50 volts", "fire seat, if there are big cars around"): followed by a noun it names a THING
+# (a fire tower, pit, extinguisher, seat); after "to / will / 'll / can / gonna" or before "up / off / away / it" it
+# is the VERB. A fire is the head of its phrase: "a fire", "structure fire", "the fire is spreading", "fire on Elm".
+FIRE_FOLLOW_OK = re.compile(r"\s*(?:$|[.,;:!?)\"'-]|(?:is|was|are|were|has|had|have|at|on|in|near|by|behind|across|along|"
+                            r"next|north|south|east|west|spreading|burning|going|started|broke|reported|that|which|and|"
+                            r"with|now|still|just|getting|moving|jumped|crews?|units?|engines?|responding|response|"
+                            r"call|calls|near|close|threatening|out of control|over there|right|here|there)\b)", re.I)
+FIRE_VERB_BEFORE = re.compile(r"(?:\b(?:to|will|would|can|could|gonna|let me|let's|I'll|we'll|you'll|I|we|you|just|ready|"
+                              r"cease|open)|'ll)\s+$", re.I)
+FIRE_VERB_AFTER = re.compile(r"\s+(?:it|them|that|this|up|off|away|back|at will|the (?:rig|radio|amp|amplifier|generator|"
+                             r"grill|engine))\b", re.I)
+
+
+def _fire_not_a_fire(s: str, m: re.Match) -> bool:
+    """A "fire" cue that names a thing ("fire tower") or an action ("fire it up"), not a fire."""
+    w = m.group(0).lower()
+    if not re.search(r"fires?$", w):
+        return False                                  # "flames", "smoke showing", "house is burning": the cue itself
+    rest = s[m.end():]
+    if FIRE_VERB_AFTER.match(rest) or FIRE_VERB_BEFORE.search(s[max(0, m.start() - 14):m.start()]) and \
+            w in ("fire", "fires"):
+        return True
+    return not FIRE_FOLLOW_OK.match(rest)
+
+
+# the report must be ABOUT the cue: within a few words before it ("there's a", "we have a structure", "reported") or
+# what follows it ("is spreading", "on Elm", "near the school"). Anywhere in the sentence ("there are big cars around
+# there ... fire seat") is not enough.
+REPORTED_NEAR = re.compile(r"\b(?:there(?:'s| is| are| was| were)|we(?:'ve| have| had)(?: got)?|i(?:'ve| have)(?: got)?|"
+                           r"(?:they|he|she)(?:'ve| have| has)(?: got)?|report(?:ed|ing|s)?(?: of)?|responding to|"
+                           r"working|active|dispatch(?:ed)?(?: to)?|need(?:s|ed)?|requesting|send)\b"
+                           r"(?:\s+(?:a|an|the|some|another|two|three|several|big|large|small|major|working|second))*"
+                           r"(?:\s+(?:structure|brush|grass|house|wild|forest|vehicle|car|kitchen|chimney|barn|field|"
+                           r"trailer|apartment|commercial|garage|truck))?\s*$", re.I)
+INCIDENT_AFTER = re.compile(r"(?:\s+[\w-]+){0,2}?\s+(?:is |are |was |were |has |have )?(?:spreading|burning|"
+                            r"out of control|involved|on scene|on the scene|threatening|jumped|growing|moving)\b|"
+                            r"\s+(?:was |were |is |been )?(?:reported|spotted|confirmed|called in)\b|"   # "fire reported", not "blocked and reported"
+                            r"\s+(?:is |are |was )?(?:at|on|near|behind|across|north of|south of|east of|west of) "
+                            r"(?!(?:me|you|him|her|us|them|it|this|that|all|least|times|the moment|the air|the radio|"
+                            r"the net|the frequency|my end|your end)\b)(?:the |a )?[\w-]+", re.I)
+
+
+def _reported_near(s: str, m: re.Match) -> bool:
+    return bool(REPORTED_NEAR.search(s[max(0, m.start() - 60):m.start()]) or INCIDENT_AFTER.match(s[m.end():]))
 
 
 QUESTION = re.compile(r"^\s*(?:any|is there any|are there any|does anyone have|do we have any|who has)\b", re.I)
@@ -302,8 +362,8 @@ def urgent_categories(s: str) -> list[str]:
     out = []
     for k, rx in URGENT_RES.items():
         for m in rx.finditer(s):
-            if k == "fire" and _fire_is_a_name(s, m):
-                continue                                  # "Shelbyville Fire", "calling Springfield fire": a station
+            if k == "fire" and (_fire_is_a_name(s, m) or _fire_not_a_fire(s, m)):
+                continue                                  # "Shelbyville Fire": a station; "fire tower": a thing
             if not NEGATED.search(s[max(0, m.start() - 30):m.start()]):
                 out.append(k)
                 break
@@ -361,7 +421,7 @@ def extract(views: list[dict], ref: date | None = None, emergency: bool = False)
                     (set(cats) - WEAK and (len(s.split()) >= 5 or "emergency" in cats))
                 if cats and not emergency and _bare_only(s):
                     # one alarm word and nothing reported (a check-in, a name, a mis-heard word): not urgent
-                    strong = bool(REPORTED.search(s) and not CHECKIN.search(s)) or \
+                    strong = (_bare_reported(s) and not CHECKIN.search(s)) or \
                         (len(set(cats)) > 1 and not CHECKIN.search(s))
                 if cats and strong:
                     add("urgent", s, category=cats[0], categories=cats, people=find_people(s, calls),

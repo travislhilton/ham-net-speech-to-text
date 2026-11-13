@@ -292,7 +292,8 @@ class SlowWatch:
     battery, a power-saving mode). Fed by Station.finish (took_s and the audio's length)."""
     FACTOR = 4.0          # this many times the measured time per second of audio
     FLOOR = 0.5           # and at least half a second per second of audio (a quick PC's 4x is still fine)
-    MIN_AUDIO_S = 3.0
+    MIN_AUDIO_S = 8.0      # a GPU engine costs ~2 s a clip whatever its length (a station 2026-11-12: a 3 s "Over." took 4 s
+                           # after 20 quiet minutes, 2 s clips read 0.5-1.3 s per s while long ones ran 0.08-0.2)
     N = 3                 # the median of the last 3
     HOLD = timedelta(minutes=10)
 

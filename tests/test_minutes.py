@@ -1,3 +1,4 @@
+import pytest
 """Minutes drafted by rules (station/minutes.py): precision/recall on hand-labelled synthetic nets, and the pieces."""
 from datetime import date, datetime
 
@@ -132,3 +133,37 @@ def test_a_bare_alarm_word_on_a_routine_net_is_not_urgent():
                    ("Springfield Fire is responding to a structure fire on Elm.", "fire"), ("Mayday mayday.", "emergency")):
         assert u(s) == [cat], s
     assert u("Fire.", em=True) == ["fire"]                     # an emergency net stays as sensitive as before
+
+
+def _urgent(text):
+    return [i for i in minutes.extract([{"id": "1", "start": "2026-11-12T18:00:00", "text": text}]) if i["kind"] == "urgent"]
+
+
+@pytest.mark.parametrize("text", [
+    "He has a nice big old fire tower in his backyard.",                 # a thing: fire + noun
+    "I wanted you to have a fire transducer would show it would send 50 volts.",
+    "fire seat, if there are big cars around there, is in the same shape.",  # "there are" is not about the fire
+    "Uh, Woo, a loud fire.",                                              # a mis-heard word, nothing reported
+    "I thought there would be a fire at me, Eugene.",                     # "at me" is not a place
+    "Let me fire up the rig and I'll call you back.",                     # the verb
+    "I'll fire off an email to the EC tonight.",
+    "I just blocked and reported the spam.",                               # "blocked": not a road
+    "You need to take up your beverage antennas before they crash.",
+])
+def test_ordinary_talk_is_not_urgent(text):
+    assert _urgent(text) == []
+
+
+@pytest.mark.parametrize("text", [
+    "There's a structure fire on Maple Street, engines responding.",
+    "We have a brush fire spreading toward the highway.",
+    "Fire is burning behind the school.",
+    "Reported fire at the grain elevator north of town.",
+    "The house is on fire and people are still inside.",
+    "We've got a fire near the north gate.",
+    "There's a fire.",
+    "A barn is burning on County Road 5.",
+    "255 EMS personnel are on scene.",
+])
+def test_a_reported_fire_or_incident_is_urgent(text):
+    assert _urgent(text)
