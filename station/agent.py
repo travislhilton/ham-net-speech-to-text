@@ -1578,7 +1578,7 @@ class Agent:
     def post(self, path: str, body: dict) -> dict:
         """POST /api/agent/settings, /api/agent/radio/<rid> {"mode"}, /api/agent/ask/<rid> (draft now),
         /api/agent/rate/<draft id> {"good", "note"}."""
-        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark|stop|presence|topics|library|chat)(?:/([\w-]+))?", path)
+        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark|stop|presence|txtest|topics|library|chat)(?:/([\w-]+))?", path)
         if not m:
             raise ValueError("unknown agent request")
         what, arg = m.groups()
@@ -1596,6 +1596,10 @@ class Agent:
             return self.library_post(body)
         if what == "presence":                                  # the dashboard: keyboard or mouse in use
             return self.sender.presence()
+        if what == "txtest":                                    # Radios… → Transmit test… (dummy load)
+            if arg not in self.st.radios:
+                raise ValueError(f"no radio called {arg!r}")
+            return {"send": self.sender.test(arg, body)}
         if what == "stop":                                      # Esc / Stop / a click: drop it now
             return {"send": self.sender.stop(arg if arg and arg != "all" else None)}
         if what == "settings":

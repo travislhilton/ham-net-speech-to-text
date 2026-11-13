@@ -51,6 +51,7 @@ class Sender:
         self.last_presence = 0.0
         self.heard_at: dict[str, float] = {}   # radio -> when something was last heard on it (monotonic)
         self.log_path = station.data / "agent_sends.jsonl"
+        self.level_override: dict[str, float] = {}
 
     # ----- the operator -----
     def presence(self) -> dict:
@@ -163,18 +164,129 @@ class Sender:
             rec.update(state="on_air", voice=audio.get("voice"), seconds=round(dur, 1))
             self._publish(rid, rec)
             k0 = self.clock()
-            with self.st.ptt.key(rid, seconds=dur + LEAD_S + TAIL_S + 2):
-                if not ev.wait(LEAD_S):
+            raw = (getattr(self.st, "radio_cfg", {}).get(rid) or {}).get("tx") or {}   # Transmit test… sets these
+            lead, tail = float(raw.get("lead_s") or LEAD_S), float(raw.get("tail_s") or TAIL_S)
+            with self.st.ptt.key(rid, seconds=dur + lead + tail + 2):
+                if not ev.wait(lead):
                     timing["key_to_voice_s"] = round(self.clock() - k0, 2)
                     self.play_fn(rid, audio["pcm"], audio["sr"], ev)
                     if not ev.is_set():
-                        ev.wait(TAIL_S)
+                        ev.wait(tail)
             timing["on_air_s"] = round(self.clock() - k0, 2)
             if ev.is_set():
                 return self._end(rid, rec, "stopped", rec.get("stop_why") or "stopped on the air: PTT dropped", timing)
             self.agent.sent(rid, rec)                          # the ID clock and the contact move on real sends only
             return self._end(rid, rec, "sent", "", timing)
         except Exception as e:  # noqa: BLE001 - a send never stops the station
+            return self._end(rid, rec, "failed", f"{type(e).__name__}: {e}", timing)
+
+    # ----- Transmit test…: a tone and the call sign, into a DUMMY LOAD, started by the operator -----
+    TEST_TONE_S = 5.0
+
+    def test(self, rid: str, body: dict) -> dict:
+        """Radios… → Transmit test…: key the radio for a test tone (to set the level / deviation) and a spoken
+        station ID, or the ID phrase alone. The operator must confirm a dummy load (or a clear test frequency) is
+        connected; everything Send checks is checked, and the same countdown + Esc applies."""
+        kind = str(body.get("kind") or "phrase")
+        if kind not in ("tone", "phrase"):
+            raise ValueError("test kind must be tone or phrase")
+        if body.get("dummy_load") is not True:
+            raise ValueError("confirm a dummy load is connected (or a free test frequency) first")
+        ok, why = self.can_send(rid, {"freq_mhz": True})
+        if not ok:
+            raise ValueError(why)
+        call = self.st.me
+        if not call:
+            raise ValueError("your call sign is not set (Settings): a test must identify (97.119)")
+        t = self.st.ptt.cfg(rid) or {}
+        try:
+            level = float(body.get("level", t.get("level", 0.5)))
+            lead = float(body.get("lead_s", t.get("lead_s", LEAD_S)))
+            tail = float(body.get("tail_s", t.get("tail_s", TAIL_S)))
+        except (TypeError, ValueError):
+            raise ValueError("level, lead and tail must be numbers") from None
+        if not (0.02 <= level <= 1.0 and 0.1 <= lead <= 2.0 and 0.1 <= tail <= 2.0):
+            raise ValueError("level 0.02-1.0, lead and tail 0.1-2.0 s")
+        say = f"This is {call}, a transmitter test into a dummy load. {call}."
+        rec = {"id": uuid.uuid4().hex[:8], "radio": rid, "draft": None, "kind": "test-" + kind, "say": say,
+               "at": datetime.now().isoformat(timespec="seconds"), "state": "counting", "why": "",
+               "countdown_s": COUNTDOWN_S, "level": level, "lead_s": lead, "tail_s": tail}
+        ev = threading.Event()
+        with self.lock:
+            self.out[rid] = rec
+            self.stops[rid] = ev
+        self._publish(rid, rec)
+        th = threading.Thread(target=self._run_test, args=(rid, rec, ev, kind, level, lead, tail, self.clock()),
+                              daemon=True, name=f"txtest-{rid}")
+        th.start()
+        self._thread = th
+        return rec
+
+    def _run_test(self, rid, rec, ev, kind, level, lead, tail, t0):
+        import numpy as np
+        timing = {}
+        try:
+            audio = {}
+
+            def prep():
+                try:
+                    audio["pcm"], audio["sr"], audio["voice"] = self.voice_fn(rec["say"])
+                except Exception as e:  # noqa: BLE001
+                    audio["error"] = f"{type(e).__name__}: {e}"
+            pt = threading.Thread(target=prep, daemon=True)
+            pt.start()
+            end = self.clock() + COUNTDOWN_S
+            while self.clock() < end:
+                if ev.wait(0.1):
+                    return self._end(rid, rec, "stopped", rec.get("stop_why") or "stopped by the operator", timing)
+                if self._busy(rid) or self.heard_at.get(rid, -1e9) > t0:
+                    return self._end(rid, rec, "stopped", "someone transmitted first: the floor is theirs", timing)
+            pt.join(30)
+            if "pcm" not in audio:
+                if kind == "phrase":
+                    return self._end(rid, rec, "failed", "no voice: " + audio.get("error", "took too long"), timing)
+                audio.update(pcm=np.zeros(0, "float32"), sr=24000, voice="none")   # tone only (still identified below)
+            sr = int(audio["sr"])
+            parts = []
+            if kind == "tone":
+                n = int(self.TEST_TONE_S * sr)
+                tone = (0.9 * np.sin(2 * np.pi * 1000.0 * np.arange(n) / sr)).astype("float32")
+                parts += [tone, np.zeros(int(0.4 * sr), "float32")]
+            parts.append(np.asarray(audio["pcm"], dtype="float32"))
+            pcm = np.concatenate(parts)
+            dur = len(pcm) / float(sr)
+            if kind == "tone" and not len(audio["pcm"]):
+                return self._end(rid, rec, "failed", "no voice for the station ID: a tone alone would not identify "
+                                 "(97.119); try the phrase test", timing)
+            limit = float((self.st.ptt.cfg(rid) or {}).get("max_s") or 60) - lead - tail - 0.5
+            if dur > limit:
+                return self._end(rid, rec, "failed", f"{dur:.0f} s is longer than the radio's time limit", timing)
+            if not self.present():
+                return self._end(rid, rec, "held", "the control operator left the station", timing)
+            ok, why = self.st.ptt.allowed(rid)
+            if not ok:
+                return self._end(rid, rec, "held", why, timing)
+            if self.heard_at.get(rid, -1e9) > t0 or self._busy(rid):
+                return self._end(rid, rec, "stopped", "the frequency is busy (listen before talk)", timing)
+            if ev.is_set():
+                return self._end(rid, rec, "stopped", rec.get("stop_why") or "stopped by the operator", timing)
+            rec.update(state="on_air", seconds=round(dur, 1), voice=audio.get("voice"))
+            self._publish(rid, rec)
+            k0 = self.clock()
+            self.level_override[rid] = level
+            try:
+                with self.st.ptt.key(rid, seconds=dur + lead + tail + 2):
+                    if not ev.wait(lead):
+                        self.play_fn(rid, pcm, sr, ev)
+                        if not ev.is_set():
+                            ev.wait(tail)
+            finally:
+                self.level_override.pop(rid, None)
+            timing["on_air_s"] = round(self.clock() - k0, 2)
+            if ev.is_set():
+                return self._end(rid, rec, "stopped", rec.get("stop_why") or "stopped on the air: PTT dropped", timing)
+            return self._end(rid, rec, "sent", "", timing)      # a test never moves Sidekick's ID clock
+        except Exception as e:  # noqa: BLE001
             return self._end(rid, rec, "failed", f"{type(e).__name__}: {e}", timing)
 
     def _busy(self, rid) -> bool:
@@ -235,7 +347,7 @@ class Sender:
         if rate != sr:                                          # linear resample: speech, a few kHz wide
             n = int(round(len(pcm) * rate / sr))
             pcm = np.interp(np.linspace(0, len(pcm) - 1, n), np.arange(len(pcm)), pcm).astype("float32")
-        level = float(t.get("level") or 0.5)                    # Transmit test… sets it (deviation)
+        level = float(self.level_override.get(rid) or t.get("level") or 0.5)   # Transmit test… sets it (deviation)
         sd.play(np.clip(pcm * level, -1, 1), rate, device=idx, blocking=False)
         end = time.monotonic() + len(pcm) / rate + 0.2
         while time.monotonic() < end:

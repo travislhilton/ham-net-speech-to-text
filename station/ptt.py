@@ -32,6 +32,7 @@ PTTS = ("none", "cm108", "rts", "dtr")
 DEFAULT_PIN = 3
 MAX_S = (5, 180)
 DEFAULT_MAX_S = 60
+LEVELS = {"level": (0.02, 1.0, 0.5), "lead_s": (0.1, 2.0, 0.35), "tail_s": (0.1, 2.0, 0.25)}
 CMEDIA = 0x0D8C                                  # C-Media: CM108/CM119 (Digirig Lite, AIOC, RA-Board)
 
 
@@ -55,6 +56,14 @@ def clean_tx(tx, name: str, cat_port: str | None = None) -> dict | None:
     if not MAX_S[0] <= max_s <= MAX_S[1]:
         raise ValueError(f"{name}: the transmit time limit must be {MAX_S[0]}-{MAX_S[1]} seconds")
     out = {"enabled": tx.get("enabled") is True, "ptt": ptt, "out": str(tx.get("out") or "").strip(), "max_s": max_s}
+    for k, (lo, hi, dflt) in LEVELS.items():                     # Transmit test… sets these (deviation, lead, tail)
+        try:
+            v = float(tx.get(k) if tx.get(k) not in (None, "") else dflt)
+        except (TypeError, ValueError):
+            raise ValueError(f"{name}: {k} must be a number") from None
+        if not lo <= v <= hi:
+            raise ValueError(f"{name}: {k} must be {lo}-{hi}")
+        out[k] = v
     if ptt == "cm108":
         hid = str(tx.get("hid") or "").strip()
         if not hid:

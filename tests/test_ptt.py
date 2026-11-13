@@ -20,7 +20,8 @@ def test_listen_only_is_the_default():
 def test_ra_board_setup_is_kept_and_switched_off_unless_exactly_true():
     r = radios.clean([_radio(ptt="cm108", hid="\\\\?\\hid#vid_0d8c", out="Digirig Lite", enabled="yes")])[0]
     assert r["tx"] == {"enabled": False, "ptt": "cm108", "out": "Digirig Lite", "max_s": 60,
-                       "hid": "\\\\?\\hid#vid_0d8c", "pin": 3}
+                       "hid": "\\\\?\\hid#vid_0d8c", "pin": 3,
+                       "level": 0.5, "lead_s": 0.35, "tail_s": 0.25}
 
 
 @pytest.mark.parametrize("tx,msg", [

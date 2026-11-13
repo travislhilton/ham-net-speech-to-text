@@ -165,3 +165,53 @@ def test_draft_mode_never_keys(tmp_path, xai_key):
     d = _speak(st)
     time.sleep(0.5)
     assert "send" not in d and dev.events == [] and played == []
+
+
+# ----- Transmit test… (Radios…): a tone / phrase + the call sign into a dummy load -----
+def _ready(tmp_path):
+    st, dev, played = _tx_station(tmp_path)
+    st.me = "N0CALL"
+    st.agent.sender.presence()
+    return st, dev, played
+
+
+def test_tx_test_needs_the_dummy_load_confirmation_presence_and_a_call(tmp_path):
+    st, dev, played = _ready(tmp_path)
+    with pytest.raises(ValueError, match="dummy load"):
+        st.agent.post("/api/agent/txtest/ic", {"kind": "tone"})
+    st.me = ""
+    with pytest.raises(ValueError, match="call sign"):
+        st.agent.post("/api/agent/txtest/ic", {"kind": "tone", "dummy_load": True})
+    st.me = "N0CALL"
+    st.agent.sender.last_presence = -1e9
+    with pytest.raises(ValueError, match="not at the station"):
+        st.agent.post("/api/agent/txtest/ic", {"kind": "phrase", "dummy_load": True})
+    assert dev.events == [] and played == []
+
+
+def test_tx_test_tone_plus_id_keys_plays_and_logs_without_moving_the_id_clock(tmp_path):
+    st, dev, played = _ready(tmp_path)
+    st.agent.post("/api/agent/txtest/ic", {"kind": "tone", "dummy_load": True, "level": 0.2})
+    o = _wait(st)
+    assert o["state"] == "sent" and o["kind"] == "test-tone" and "N0CALL" in o["say"], o
+    assert dev.events[0] is True and played and played[0][1] > 24000 * 5      # 5 s of tone + the spoken ID
+    assert "last_id" not in st.agent.state.get("ic", {})
+    assert '"test-tone"' in (tmp_path / "agent_sends.jsonl").read_text()
+
+
+def test_tx_test_esc_cancels_and_a_bad_level_is_refused(tmp_path):
+    st, dev, played = _ready(tmp_path)
+    with pytest.raises(ValueError, match="level"):
+        st.agent.post("/api/agent/txtest/ic", {"kind": "phrase", "dummy_load": True, "level": 5})
+    st.agent.post("/api/agent/txtest/ic", {"kind": "phrase", "dummy_load": True})
+    st.agent.post("/api/agent/stop/all", {})
+    o = _wait(st)
+    assert o["state"] == "stopped" and dev.events == [] and played == []
+
+
+def test_clean_tx_keeps_level_lead_tail():
+    from station.ptt import clean_tx
+    t = clean_tx({"ptt": "rts", "port": "COM7", "level": "0.3", "lead_s": 0.5}, "r")
+    assert (t["level"], t["lead_s"], t["tail_s"]) == (0.3, 0.5, 0.25)
+    with pytest.raises(ValueError):
+        clean_tx({"ptt": "rts", "port": "COM7", "level": 3}, "r")

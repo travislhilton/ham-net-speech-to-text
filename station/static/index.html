@@ -933,8 +933,15 @@ function txBlock(r){const t=r.tx||{ptt:"none"},p=t.ptt||"none";
    ${p==="rts"||p==="dtr"?`<label title="Its own COM port, never the CAT port.">PTT port ${sel("port",t.port,catOpt(t.port))}</label>`:""}
    ${p!=="none"?`<label title="Where the transmitted audio goes: the interface's output (speaker) side.">Audio out ${sel("out",t.out,`<option value="">— choose —</option>${t.out&&!os.includes(t.out)?`<option selected>${esc(t.out)}</option>`:""}${os.map(o=>`<option${o===t.out?" selected":""}>${esc(o)}</option>`).join("")}`)}</label>
      <label title="The transmitter is let go after this long, whatever happens.">Time limit, s <input data-tx="max_s" value="${esc(t.max_s||60)}" inputmode="numeric" style="width:4em"></label>
-     <label class="txsw" title="Off by default. While off, nothing can key this radio. Sidekick still only drafts; this switch is what a future 'send' will need."><input type="checkbox" data-tx="enabled"${t.enabled?" checked":""}> Allow transmitting on this radio</label>`:""}
-   </div>${p!=="none"?`<p class="small muted">Off by default: with the switch off nothing can key this radio. Sidekick still only drafts. A voice transmission needs a control operator at the station (FCC 97.109) and your call sign (97.119).</p>`:""}</details>`}
+     <label class="txsw" title="Off by default. While off, nothing can key this radio. Sidekick still only drafts; this switch is what a future 'send' will need."><input type="checkbox" data-tx="enabled"${t.enabled?" checked":""}> Allow transmitting on this radio</label>
+     <label title="How loud the radio is driven (0.02-1.0). Set it with the test tone into a dummy load, watching deviation / ALC on the radio or a service monitor.">Drive level <input data-tx="level" value="${esc(t.level??0.5)}" inputmode="decimal" style="width:4em"></label>
+     <label title="PTT on, then the voice: the transmitter's ramp and a repeater's receiver.">Lead, s <input data-tx="lead_s" value="${esc(t.lead_s??0.35)}" inputmode="decimal" style="width:4em"></label>
+     <label title="After the voice, before PTT lets go.">Tail, s <input data-tx="tail_s" value="${esc(t.tail_s??0.25)}" inputmode="decimal" style="width:4em"></label>`:""}
+   </div>${p!=="none"&&t.enabled&&r.id?`<div class="row small"><b>Transmit test…</b> <label><input type="checkbox" id="txd-${esc(r.id)}"> a dummy load is connected (or this is a free test frequency)</label>
+     <button data-txtest="tone" data-rid="${esc(r.id)}" title="5 s 1 kHz tone, then your call sign by voice. Saved settings are used (Save first after changing them), except Drive level, which is taken from the box above.">Tone + ID</button>
+     <button data-txtest="phrase" data-rid="${esc(r.id)}" title="Your call sign and a test phrase by voice.">Phrase + ID</button>
+     <button data-txstop="1" data-rid="${esc(r.id)}">Stop</button> <span class="muted" id="txr-${esc(r.id)}"></span></div>
+     <p class="small muted">After a test: raise or lower Drive level until deviation is right (about 3 kHz on FM, ALC just touching on SSB), Save, test again. Saving restarts the station. The test needs this page open and in use (you at the PC); Esc stops it.</p>`:""}${p!=="none"?`<p class="small muted">Off by default: with the switch off nothing can key this radio. Sidekick still only drafts. A voice transmission needs a control operator at the station (FCC 97.109) and your call sign (97.119).</p>`:""}</details>`}
 function renderRadiosDlg(){
   const ins=RD.inputs||[],used=new Set(RD.list.map(r=>r.device));
   const opt=(cur)=>{const have=ins.includes(cur);
@@ -966,6 +973,17 @@ function renderRadiosDlg(){
     if(k==="ptt"){if(el.value==="none")r.tx.enabled=false;                 // same box as the radio's sound input: pick it
       const h=(RD.hids||[]).find(x=>x.sound&&x.sound===r.device);if(el.value==="cm108"&&!r.tx.hid&&h)r.tx.hid=h.path;
       if(el.value!=="none"&&!r.tx.out&&(RD.outputs||[]).includes(r.device))r.tx.out=r.device;renderRadiosDlg()}};
+  for(const b of $("radiosBody").querySelectorAll("[data-txtest],[data-txstop]"))b.onclick=async()=>{
+    const rid=b.dataset.rid,out=$("txr-"+rid),r=RD.list.find(x=>x.id===rid)||{};
+    try{
+      if(b.dataset.txstop){await post("/api/agent/stop/"+encodeURIComponent(rid),{});out.textContent="stopped";return}
+      if(!$("txd-"+rid).checked){out.textContent="Tick the dummy-load box first.";return}
+      if(!confirm("Key the transmitter now? It will send for several seconds into the dummy load. Esc stops it."))return;
+      await post("/api/agent/presence",{});
+      const t=r.tx||{};
+      await post("/api/agent/txtest/"+encodeURIComponent(rid),{kind:b.dataset.txtest,dummy_load:true,level:+(t.level??0.5),lead_s:+(t.lead_s??0.35),tail_s:+(t.tail_s??0.25)});
+      out.textContent="counting down 3 s, then on the air… (Esc stops)";
+    }catch(err){out.textContent=err.message}};
   for(const b of $("radiosBody").querySelectorAll("[data-rm]"))b.onclick=()=>{const r=RD.list[+b.dataset.rm];
     const nn=(RD.nets[r.id]||[]).length;
     if(confirm(`Remove ${r.name||"this radio"}?${nn?` Its ${nn} net${nn>1?"s stay":" stays"} in the list with no radio: choose another radio for ${nn>1?"them":"it"} in Nets.`:""} Its log and recordings stay on disk.`)){RD.list.splice(+b.dataset.rm,1);renderRadiosDlg()}};
