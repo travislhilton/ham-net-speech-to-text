@@ -241,3 +241,37 @@ returns to well under 1 GB. `GET /health` shows `whisper_loaded`, `idle_s` and t
 (default 4) caps what MLX may keep between decodes. Before this the cache was never returned: a server with no
 restart grew to 43 GB in 12 hours of final passes; six replayed final passes now stay at 4.5 GB, no slower.
 
+## VHF/UHF path analysis (`hamkit/pathprofile.py`)
+
+Sidekick is asked things like "can the EOC reach the shelters on 2 m, and how should we set up Winlink?". It must
+not guess terrain, so it calls this module and treats its numbers as the answer.
+
+- **Terrain**: the great-circle path is sampled every `step_m` (100 m) up to `max_samples` (600; longer paths are
+  sampled more coarsely). `source="usgs"` (default) asks the USGS Elevation Point Query Service (3DEP, US only, one
+  point per query, 4 at a time); `source="open-meteo"` asks Open-Meteo (Copernicus GLO-90, worldwide, 100 points
+  per query, one query at a time; 90 m cells round off narrow ridges a little). Answers are cached in
+  `elevation.sqlite` in the callbook folder, keyed by source and lat/lon to 4 decimals. If the chosen source cannot
+  answer for any point the call raises `ElevationError`: there is no fallback to another source or to flat ground.
+  `elevation_fn(lat, lon)` replaces both (tests).
+- **Geometry**: effective earth radius `k` = 4/3, earth bulge d1·d2/(2kR) added to the ground, a straight ray from
+  antenna to antenna, the first Fresnel zone radius √(λ·d1·d2/d). The verdict comes from the smallest clearance
+  ratio along the path: ≥ 60% = clear, ≥ 0 = line of sight but grazing / partly blocked, < 0 = obstructed (by the
+  curve of the earth when the path would clear on a flat earth).
+- **Loss**: free space 32.44 + 20·log10(d km) + 20·log10(f MHz), plus ITU-R P.526 knife-edge loss J(v). Several
+  edges: Deygout, the main edge and then the worst one on each side of it (`max_edges` 3); a side edge counts only
+  when it really blocks its half of the path, since on smooth ground every sample is a near-grazing edge and adding
+  them all counted the same ground two or three times. `clutter_db` allows for buildings and trees, which the terrain
+  does not include (5–20 dB at VHF/UHF).
+- **Link budget**: watts, cable loss at each end, antenna gains (per site via `Point.gain_dbi`), sensitivity for FM
+  voice (−120 dBm, 12 dB SINAD) and VARA FM / 1200-baud packet (−110 dBm); a margin of `fade_margin_db` (10 dB) is
+  "reliable", 0–10 "marginal", below 0 "not expected".
+- **Calls**: `analyze(a, b, mhz)` (dict + `text`; `profile=True` adds up to ~200 rows for a chart),
+  `matrix(points)` (every pair), `best_relay(points, candidates, mode="vara_fm")` (ranked by sites reached with the
+  wanted margin, then by the weakest margin), `height_needed(a, b, at="a")` (lowest mast for 60% clearance, `None`
+  over 30 m). Points are `"lat,lon"`, a Maidenhead grid (its centre: give coordinates for real work), a tuple, a dict
+  or a `Point`.
+- **CLI**: `python -m hamkit.pathprofile 40.0150,-105.2705 39.9580,-105.2950 --mhz 146 --ha 10 --hb 6 --watts 50
+  [--ft] [--source open-meteo] [--json [--profile]]`.
+- **Not modelled**: buildings, trees and indoor loss (only as `clutter_db`), ducting and troposcatter, multipath,
+  repeater coverage and antenna patterns (antennas are assumed aimed at each other). Deygout with three edges can
+  still be pessimistic over long rolling paths; treat a few dB either way as noise.
