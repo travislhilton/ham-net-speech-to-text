@@ -36,6 +36,7 @@ HamNet Station listens to your radio and writes down every transmission a few se
 |---|---|---|
 | **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip)** |
 | **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf)** |
+| **Sidekick card** (two sides, US Letter) | Setting up Sidekick and reading it on a net | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Sidekick_Quick_Reference_Card.pdf)** |
 
 The same ZIP is on this page under the green **Code** button → **Download ZIP**.
 
@@ -183,6 +184,10 @@ keep it by the radio. Works in black and white.
 **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf)** ·
 [view it on GitHub](https://github.com/travislhilton/ham-net-speech-to-text/blob/master/docs/HamNet_Station_Quick_Reference_Card.pdf) ·
 on the station: **Help** (top right of the dashboard) opens the same card; the browser's Print prints it.
+
+**Sidekick card** (two sides: setting up Sidekick, and Sidekick on a net):
+**[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Sidekick_Quick_Reference_Card.pdf)** ·
+on the station: **Settings → Station agent → Sidekick card**, or **Card** on Sidekick's card on a radio.
 
 The card's QR code opens this download page. A club handing out its own copy sets `download_url:` in
 `config\station.yaml` and the card the station prints carries that address instead. To rebuild the PDF after
@@ -387,6 +392,7 @@ server addresses, keys and logins go only in those files (`config/station.yaml`,
 | Roll calls by place: the US state names are downloaded once from the US Census list (`hamkit/places.py`, 2 KB, into the callbook folder; the installer and the station fetch it), none are in the code; without it the call's shape is used | built 2026-11-12 |
 | Urgent board reads **fire** by its grammar: a fire tower, fire seat or fire transducer (fire + a noun) is a thing, "fire it up" is the verb, and a report must be about the word itself ("there's a fire", "fire spreading", "fire on Elm"), not anywhere in the sentence. Replay of 9,475 real transmissions: 8 false alerts gone, no real report lost | fixed 2026-11-12 |
 | "This PC is transcribing slowly" is judged on clips of 8 s or more only: a GPU engine costs about 2 s a clip whatever its length, so short clips (an "Over.") looked slow. A day of real traffic: 8 false notices → 0; a PC really 5× slower is still caught | fixed 2026-11-12 |
+| **Sidekick card**: a two-sided reference card for setting up Sidekick and reading it on a net (`station/static/sidekick_card.html`, `/help/sidekick`, PDF in `docs/`) | built 2026-11-12 |
 | **Net board** per radio (a tab above the log): who is in (numbered), **heard once** marked, **Ask again**, traffic, heard but not checked in, regulars not heard yet, net control's 10-minute ID timer; refreshed after each transmission | built 2026-11-12 (`History.board`, `tests/test_review_board.py`) |
 | **Review the check-ins** after a net (✓ / ✎ right call / ✗, ▶ where it was heard): fixes the attendance, the minutes, the ICS-309 and Winlink messages; calls heard once show as **(?)** until reviewed; each mark is logged to `data/review_log.jsonl` as the human truth for call accuracy | built 2026-11-12 |
 | Phones: the radio column scrolls as a whole when the notices and Sidekick's card are taller than the screen (the tabs under them were out of reach) | fixed 2026-11-12 |

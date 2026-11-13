@@ -49,11 +49,12 @@ def make_handler(station):
 
         def do_GET(self):
             u = urlparse(self.path)
-            if u.path in ("/help", "/card"):         # the printable two-sided reference card (station/static/card.html)
+            if u.path in ("/help", "/card", "/help/sidekick"):   # the printable two-sided reference cards
                 from . import phone
+                src = "sidekick_card.html" if u.path == "/help/sidekick" else "card.html"
                 page = '<!doctype html><html lang="en"><head><meta charset="utf-8">' \
                        '<meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + \
-                       phone.card_with_download((STATIC / "card.html").read_text(encoding="utf-8"),
+                       phone.card_with_download((STATIC / src).read_text(encoding="utf-8"),
                                                 station.cfg.get("download_url")) + "</body></html>"
                 page = page.encode("utf-8")
                 return self._send(200, page, "text/html; charset=utf-8")

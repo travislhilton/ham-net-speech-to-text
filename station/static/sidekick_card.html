@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sidekick Card</title>
+<!-- Sidekick's two-sided reference card (set up / on a net), styled like the station's card.html.
+     Served at /help/sidekick; PDF by tools/build_ref_card.py. Keep every side within one page.
+     The station's card:  Same look as the Church of Jesus Christ EMCOMM quick reference cards (one family):
+     system fonts (works with no internet), red front, navy back, numbered steps, one card side per Letter page.
+     Served by the station at /help (the download QR filled in by station/phone.py); the PDF is built by
+     tools/build_ref_card.py. Keep every side within one page: python -m tools.build_ref_card checks it. -->
+<style>
+:root{--red:#C8102E;--navy:#1A2744;--blue:#4A7FC1;--green:#5BAD8A;--amber:#D4850A;--muted:#4A5568;--border:#CBD5E0;color-scheme:light}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#F0F4F8;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#2D3748;padding:32px 16px 64px}
+.page-header{max-width:1120px;margin:0 auto}
+h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.page-intro{font-size:17px;color:var(--muted);margin-bottom:12px}
+.print-btn{background:var(--red);color:#fff;border:none;border-radius:8px;padding:10px 24px;font:600 18px system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;cursor:pointer;letter-spacing:.05em;margin-bottom:24px}
+.print-btn:hover{background:#9a0020}
+.card-row{display:flex;gap:20px;flex-wrap:wrap;max-width:1120px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:24px 28px;box-shadow:0 2px 8px rgba(0,0,0,.10);display:flex;flex-direction:column;gap:12px;min-width:340px;flex:1;max-width:550px}
+.card-front{border-top:5px solid var(--red)}
+.card-back{border-top:5px solid var(--navy)}
+.card-role{font-size:13.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card-title{font-size:24px;font-weight:700;color:var(--navy);line-height:1.1}
+.card-side{display:inline-block;align-self:flex-start;font-size:13.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--red);color:#fff;padding:2px 10px;border-radius:4px;margin:2px 0}
+.card-side.back{background:var(--navy)}
+.card-head{display:flex;gap:12px;align-items:flex-start}
+.card-head>div:first-child{flex:1;min-width:0}
+.card-qr{flex:none;width:108px;text-align:center;font-size:12.5px;line-height:1.15;color:var(--muted)}
+.card-qr svg{display:block;width:100px;height:100px;margin:0 auto 2px}
+.card-qr .url{display:block;font-size:10px;word-break:break-all;margin-top:2px}
+.lead{font-size:15.5px;line-height:1.45}
+.card-part{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red);border-bottom:1px solid #D5DCE5;padding-bottom:2px}
+.card-back .card-part{color:var(--navy)}
+.card-part span{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:13.5px}
+.steps{display:flex;flex-direction:column;gap:7px}
+.step{display:flex;gap:12px;align-items:flex-start}
+.step-num{background:var(--red);color:#fff;border-radius:50%;width:26px;height:26px;min-width:26px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
+.card-back .step-num{background:var(--navy)}
+.step-text{font-size:15.5px;line-height:1.42;padding-top:2px}
+.step-text b{color:var(--navy)}
+.step-text small{color:var(--muted);font-size:13.5px;display:block}
+.note-box{background:#F0F4F8;border-left:4px solid var(--blue);border-radius:0 8px 8px 0;padding:9px 14px;font-size:14.5px;line-height:1.42}
+.note-box.warning{border-color:var(--amber);background:#FFF8E1}
+.note-box.tip{border-color:var(--green);background:#E8F8F0}
+.phrase-box{background:var(--navy);color:#BFD8D5;border-radius:8px;padding:11px 16px;font-size:14.5px;line-height:1.45}
+.phrase-box b{color:#fff}
+.tier-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.35}
+@media screen and (max-width:600px){.tier-table{display:block;overflow-x:auto}}
+.tier-table th{background:var(--navy);color:#fff;padding:6px 10px;text-align:left;font-size:13px;font-weight:600;letter-spacing:.06em}
+.tier-table td{padding:5px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.tier-table tr:nth-child(even) td{background:#F7F9FC}
+.tier-table td:first-child{font-weight:600;color:var(--navy);white-space:nowrap}
+.k{display:inline-block;font-weight:600;font-size:.92em;border:1px solid #8a96a3;border-radius:4px;padding:0 5px;line-height:1.35;background:#fff;white-space:nowrap;color:var(--navy)}
+.mono{font-family:Consolas,'Courier New',monospace;font-size:.92em}
+.grey{color:#6b7785}.edge{border-left:3px solid var(--blue);padding-left:4px}
+.call{text-decoration:underline;font-family:Consolas,'Courier New',monospace}
+.fill{display:inline-block;min-width:2.1in;border-bottom:1px solid #2D3748;height:1em;vertical-align:baseline}
+.turn-over{margin-top:auto;text-align:right;font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--muted)}
+.card-disclaimer{margin-top:auto;padding-top:6px;border-top:1px solid #e2e8f0;font-size:12.5px;line-height:1.35;color:var(--muted)}
+@media (max-width:600px){.card-row{flex-direction:column}.card{min-width:0;max-width:none;padding:18px 16px;overflow-wrap:anywhere}.card-head{flex-direction:column}}
+/* Printing: every card side is one US Letter page, front then back, so a sheet printed double-sided
+   ("flip on long edge") is the card. Nothing flows from one side onto the next. */
+@page{size:letter;margin:.5in}
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  html,body{background:#fff;padding:0;margin:0}
+  .page-header{display:none}
+  .card-row{display:block;margin:0;max-width:none}
+  .card{max-width:none;width:100%;min-width:0;flex:none;box-shadow:none;border:1px solid #b8c2cc;border-top-width:6px;border-radius:10px;
+        min-height:9.8in;padding:16px 22px;gap:9px;break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid}
+  .card:last-child{break-after:auto;page-break-after:auto}
+  /* a touch smaller than on screen so every side fits one Letter page (measured with Chrome on macOS, whose
+     system font runs wider than Windows' Segoe UI) */
+  .card{gap:7px;padding:14px 20px}
+  .card-title{font-size:22px}
+  .lead,.step-text{font-size:14px;line-height:1.36}
+  .step-text small{font-size:12.5px}
+  .steps{gap:5px}
+  .step-num{width:24px;height:24px;min-width:24px;font-size:14px}
+  .note-box,.phrase-box{font-size:13px;line-height:1.36;padding:7px 12px}
+  .tier-table{font-size:13px;line-height:1.3}
+  .tier-table td{padding:4px 8px}
+  .card-part{font-size:13px}
+  .card-disclaimer{font-size:11.5px}
+}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <h1>Sidekick: Quick Reference Card</h1>
+  <p class="page-intro">Two sides, US Letter. Print double-sided ("flip on long edge") and keep it with the station's card. Works in black and white.</p>
+  <button class="print-btn" onclick="window.print()">PRINT</button>
+</div>
+<div class="card-row">
+
+<!-- ===================== FRONT ===================== -->
+<div class="card card-front">
+  <p class="card-role">HamNet Station · Sidekick, the station agent</p>
+  <span class="card-side">Front · side 1 of 2</span>
+  <h2 class="card-title">Set Up Sidekick</h2>
+  <p class="lead">Sidekick listens with you. After each transmission it decides whether <b>your station</b> should speak and <b>drafts</b> exactly what it would say: a check-in, an acknowledgement, a short answer. <b>It never transmits</b>: you read the draft and decide.</p>
+
+  <p class="card-part">A · The xAI key <span>(optional: without it Sidekick uses its offline rules)</span></p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Create a key</b> at <span class="mono">console.x.ai</span> → API Keys → Create API Key<small>Add a little credit. Sidekick asks the model only on its turns, about 1–4 times a net (well under a cent each). ▶ Hear it costs a little per clip.</small></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><span class="k">Settings</span> → <b>Station agent</b> → paste the key → <span class="k">Save</span><small>It is kept on this PC only, never shown again and never sent anywhere but xAI.</small></div></div>
+  </div>
+
+  <p class="card-part">B · Turn it on</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">3</div><div class="step-text"><span class="k">Settings</span> → <b>Station agent</b> → tick <b>Enable the station agent</b>, then fill in:</div></div>
+  </div>
+  <table class="tier-table">
+    <tr><td>On-air name</td><td>Said after your call (default <b>Sidekick</b>). Not a phonetic word, number or procedure word (Echo, Portable, Break)</td></tr>
+    <tr><td>Your first name</td><td>Sidekick names you as its control operator</td></tr>
+    <tr><td>Your check-in line</td><td>What it says to check in, e.g. <i>"This is W9XYZ, Sam, Springfield, no traffic"</i></td></tr>
+    <tr><td>License class</td><td>It never drafts outside your phone privileges</td></tr>
+    <tr><td>Your region</td><td>Your state (and county). It answers a roll call by place (<i>"Stations Colorado, check in now"</i>) <b>only</b> for your region; left empty, never</td></tr>
+  </table>
+  <div class="steps">
+    <div class="step"><div class="step-num">4</div><div class="step-text">On each radio's card: <b>Sidekick</b> <span class="k">Off</span> → <span class="k">Draft</span><small>Off by default on every radio. Its card appears at the top of that radio's column.</small></div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-text"><b>Nets where it must not check in</b> (members-, mobiles- or traffic-only): <span class="k">Nets</span> → the net → <b>Sidekick on this net</b> → <b>Never checks in</b></div></div>
+    <div class="step"><div class="step-num">6</div><div class="step-text"><b>Its voice</b> (optional): <span class="k">Settings</span> → <b>Sidekick's voice</b> → pick one, press ▶<small>Plays in this browser only, never on a radio. Without a key or internet, the PC's own voice is used.</small></div></div>
+  </div>
+
+  <div class="note-box warning"><b>Draft only.</b> There is no transmit mode: the radio's PTT stays off and the station refuses to key up. <b>You</b> are the control operator; read the draft yourself if you choose to use it.</div>
+  <div class="note-box tip"><b>Every draft is checked in code against FCC Part 97</b> before you see it: your call at the end and every 10 minutes (§97.119), says it is an automated assistant and names you (§97.113), no music, codes or business, no relayed messages (§97.115), silent during emergency or priority traffic (§97.101), inside your privileges (§97.301/305). A draft that fails shows <b>Would not send</b> with the rule.</div>
+  <p class="turn-over">Turn over → side 2: On a Net</p>
+</div>
+
+<!-- ===================== BACK ===================== -->
+<div class="card card-back">
+  <p class="card-role">HamNet Station · Sidekick, the station agent</p>
+  <span class="card-side back">Back · side 2 of 2</span>
+  <h2 class="card-title">Sidekick on a Net</h2>
+
+  <p class="card-part">The YOUR TURN chip <span>(top of Sidekick's card on each radio)</span></p>
+  <table class="tier-table">
+    <tr><td>Listening</td><td>Not its turn; the reason is shown (<i>"check-ins called for mobile stations"</i>)</td></tr>
+    <tr><td>Check-ins open to you</td><td>Net control opened check-ins to a station like yours: a check-in is drafted</td></tr>
+    <tr><td>CALLED</td><td>Someone called your call or Sidekick's name: what they said, and a reply</td></tr>
+    <tr><td>Answer ready</td><td>A question that needed thinking is answered; it waits for net control's <i>"comments or questions?"</i></td></tr>
+    <tr><td>Checked in ✓</td><td>Net control acknowledged you, or your own check-in was heard: it will not check in again</td></tr>
+  </table>
+
+  <p class="card-part">Buttons</p>
+  <table class="tier-table">
+    <tr><td><span class="k">What would you say now?</span></td><td>A draft for this moment, any time</td></tr>
+    <tr><td><span class="k">▶ Hear it</span></td><td>The draft in Sidekick's voice, in your browser only</td></tr>
+    <tr><td><span class="k">👍</span> <span class="k">👎</span></td><td>Rate the draft: your ratings show what to fix</td></tr>
+    <tr><td><span class="k">I checked in myself</span></td><td>You checked in on the air: it stops offering a check-in. <b>Not checked in</b> undoes it</td></tr>
+    <tr><td><span class="k">Mute for this net</span></td><td>Silent until the net ends. <b>Unmute</b> undoes it</td></tr>
+  </table>
+
+  <p class="card-part">When it speaks, and when it stays quiet</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Checks in</b> when check-ins are open to all, to your region, or to <i>"anyone with or without traffic"</i></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><b>Stays quiet</b> for traffic-only, maritime, mobile, member or EOC calls; <i>"before I start taking check-ins"</i>; a bare <i>"please call now"</i> whose start was not heard; anyone else's roll call by place</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><b>Silent on</b> <i>"break break"</i>, emergency or priority traffic, on every net, unless net control calls you</div></div>
+  </div>
+
+  <p class="card-part">No internet or no key</p>
+  <div class="note-box">An amber band says <b>Offline rules</b> and why. It still checks in when invited and acknowledges a call, but cannot answer questions. With a key, xAI is checked every 2 minutes.</div>
+
+  <p class="card-part">When something looks wrong</p>
+  <table class="tier-table">
+    <tr><td>No Sidekick on a radio</td><td>Settings → Enable the station agent; then <b>Draft</b> on that radio's card</td></tr>
+    <tr><td>Never answers a roll call</td><td>Set <b>Your region</b> (Settings → Station agent)</td></tr>
+    <tr><td>Wants to check in again</td><td>Press <b>I checked in myself</b></td></tr>
+    <tr><td>Would not send</td><td>A Part 97 check stopped it: the rule is shown. Nothing to do</td></tr>
+    <tr><td>Wrong turn</td><td>👎 it: the ratings show what to fix (a net can be replayed: <span class="mono">tools.sidekick_replay</span>)</td></tr>
+  </table>
+
+  <p class="card-disclaimer">Part of HamNet Station (MIT License). Sidekick drafts; it never transmits. Drafts stay on this PC (<span class="mono">data\agent_drafts.jsonl</span>).</p>
+</div>
+
+</div>
+</body>
+</html>

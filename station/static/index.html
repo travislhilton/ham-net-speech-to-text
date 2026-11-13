@@ -532,7 +532,7 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamnet.display",JSO
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <h4>Local names</h4><div id="lnSet" class="small"></div>
-  <h4>Station agent (optional)</h4><div id="agentSet" class="small"></div><div id="keySet" class="small"></div>
+  <h4>Station agent (optional) <a class="small" href="/help/sidekick" target="_blank" rel="noopener" style="font-weight:400">Sidekick card (set up and use, printable)</a></h4><div id="agentSet" class="small"></div><div id="keySet" class="small"></div>
   <h4>Sidekick's voice</h4><div id="voiceSet" class="small"></div>
   <h4>Grok speech-to-text (compared)</h4><div id="grokSet" class="small"></div>
   <div class="row savebar"><button value="save" id="setSave" class="primary">Save</button> <button value="cancel" formnovalidate>Cancel</button> <span class="err" id="setErr"></span></div>
@@ -2325,7 +2325,7 @@ function renderEcho(rid){
   const ago=x=>{const m=Math.round((Date.now()-new Date(x.at))/60000);return m<1?"just now":m+" min ago"};
   const chip=`<div class="turn ${TC}" role="status"><b>${T.state==="called"?"YOUR TURN · ":T.state==="open"?"YOUR TURN · ":""}${esc(T.say||"")}</b>${T.checked_in_at?` <span>✓ ${esc(new Date(T.checked_in_at).toLocaleTimeString([],TOPT()))}${T.checked_in_how?` (${esc(T.checked_in_how)})`:""}</span>`:""}</div>`;
   const btns=`<div class="row small" style="margin:4px 0">${T.checked_in?`<button data-agmark="${esc(rid)}" data-v="not_checked_in" title="Sidekick will check in again when check-ins are open to it">Not checked in</button>`:`<button data-agmark="${esc(rid)}" data-v="checked_in" title="You checked in yourself: Sidekick won't draft a check-in on this net">I checked in myself</button>`} <button data-agmark="${esc(rid)}" data-v="${T.muted?"unmute":"mute"}">${T.muted?"Unmute":"Mute for this net"}</button> <button data-agask="${esc(rid)}">What would you say now?</button></div>`;
-  box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span></div>`
+  box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span><a href="/help/sidekick" target="_blank" rel="noopener" style="margin-left:auto;text-transform:none;letter-spacing:0" title="Setting up and using ${esc(agName())}: the two-sided card (printable)">Card</a></div>`
     +(mn.how==="rules"?`<div class="warnband small" role="note">${esc(mn.say)}${mn.why==="no xAI key"?' <button class="linkish" data-goto-settings="agent">Add a key</button>':""}</div>`:"")
     +chip+btns+pend
     +(show?`<div class="meta">Last time it would have spoken (${esc(ago(show))}), after: ${esc(show.heard||"")}</div>${draftHtml(show)}

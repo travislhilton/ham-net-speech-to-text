@@ -281,7 +281,7 @@ you chose is remembered. Each column shows:
   quiet). Frequencies with conversations are **remembered** (hours, days, count, calls heard; Pin or Hide them) in
   `data\scan_spots.json`. Turning the dial yourself pauses the scan for 30 minutes; when it stops, the radio goes
   back to where it was. Receive only: the only CAT commands are frequency, mode and the S-meter read.
-- **Sidekick, the station agent (Draft mode)**: an optional AI operator's assistant. Its on-air name is yours to
+- **Sidekick, the station agent (Draft mode)**: an optional AI operator's assistant. Its own two-sided card (set up; on a net) opens from **Settings → Station agent → Sidekick card**, from **Card** on Sidekick's card, or at `/help/sidekick`; the PDF is `docs/HamNet_Sidekick_Quick_Reference_Card.pdf`. Its on-air name is yours to
   choose (**Settings → Station agent → On-air name**, default **Sidekick**); a name that is a phonetic-alphabet word
   (Echo, Victor…), a number or a procedure word (Portable, Mobile, Break, Over) is refused, because it is said right
   after the call and listeners would hear it as part of the call. **Off by default**: the operator turns it on in

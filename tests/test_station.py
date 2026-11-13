@@ -535,3 +535,13 @@ def test_a_missing_input_that_windows_has_now_is_rescanned_once_a_minute(tmp_pat
     assert not st._audio_rescan("Digirig Lite NET-REC")                # not again within a minute
     monkeypatch.setattr(core.Station, "_rescan_at", 0.0)
     assert not st._audio_rescan("Something else") and calls == ["t", "i"]
+
+
+def test_sidekick_card_is_served_and_linked():
+    from station.server import STATIC
+    html = (STATIC / "sidekick_card.html").read_text(encoding="utf-8")
+    assert "side 1 of 2" in html and "side 2 of 2" in html and "<title>Sidekick Card</title>" in html
+    assert "never transmits" in html and "Your region" in html
+    idx = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert idx.count('href="/help/sidekick"') == 2                 # Settings -> Station agent, and Sidekick's card
+    assert '"/help/sidekick"' in (STATIC.parent / "server.py").read_text(encoding="utf-8")

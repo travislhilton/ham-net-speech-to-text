@@ -23,7 +23,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
 .card-back{border-top:5px solid var(--navy)}
 .card-role{font-size:13.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .card-title{font-size:24px;font-weight:700;color:var(--navy);line-height:1.1}
-.card-side{display:inline-block;font-size:13.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--red);color:#fff;padding:2px 10px;border-radius:4px;margin:2px 0}
+.card-side{display:inline-block;align-self:flex-start;font-size:13.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--red);color:#fff;padding:2px 10px;border-radius:4px;margin:2px 0}
 .card-side.back{background:var(--navy)}
 .card-head{display:flex;gap:12px;align-items:flex-start}
 .card-head>div:first-child{flex:1;min-width:0}
@@ -59,7 +59,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
 .fill{display:inline-block;min-width:2.1in;border-bottom:1px solid #2D3748;height:1em;vertical-align:baseline}
 .turn-over{margin-top:auto;text-align:right;font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--muted)}
 .card-disclaimer{margin-top:auto;padding-top:6px;border-top:1px solid #e2e8f0;font-size:12.5px;line-height:1.35;color:var(--muted)}
-@media (max-width:600px){.card{min-width:0;padding:18px 16px}.card-head{flex-direction:column}}
+@media (max-width:600px){.card-row{flex-direction:column}.card{min-width:0;max-width:none;padding:18px 16px;overflow-wrap:anywhere}.card-head{flex-direction:column}}
 /* Printing: every card side is one US Letter page, front then back, so a sheet printed double-sided
    ("flip on long edge") is the card. Nothing flows from one side onto the next. */
 @page{size:letter;margin:.5in}
@@ -122,7 +122,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
 
   <div class="note-box warning"><b>Each radio needs its own sound input,</b> never the one VARA or Winlink uses. Two identical adapters? Rename one in Windows: Settings → System → Sound → the input → Rename.</div>
   <div class="note-box tip"><b>On a laptop:</b> keep it plugged in and set the maker's fan profile to <b>Performance</b>. The station keeps the screen on and runs at full speed only while it transcribes, then puts your power plan back.</div>
-  <div class="note-box"><b>Optional, in Settings:</b> your name, grid and Winlink account (for the messages) · a QRZ.com login · local names · an xAI key for <b>Sidekick</b>, a station assistant that drafts what to say and never transmits.<br><b>To update:</b> download again and run <span class="mono">install.cmd</span> again. Your settings stay.</div>
+  <div class="note-box"><b>Optional, in Settings:</b> your name, grid and Winlink account (for the messages) · a QRZ.com login · local names · an xAI key for <b>Sidekick</b>, a station assistant that drafts what to say and never transmits (its own card: <b>Sidekick card</b> in Settings).<br><b>To update:</b> download again and run <span class="mono">install.cmd</span> again. Your settings stay.</div>
   <p class="turn-over">Turn over → side 2: Running a Net</p>
 </div>
 

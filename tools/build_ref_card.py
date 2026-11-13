@@ -1,4 +1,5 @@
-"""Build the printable reference card: docs/HamNet_Station_Quick_Reference_Card.pdf (and its .html).
+"""Build the printable reference cards: docs/HamNet_Station_Quick_Reference_Card.pdf and
+docs/HamNet_Sidekick_Quick_Reference_Card.pdf (and their .html).
 
     python -m tools.build_ref_card
 
@@ -41,16 +42,23 @@ PUBLIC_PDF = "https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@m
 #  copy up to 12 h: after pushing a new card, open https://purge.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf
 
 
+CARDS = [(SRC, NAME), (ROOT / "station" / "static" / "sidekick_card.html", "HamNet_Sidekick_Quick_Reference_Card")]
+
+
 def main() -> int:
-    html = phone.card_with_download(SRC.read_text(encoding="utf-8"), phone.REPO_URL)
+    return max(build(src, name) for src, name in CARDS)
+
+
+def build(src: Path, name: str) -> int:
+    html = phone.card_with_download(src.read_text(encoding="utf-8"), phone.REPO_URL)
     OUT.mkdir(exist_ok=True)
-    out_html = OUT / f"{NAME}.html"
+    out_html = OUT / f"{name}.html"
     out_html.write_text(html, encoding="utf-8")
     exe = chrome()
     if not exe:
         print("Google Chrome not found: wrote the HTML only (open it and Print)")
         return 1
-    pdf = OUT / f"{NAME}.pdf"
+    pdf = OUT / f"{name}.pdf"
     with tempfile.TemporaryDirectory() as prof:
         subprocess.run([exe, "--headless=new", "--disable-gpu", f"--user-data-dir={prof}", "--no-pdf-header-footer",
                         f"--print-to-pdf={pdf}", out_html.as_uri()], check=True, capture_output=True, timeout=120)
