@@ -1,0 +1,33 @@
+name: operator-walkthrough
+# Installs the project the way the Quick Reference Card says, on a clean Windows machine, then walks both cards in a browser
+# (tools/operator_install_check.ps1, tools/operator_walkthrough.py). Reports and screenshots are kept as an artifact.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [master]
+    paths: ['station/**', 'install/**', 'tools/operator_*', 'tests/operator/**', '.github/workflows/operator-walkthrough.yml']
+jobs:
+  card-walkthrough:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install as the card says (steps 1-4), then open the dashboard
+        shell: powershell
+        run: ./tools/operator_install_check.ps1 -ZipUrl "https://github.com/${{ github.repository }}/archive/${{ github.sha }}.zip" -Report install-report.json
+      - name: Walk both cards in a browser (a throwaway station)
+        shell: powershell
+        env:
+          STATION_PYTHON: C:\HAM-Sidekick-Station\.venv\Scripts\python.exe
+        run: |
+          py -m pip install --quiet playwright
+          py -m playwright install chromium
+          py -m tools.operator_walkthrough --sandbox --out operator-report
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-walkthrough
+          path: |
+            install-report.json
+            operator-report/
