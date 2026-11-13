@@ -1,0 +1,4 @@
+import soundfile as sf, io, sys
+print(sf.__libsndfile_version__, "MP3" in sf.available_formats())
+d, sr = sf.read(io.BytesIO(open(sys.argv[1], "rb").read()), dtype="float32")
+print("decoded", d.shape, sr)

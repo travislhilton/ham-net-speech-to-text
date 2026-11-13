@@ -244,6 +244,8 @@ button{font:inherit;border:1px solid var(--line);background:var(--panel);color:v
 .turn.ok{background:var(--ok);color:var(--on);border-color:var(--ok)}.turn.bad{background:var(--bad);color:var(--on);border-color:var(--bad)}
 .turn.in{border-color:var(--ok)}.turn.in b{color:var(--ok)}.turn.mute{opacity:.75}.turn span{font-weight:400}
 .warnband{background:color-mix(in srgb,var(--warn) 14%,var(--panel));color:var(--ink);border:1px solid var(--warn);border-radius:8px;padding:6px 10px;margin:6px 0}
+.sendband{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:2px solid var(--warn);border-radius:8px;padding:8px 10px;margin:6px 0;background:color-mix(in srgb,var(--warn) 16%,var(--panel));font-size:14px}
+.sendband.on_air{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 18%,var(--panel))}.sendband .cd{font-variant-numeric:tabular-nums}.sendband button{margin-left:auto}
 .echo{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:6px 9px;font-size:13px;flex:none}
 .echo .eh{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .echo .eh .sp{flex:1}.echo .eh button{all:unset;cursor:pointer;color:var(--accent);text-transform:none;letter-spacing:0;font-size:12.5px}
@@ -1285,7 +1287,7 @@ function renderRadios(){
       +`<span><button class="linkish small" data-rsearch="${esc(r.id)}" title="Search everything heard on ${esc(r.name)}: words, callsigns, names (press / anywhere for all radios)">Search this log</button></span>`
       +`<span>Used for <span class="rseg" role="group" aria-label="${esc(r.name)} is used for">${seg("setrole","nets","Nets",r.role!=="winlink")}${seg("setrole","winlink","Winlink only",r.role==="winlink")}</span></span>`
       +(r.scan&&!r.scan.can?`<span title="Scan HF for conversations between nets. A net always comes first.">Scan <span class="rseg" role="group" aria-label="Scan on ${esc(r.name)}">${seg("scanmode","off","Off",r.scan.mode==="off")}${seg("scanmode","on","On",r.scan.mode==="on")}${seg("scanmode","auto","Auto",r.scan.mode==="auto")}</span> <button class="linkish small" data-scanset="${esc(r.id)}" title="Antenna, bands and remembered frequencies">${esc((r.scan.antenna||{}).name||"Antenna")}…</button></span>`:"")
-      +(r.role!=="winlink"&&AG&&(AG.settings||{}).enabled?`<span title="${esc(agName())} drafts what it would say on this radio. It never transmits.">${esc(agName())} <span class="rseg" role="group" aria-label="${esc(agName())} on ${esc(r.name)}">${seg("agmode","off","Off",agMode(r.id)==="off")}${seg("agmode","draft","Draft",agMode(r.id)==="draft")}</span></span>`:"");
+      +(r.role!=="winlink"&&AG&&(AG.settings||{}).enabled?`<span title="${esc(agName())}: Draft = shows what it would say, never transmits. Send = says it on the air after a 3 s countdown, only while you are at this PC (Esc stops it); offered when this radio's Transmit switch is on (Radios…).">${esc(agName())} <span class="rseg" role="group" aria-label="${esc(agName())} on ${esc(r.name)}">${seg("agmode","off","Off",agMode(r.id)==="off")}${seg("agmode","draft","Draft",agMode(r.id)==="draft")}${((AG||{}).tx_ready||{})[r.id]||agMode(r.id)==="send"?seg("agmode","send","Send",agMode(r.id)==="send"):""}</span></span>`:"");
     renderEcho(r.id);
     {let sl=el.querySelector(".scanline");if(!sl){sl=document.createElement("div");sl.className="scanline";el.querySelector(".rsetup").after(sl)}
      const sc=r.scan||{};sl.hidden=!sc.mode||sc.mode==="off"||!!sc.can;sl.classList.toggle("live",sc.state==="conversation");
@@ -1653,6 +1655,7 @@ function connect(){
   es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HamNet Station";renderEngine(d.engines);all();renderPCNote()});
   es.addEventListener("tx",e=>{const t=JSON.parse(e.data);upsertTx(t);if(t.status==="final")boardSoon(t.radio)});
   es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
+    if(m.send){const o=m.send;AG.send=AG.send||{out:{}};AG.send.out=AG.send.out||{};AG.send.out[o.radio]=o;if(o.state==="counting"||o.state==="on_air")AG.send.present=true;renderEcho(o.radio);return}
     if(m.pending){const p=m.pending;AG.pending=AG.pending||{};if(p.state==="none")delete AG.pending[p.radio];else AG.pending[p.radio]=p;renderEcho(p.radio);return}
     if(m.turn){AG.turn=Object.assign(AG.turn||{},m.turn)}if(m.mode_now)AG.mode_now=m.mode_now;
     const d=m.draft;if(!d){for(const rid of Object.keys(m.turn||{}))renderEcho(rid);return}
@@ -2313,7 +2316,7 @@ function draftHtml(d,alt){
 let MODELN={};
 function renderEcho(rid){
   const box=document.getElementById("echo-"+rid);if(!box)return;
-  if(!AG||agMode(rid)!=="draft"){box.hidden=true;return}
+  if(!AG||!["draft","send"].includes(agMode(rid))){box.hidden=true;return}
   MODELN=Object.fromEntries((AG.models||[]).map(m=>[m.id,m.label]));
   const L=(AG.drafts||[]).filter(d=>d.radio===rid),d=L[L.length-1];
   box.hidden=false;
@@ -2325,14 +2328,31 @@ function renderEcho(rid){
   const ago=x=>{const m=Math.round((Date.now()-new Date(x.at))/60000);return m<1?"just now":m+" min ago"};
   const chip=`<div class="turn ${TC}" role="status"><b>${T.state==="called"?"YOUR TURN · ":T.state==="open"?"YOUR TURN · ":""}${esc(T.say||"")}</b>${T.checked_in_at?` <span>✓ ${esc(new Date(T.checked_in_at).toLocaleTimeString([],TOPT()))}${T.checked_in_how?` (${esc(T.checked_in_how)})`:""}</span>`:""}</div>`;
   const btns=`<div class="row small" style="margin:4px 0">${T.checked_in?`<button data-agmark="${esc(rid)}" data-v="not_checked_in" title="Sidekick will check in again when check-ins are open to it">Not checked in</button>`:`<button data-agmark="${esc(rid)}" data-v="checked_in" title="You checked in yourself: Sidekick won't draft a check-in on this net">I checked in myself</button>`} <button data-agmark="${esc(rid)}" data-v="${T.muted?"unmute":"mute"}">${T.muted?"Unmute":"Mute for this net"}</button> <button data-agask="${esc(rid)}">What would you say now?</button></div>`;
-  box.innerHTML=`<div class="eh"><span>${esc(agName())} · draft only, never transmitted</span><a href="/help/sidekick" target="_blank" rel="noopener" style="margin-left:auto;text-transform:none;letter-spacing:0" title="Setting up and using ${esc(agName())}: the two-sided card (printable)">Card</a></div>`
+  const SO=(((AG||{}).send||{}).out||{})[rid],sending=agMode(rid)==="send";
+  const SN={counting:"Sending in",on_air:"ON THE AIR",sent:"Sent",stopped:"Not sent",held:"Not sent",failed:"Not sent"};
+  const sendBand=!sending?"":SO&&["counting","on_air"].includes(SO.state)
+    ?`<div class="sendband ${SO.state}" role="alert"><b>${SO.state==="counting"?`Sending in <span class="cd" data-cd="${esc(SO.at||"")}" data-s="${SO.countdown_s||3}">${Math.round(SO.countdown_s||3)}</span>…`:"● ON THE AIR"}</b> “${esc(SO.say||"")}” <button class="primary" data-agstop="${esc(rid)}">Stop (Esc)</button></div>`
+    :`<div class="meta">${((AG||{}).send||{}).present?"✓ You are at the station: drafts that speak are sent after a 3 s countdown.":"⚠ You are not at the station: Draft only until you use the keyboard or mouse here."}${SO?` Last: ${esc(SN[SO.state]||SO.state)}${SO.why?` (${esc(SO.why)})`:""}.`:""}</div>`;
+  box.innerHTML=`<div class="eh"><span>${esc(agName())} · ${sending?"SEND: says it on the air, you are control operator":"draft only, never transmitted"}</span><a href="/help/sidekick" target="_blank" rel="noopener" style="margin-left:auto;text-transform:none;letter-spacing:0" title="Setting up and using ${esc(agName())}: the two-sided card (printable)">Card</a></div>`
     +(mn.how==="rules"?`<div class="warnband small" role="note">${esc(mn.say)}${mn.why==="no xAI key"?' <button class="linkish" data-goto-settings="agent">Add a key</button>':""}</div>`:"")
-    +chip+btns+pend
+    +sendBand+chip+btns+pend
     +(show?`<div class="meta">Last time it would have spoken (${esc(ago(show))}), after: ${esc(show.heard||"")}</div>${draftHtml(show)}
       <div class="rate meta">Right call? <button data-agrate="${esc(show.id)}" data-v="1" class="${(show.rating||{}).good===true?"on":""}" aria-label="Good draft">👍</button><button data-agrate="${esc(show.id)}" data-v="0" class="${(show.rating||{}).good===false?"on":""}" aria-label="Bad draft">👎</button></div>`
       +(show.alts||[]).map(a=>`<div class="alt">${draftHtml(a,true)}</div>`).join(""):"")
     +`<div class="meta">${sp} time${sp===1?"":"s"} it would have spoken · stayed silent ${T.silent||0} time${T.silent===1?"":"s"}${d&&!d.speak?` · last: ${esc(d.why||"")}`:""}</div>`}
+const agLive=()=>Object.values((((AG||{}).send)||{}).out||{}).some(o=>o.state==="counting"||o.state==="on_air");
+const agStop=()=>fetch("/api/agent/stop/all",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});
+// the control operator's hand on the switch: Esc, Stop or ANY click on the page while Sidekick is sending drops it
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&agLive()){e.preventDefault();agStop()}},true);
+document.addEventListener("pointerdown",()=>{if(agLive())agStop()},true);
+// presence: the dashboard in use at this PC (keyboard, mouse, touch) lets Send work; a quiet heartbeat, every 30 s at most
+let agSeen=0;const agHere=()=>{const now=Date.now();if(now-agSeen<30000)return;
+  if(!Object.values(((AG||{}).settings||{}).radios||{}).includes("send"))return;agSeen=now;
+  fetch("/api/agent/presence",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(()=>{if(AG&&AG.send&&!AG.send.present){AG.send.present=true;for(const rid of Object.keys(((AG||{}).settings||{}).radios||{}))renderEcho(rid)}}).catch(()=>{})};
+for(const ev of ["pointermove","pointerdown","keydown","wheel","touchstart"])document.addEventListener(ev,agHere,{passive:true});
+setInterval(()=>{for(const el of document.querySelectorAll(".sendband .cd")){const left=Math.max(0,Number(el.dataset.s)-(Date.now()-Number(el.dataset.t||(el.dataset.t=Date.now())))/1000);el.textContent=Math.ceil(left)}},200);
 document.addEventListener("click",e=>{
+  const st=e.target.closest("[data-agstop]");if(st){agStop();return}
   const a=e.target.closest("[data-agask]");if(a){a.textContent="Thinking…";agPost(`/api/agent/ask/${enc(a.dataset.agask)}`,{});return}
   const mk=e.target.closest("[data-agmark]");if(mk){agPost(`/api/agent/mark/${enc(mk.dataset.agmark)}`,{what:mk.dataset.v});return}
   const gs=e.target.closest("[data-goto-settings]");if(gs){$("openSettings").click();setTimeout(()=>{const k=$("keySet");if(k)k.scrollIntoView({block:"center"})},300);return}

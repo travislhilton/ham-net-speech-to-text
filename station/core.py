@@ -188,8 +188,10 @@ class Station:
         self._apply_operator()
         from .schedule import NetSchedule      # schedule: dashboard-edited nets + listen only during nets + alerts
         self.nets = NetSchedule(self)
+        from .ptt import Transmitter                  # PTT: refuses unless the radio's Transmit switch is on
+        self.ptt = Transmitter(self)
         from .agent import Agent
-        self.agent = Agent(self)                                 # the station agent: Draft mode only, never transmits
+        self.agent = Agent(self)            # the station agent: Draft; Send only on a radio whose Transmit switch is on
         from .grokstt import GrokSTT
         self.grokstt = GrokSTT(self)                             # Grok speech-to-text, compared (off until chosen)
         from .tts import Voice
@@ -245,8 +247,6 @@ class Station:
         if listen:
             for r in self.cfg["radios"]:
                 threading.Thread(target=self._listen, args=(r,), daemon=True, name=f"radio-{r['id']}").start()
-        from .ptt import Transmitter                  # PTT: refuses unless the radio's Transmit switch is on
-        self.ptt = Transmitter(self)
         from .cat import CatControl                   # CAT: read and tune radios that have a CI-V port
         self.cat = CatControl(self, getattr(self, "_cat_factory", None))
         if self.cat.cfg:

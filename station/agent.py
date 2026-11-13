@@ -635,6 +635,9 @@ class Agent:
         self.online = {p: Online(p) for p in self.providers}
         self._probe_stop = threading.Event()
         self.state: dict[str, dict] = self._load_state()   # radio -> {"last_id", "disclosed", "checked_in", "pending"}
+        from .sender import Sender
+        self.sender = Sender(station, self)                 # Send mode (station/sender.py): off unless chosen
+        self._to_send: dict[str, tuple] = {}
 
     # ----- is the model reachable? (Sidekick's card says so before a turn needs it) -----
     PROBE_EVERY_S = 120
@@ -642,7 +645,7 @@ class Agent:
     def probe(self) -> dict | None:
         """One free request (the model list) when Sidekick is on, a key is set and a radio is in Draft; updates the
         online state the card shows. Returns the new mode_now when it changed."""
-        if not self.cfg.get("enabled") or not any(self.mode(r) == "draft" for r in self.st.radios):
+        if not self.cfg.get("enabled") or not any(self.mode(r) in ("draft", "send") for r in self.st.radios):
             return None
         prov = MODELS.get(self.cfg.get("model") or DEFAULT_MODEL, {}).get("provider", "xai")
         keyname, _ = self.providers.get(prov, (None, None))
@@ -771,10 +774,14 @@ class Agent:
     def set_radio(self, rid: str, mode: str) -> dict:
         if rid not in self.st.radios:
             raise ValueError(f"no radio called {rid!r}")
-        if mode not in ("off", "draft"):
-            raise ValueError("mode: off or draft (nothing else exists yet: the agent never transmits)")
+        if mode not in ("off", "draft", "send"):
+            raise ValueError("mode: off, draft or send")
         if mode != "off" and not self.cfg.get("enabled"):
             raise ValueError("turn the station agent on first (Settings → Station agent)")
+        if mode == "send":                                      # only a radio whose Transmit switch is on (station/ptt.py)
+            ok, why = self.st.ptt.allowed(rid)
+            if not ok:
+                raise ValueError(f"Send needs this radio's transmitter: {why}")
         with self.lock:
             self.cfg.setdefault("radios", {})[rid] = mode
             self._save()
@@ -792,11 +799,13 @@ class Agent:
                 "models": [{"id": m, "label": v["label"], "ready": keys.get(v["provider"], False)}
                            for m, v in MODELS.items()],
                 "online": {p: o.view() for p, o in self.online.items()},
+                "send": self.sender.view(),
+                "tx_ready": {rid: self.st.ptt.allowed(rid)[0] for rid in self.st.radios},
                 "pending": {rid: {**s["pending"], "queue": [dict(question=x.get("question"), asker=x.get("asker"),
                                                                  state=x.get("state")) for x in s.get("queue") or []]}
                             for rid, s in self.state.items() if s.get("pending")},
                 "classes": list(PHONE), "drafts": list(self.drafts),
-                "turn": {rid: self.turn(rid) for rid in self.st.radios if self.mode(rid) == "draft"},
+                "turn": {rid: self.turn(rid) for rid in self.st.radios if self.mode(rid) in ("draft", "send")},
                 "mode_now": self._mode_now(keys)}
 
     def _mode_now(self, keys: dict) -> dict:
@@ -816,8 +825,10 @@ class Agent:
         """A transmission was transcribed: draft (after DEBOUNCE_S of quiet) on a radio in Draft mode. A pending
         draft or stand-by answer on this radio is dropped: someone else spoke first."""
         rid = tx.get("radio")
-        if self.mode(rid) != "draft" or tx.get("noise") or not (tx.get("text") or "").strip():
+        if self.mode(rid) not in ("draft", "send") or tx.get("noise") or not (tx.get("text") or "").strip():
             return
+        if self.mode(rid) == "send":
+            self.sender.heard(rid)                              # someone else has the floor: a countdown stops
         call = self.st.me or ""
         if call and tx.get("speaker") == call and self._net(rid, self.st.clock()).get("name"):
             st, contact = self.state.setdefault(rid, {}), self.contact_now(rid)   # the operator on the air himself
@@ -1002,14 +1013,15 @@ class Agent:
              "asked": asked, "trigger": why or ("asked" if asked else "heard"), **main,
              "alts": [results[m] | {"model": m} for m in models[1:] if m in results]}
         if d.get("speak") and d.get("ok"):
-            if _has_call(d.get("say", ""), call):
-                st["last_id"] = now                              # as if sent: Draft mode keeps the clock honest
-            if re.search(r"\bautomat\w*\b", d.get("say", ""), re.I) and re.search(r"control operator", d.get("say", ""), re.I):
-                st["disclosed"] = contact
-            if d.get("kind") == "check_in":
-                self._checked_in(st, contact, now, "drafted a check-in")
-            self._advance(rid, st, d, rows, now, ctx, contact, lines, user)
-            self._save_state()
+            if self.mode(rid) == "send" and not asked:
+                # Send mode: the ID clock, the disclosure, the check-in and the prepared answer move on only when it
+                # is really said (Sender -> sent()); a stopped or held send changes nothing
+                self._to_send[d["id"]] = (rid, d, rows, now, ctx, contact, lines, user)
+                d["send"] = self.sender.offer(rid, d, ctx)
+                if d["send"]["state"] != "counting":
+                    self._to_send.pop(d["id"], None)
+            else:
+                self._as_said(rid, st, d, rows, now, ctx, contact, lines, user)
         with self.lock:
             self.drafts.append(d)
             try:
@@ -1021,9 +1033,29 @@ class Agent:
         self.st.bus.publish("agent", {"draft": d, "turn": {rid: self.turn(rid)}, "mode_now": self._mode_now(keys)})
         pend = st.get("pending") or {}
         if (not ctx["in_net"] and pend.get("state") in ("ready", "failed") and not d.get("speak") and why != "pause"
-                and not asked and self.mode(rid) == "draft"):
+                and not asked and self.mode(rid) in ("draft", "send")):
             self._later(rid, PAUSE_S - DEBOUNCE_S, None, why="pause")   # a conversation: the answer at the next lull
         return d
+
+    def _as_said(self, rid, st, d, rows, now, ctx, contact, lines, user, how="drafted a check-in"):
+        if _has_call(d.get("say", ""), ctx["call"]):
+            st["last_id"] = now                                  # Draft mode: as if sent, keeps the clock honest
+        if re.search(r"\bautomat\w*\b", d.get("say", ""), re.I) and re.search(r"control operator", d.get("say", ""), re.I):
+            st["disclosed"] = contact
+        if d.get("kind") == "check_in":
+            self._checked_in(st, contact, now, how)
+        self._advance(rid, st, d, rows, now, ctx, contact, lines, user)
+        self._save_state()
+
+    def sent(self, rid, rec):
+        """Sender: the draft was said on the air."""
+        args = self._to_send.pop(rec.get("draft"), None)
+        if not args:
+            return
+        _, d, rows, _, ctx, contact, lines, user = args
+        st = self.state.setdefault(rid, {})
+        self._as_said(rid, st, d, rows, self.st.clock(), ctx, contact, lines, user, how="checked in on the air")
+        self.st.bus.publish("agent", {"turn": {rid: self.turn(rid)}})
 
     @staticmethod
     def _quiet_for(rows, now) -> float:
@@ -1212,7 +1244,7 @@ class Agent:
         q = st.get("queue") or []
         if q:
             st["pending"] = q.pop(0)
-            if st["pending"].get("state") in ("ready", "failed") and self.mode(rid) == "draft":
+            if st["pending"].get("state") in ("ready", "failed") and self.mode(rid) in ("draft", "send"):
                 self._later(rid, PAUSE_S, None, why="pause")    # its place comes at the next opening
         self._save_state()
 
@@ -1294,7 +1326,7 @@ class Agent:
                 fh.write(json.dumps({"pending": {"radio": rid, **p}}) + "\n")
         except OSError:
             pass
-        if self.mode(rid) == "draft":                           # its place may already be open: let the quick model see
+        if self.mode(rid) in ("draft", "send"):                           # its place may already be open: let the quick model see
             t = self.timers.get(rid)
             if not (t and t.is_alive()):
                 self._later(rid, 0.2, None, why="answer ready" if p["state"] == "ready" else "answer failed")
@@ -1355,10 +1387,14 @@ class Agent:
     def post(self, path: str, body: dict) -> dict:
         """POST /api/agent/settings, /api/agent/radio/<rid> {"mode"}, /api/agent/ask/<rid> (draft now),
         /api/agent/rate/<draft id> {"good", "note"}."""
-        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark)(?:/([\w-]+))?", path)
+        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark|stop|presence)(?:/([\w-]+))?", path)
         if not m:
             raise ValueError("unknown agent request")
         what, arg = m.groups()
+        if what == "presence":                                  # the dashboard: keyboard or mouse in use
+            return self.sender.presence()
+        if what == "stop":                                      # Esc / Stop / a click: drop it now
+            return {"send": self.sender.stop(arg if arg and arg != "all" else None)}
         if what == "settings":
             return self.settings(body)
         if what == "radio":

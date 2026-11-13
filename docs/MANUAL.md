@@ -297,6 +297,19 @@ you chose is remembered. Each column shows:
     opens. Outside those the station drafts "silent" itself, at once, without asking a model; when it asks, the model
     is offered only the moves that turn allows (replays of four real nets: the quick model, offered every move, tried
     to check in on 29 turns of one roll call).
+  - **Send (says it on the air)**: a radio whose **Transmit** switch is on (Radios… → Transmit; off by default) gets a
+    third position on its Sidekick switch, **Send**. A draft that would speak (and passed every check) is shown with
+    **Sending in 3… Stop (Esc)**; the voice clip is made during the countdown. It is sent only while you are at the
+    station: the dashboard must have seen your keyboard or mouse in the last 3 minutes (otherwise the card says
+    "You are not at the station: Draft only"); Part 97 needs the control operator at the control point for a voice
+    station that answers people. At key-up it checks again: still present, nobody transmitting (carrier, or the voice
+    gate on HF), nothing new heard on that radio since the draft, the frequency known. PTT goes through the radio's
+    transmitter (its time limit is the watchdog), with a short lead before the voice and a tail after it. **Esc, the
+    Stop button or any click on the dashboard drops PTT at once.** The voice is your chosen Grok voice, or this PC's
+    own Windows voice when there is no key or no internet. A transmission that was stopped, held or cut off does not
+    count as said (the ID clock, the disclosure and check-ins move on only on a real send). **What would you say
+    now?** never sends. Every send is logged in `data\agent_sends.jsonl`. Before a net: a test into a dummy load
+    (Radios… → Transmit test).
   - **Who net control called** (2026-11-12, from a review of real nets where all three drafts that would have spoken
     were wrong turns): the station reads the calling sentence and the one before it (and the transmission before,
     when the call opens a transmission under 10 s after it). It does not check in when the call is for another kind of
