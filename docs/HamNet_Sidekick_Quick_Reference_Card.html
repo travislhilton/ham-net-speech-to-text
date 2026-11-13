@@ -102,7 +102,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
   <p class="card-role">HamNet Station · Sidekick, the station agent</p>
   <span class="card-side">Front · side 1 of 2</span>
   <h2 class="card-title">Set Up Sidekick</h2>
-  <p class="lead">Sidekick listens with you. After each transmission it decides whether <b>your station</b> should speak and <b>drafts</b> exactly what it would say: a check-in, an acknowledgement, a short answer. <b>It never transmits</b>: you read the draft and decide.</p>
+  <p class="lead">Sidekick listens with you. After each transmission it decides whether <b>your station</b> should speak and <b>drafts</b> exactly what it would say: a check-in, an acknowledgement, a short answer. <b>It drafts only</b> until you switch Send on (see the checklist below): you read the draft and decide.</p>
 
   <p class="card-part">A · The xAI key <span>(optional: without it Sidekick uses its offline rules)</span></p>
   <div class="steps">
@@ -127,7 +127,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
     <div class="step"><div class="step-num">6</div><div class="step-text"><b>Its voice</b> (optional): <span class="k">Settings</span> → <b>Sidekick's voice</b> → pick one, press ▶<small>Plays in this browser only, never on a radio. Without a key or internet, the PC's own voice is used.</small></div></div>
   </div>
 
-  <div class="note-box warning"><b>Draft only.</b> There is no transmit mode: the radio's PTT stays off and the station refuses to key up. <b>You</b> are the control operator; read the draft yourself if you choose to use it.</div>
+  <div class="note-box warning"><b>Draft only is the default.</b> A radio's PTT stays off until <b>you</b> allow it. <b>Before the first Send, once, into a dummy load:</b> <b>1</b> <span class="k">Radios…</span> → <b>Transmit</b>: how it keys, <b>Audio out</b>, tick <b>Allow transmitting</b>, Save. <b>2</b> Tick <b>a dummy load is connected</b>, press <b>Tone + ID</b>: set <b>Drive level</b> until deviation is right (about 3 kHz on FM; SSB: ALC just touching), Save. <b>3</b> <b>Phrase + ID</b>: check your call and the audio. <b>4</b> Radio card: Sidekick <span class="k">Send</span>. You stay at the PC; <b>Esc</b> stops any transmission.</div>
   <div class="note-box tip"><b>Every draft is checked in code against FCC Part 97</b> before you see it: your call at the end and every 10 minutes (§97.119), says it is an automated assistant and names you (§97.113), no music, codes or business, no relayed messages (§97.115), silent during emergency or priority traffic (§97.101), inside your privileges (§97.301/305). A draft that fails shows <b>Would not send</b> with the rule.</div>
   <p class="turn-over">Turn over → side 2: On a Net</p>
 </div>
@@ -175,7 +175,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
     <tr><td>Wrong turn</td><td>👎 it: the ratings show what to fix (a net can be replayed: <span class="mono">tools.sidekick_replay</span>)</td></tr>
   </table>
 
-  <p class="card-disclaimer">Part of HamNet Station (MIT License). Sidekick drafts; it never transmits. Drafts stay on this PC (<span class="mono">data\agent_drafts.jsonl</span>).</p>
+  <p class="card-disclaimer">Part of HamNet Station (MIT License). Sidekick transmits only in Send mode, on a radio you allowed, with you at the PC. Drafts stay on this PC (<span class="mono">data\agent_drafts.jsonl</span>).</p>
 </div>
 
 </div>
