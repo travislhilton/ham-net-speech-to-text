@@ -18,7 +18,11 @@ foreach ($t in 'HAM Sidekick Station', 'HAM Sidekick Callbook Update', 'HamNet S
     Unregister-ScheduledTask -TaskName $t -Confirm:$false; "removed task: $t"
   }
 }
-Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "$InstallDir\*" -or $_.CommandLine -like "*$InstallDir*" } |
+# The station's own processes (python / pythonw / pip running from the folder). Never this script or the shell that started it:
+# their command lines name the folder too (a run of this script killed itself that way on 2026-11-13).
+$me = $PID; $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $me -and $_.ProcessId -ne $parent -and
+    ($_.ExecutablePath -like "$InstallDir\*" -or ($_.CommandLine -like "*$InstallDir\*" -and $_.Name -match '^pythonw?\.exe$')) } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep 3
 foreach ($r in 'HAM-Sidekick-Station-8091', 'HamNet-Station-8091') { Remove-NetFirewallRule -Name $r -ErrorAction SilentlyContinue }
