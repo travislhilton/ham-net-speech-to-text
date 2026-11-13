@@ -107,7 +107,7 @@ URGENT = {   # category -> cue (whole words, case-insensitive)
     "missing person": r"missing (?:person|child|hiker|hunter|man|woman|boy|girl|kid|resident|\w+ year old)|"
                       r"(?:is|are|been|went|gone|reported) missing|(?:man|woman|child|boy|girl|person|hiker|resident|kid|"
                       r"husband|wife|son|daughter|mother|father) (?:is |was |still )?missing|lost (?:child|hiker|person)|search and rescue|"
-                      r"haven't heard from|welfare check|overdue",
+                      r"haven't heard from(?=\s+(?!you\b|ya\b|y'all\b))|welfare check|overdue",
     "medical": r"medical|oxygen|insulin|dialysis|heart attack|chest pain|stroke|seizure|diabetic|medication|"
                r"needs? (?:a )?doctor|allergic reaction|overdose|hypothermia|heat stroke|paramedics?|EMS",
     "shelter": r"shelters?|evacuat(?:e|ed|ion|ing)|displaced|red cross|warming center|cooling center",
@@ -132,6 +132,10 @@ WEAK = {"medical", "shelter", "roads", "power", "resources"}     # alone, on a n
 # fired on "Now calling <town> Fire." and "Ambulance, outstanding signal, and welcome to the net.").
 BARE = re.compile(r"(?:fires?|flames|smoke|ambulance|crash|trauma|floods?|EMS|paramedics?|medical|closure|blocked|"
                   r"outage|shelters?)", re.I)
+# something that happened long ago ("I got injured like six years ago", "back in 2019"): a story, not a report
+LONG_AGO = re.compile(r"\b(?:(?:\d+|a few|a couple(?: of)?|several|many|some|two|three|four|five|six|seven|eight|nine|ten|"
+                      r"twenty|thirty|forty|fifty)\s+(?:years?|months?|decades?)\s+ago|last (?:year|month|summer|winter|"
+                      r"spring|fall)|back in (?:19|20)\d\d|years? back|when I was (?:a )?(?:kid|young|younger))\b", re.I)
 REPORTED = re.compile(r"\b(?:there(?:'s| is| are| was| were)|we(?:'ve| have| had)(?: got)?|i(?:'ve| have)(?: got)?|"
                       r"(?:they|he|she)(?:'ve| have| has)(?: got)?|report(?:ed|ing|s)?|responding|on scene|working|"
                       r"active|spreading|involved|out of control|need(?:s|ed)?|requesting|called? for|send|dispatch(?:ed)?|"
@@ -423,6 +427,8 @@ def extract(views: list[dict], ref: date | None = None, emergency: bool = False)
                     # one alarm word and nothing reported (a check-in, a name, a mis-heard word): not urgent
                     strong = (_bare_reported(s) and not CHECKIN.search(s)) or \
                         (len(set(cats)) > 1 and not CHECKIN.search(s))
+                if cats and strong and not emergency and LONG_AGO.search(s):
+                    strong = False                            # a story about long ago, not something happening
                 if cats and strong:
                     add("urgent", s, category=cats[0], categories=cats, people=find_people(s, calls),
                         place=find_place(s))

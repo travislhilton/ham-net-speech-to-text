@@ -167,3 +167,18 @@ def test_ordinary_talk_is_not_urgent(text):
 ])
 def test_a_reported_fire_or_incident_is_urgent(text):
     assert _urgent(text)
+
+
+@pytest.mark.parametrize("text,urgent", [
+    ("You know, I haven't heard from you for a while.", False),           # a greeting (a station, 11-06)
+    ("Good to hear you, haven't heard from ya in ages.", False),
+    ("I got injured like six years ago.", False),                         # a story (a station, 11-10)
+    ("Back in 2019 we had a house fire on our street, everybody got out.", False),
+    ("We haven't heard from his mother since the flood came through town.", True),
+    ("A hiker was injured two hours ago near the trailhead and needs help.", True),
+    ("155 EMS personnel are on scene.", True),
+])
+def test_greetings_and_old_stories_are_not_urgent(text, urgent):
+    got = [i for i in minutes.extract([{"id": "t", "start": "2026-11-12T20:00:00", "text": text, "speaker": "K7ABC"}])
+           if i["kind"] == "urgent"]
+    assert bool(got) is urgent, got
