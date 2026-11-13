@@ -34,19 +34,15 @@ try {
   Expand-Archive $zip (Join-Path $work 'x') -Force
   $root = (Get-ChildItem (Join-Path $work 'x') -Directory | Select-Object -First 1).FullName
   Rec 'station:install.2' ($marked -and $cleared -and (Test-Path "$root\install\windows\install.cmd")) "ZIP marked from the internet: $marked; Unblock cleared it: $cleared; extracted, install\windows\install.cmd present"
-  # 3 + 4 Run install.cmd, type the callsign, press Enter at the QRZ question
-  $answers = "$Callsign`r`n`r`n"                   # callsign, then Enter for the QRZ question
-  $args = @('-KeepAwake', 'off'); if (-not $Models) { $args += '-SkipModels' }
-  $out = Join-Path $work 'install.log'
-  $p = Start-Process cmd.exe -ArgumentList (@('/c', "`"$root\install\windows\install.cmd`"") + $args) -RedirectStandardInput (Join-Path $work 'in.txt') -RedirectStandardOutput $out -RedirectStandardError (Join-Path $work 'err.txt') -NoNewWindow -PassThru -Wait 2>$null
 } catch { Rec 'station:install.1' $false "setup failed: $_" }
-# Start-Process needs the stdin file before it runs: do it with the real call below
 try {
   Set-Content -Path (Join-Path $work 'in.txt') -Value "$Callsign`r`n`r`n`r`n" -Encoding ascii
+  $iargs = @('-KeepAwake', 'off'); if (-not $Models) { $iargs += '-SkipModels' }
   $out = Join-Path $work 'install.log'; $err = Join-Path $work 'err.txt'
-  $p = Start-Process cmd.exe -ArgumentList (@('/c', "`"$root\install\windows\install.cmd`"") + $args) -RedirectStandardInput (Join-Path $work 'in.txt') -RedirectStandardOutput $out -RedirectStandardError $err -NoNewWindow -PassThru
+  $p = Start-Process cmd.exe -ArgumentList (@('/c', "`"$root\install\windows\install.cmd`"") + $iargs) -RedirectStandardInput (Join-Path $work 'in.txt') -RedirectStandardOutput $out -RedirectStandardError $err -NoNewWindow -PassThru
   if (-not $p.WaitForExit(2400000)) { $p.Kill(); throw 'the installer did not finish in 40 minutes' }
   $log = (Get-Content $out -Raw -ErrorAction SilentlyContinue) + (Get-Content $err -Raw -ErrorAction SilentlyContinue)
+  Write-Host '----- installer output (last 60 lines) -----'; ($log -split "`n" | Select-Object -Last 60) | ForEach-Object { Write-Host $_ }; Write-Host '-----'
   Rec 'station:install.3' ($log -match 'Installed in') "install.cmd ran (exit $($p.ExitCode)); the installer reached its last step"
   Rec 'station:install.4' ($log -match '== Done') "the callsign was taken from the keyboard, the QRZ question skipped with Enter, and the installer ended with '== Done'"
   $dir = if ($log -match 'Installed in ([^.\r\n]+)\.') { $Matches[1].Trim() } else { 'C:\HAM-Sidekick-Station' }
