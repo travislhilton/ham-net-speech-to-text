@@ -35,6 +35,12 @@ def chrome() -> str:
     return shutil.which("google-chrome") or shutil.which("chromium") or ""
 
 
+PUBLIC_PDF = "https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/" \
+             "HamNet_Station_Quick_Reference_Card.pdf"   # README's link: served as application/pdf, so a phone opens it
+#  (GitHub's raw link is application/octet-stream: iPhone Safari stays on the old page). The CDN keeps a branch's
+#  copy up to 12 h: after pushing a new card, open https://purge.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf
+
+
 def main() -> int:
     html = phone.card_with_download(SRC.read_text(encoding="utf-8"), phone.REPO_URL)
     OUT.mkdir(exist_ok=True)

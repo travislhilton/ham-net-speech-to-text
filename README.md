@@ -35,7 +35,7 @@ HamNet Station listens to your radio and writes down every transmission a few se
 | | Best for | Link |
 |---|---|---|
 | **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip)** |
-| **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Download the PDF](https://github.com/travislhilton/ham-net-speech-to-text/raw/master/docs/HamNet_Station_Quick_Reference_Card.pdf)** |
+| **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf)** |
 
 The same ZIP is on this page under the green **Code** button → **Download ZIP**.
 
@@ -180,7 +180,7 @@ Two sides on one sheet: **Install and Get Started** on the front, **Running a Ne
 Church of Jesus Christ EMCOMM quick reference cards. Print it double-sided ("flip on long edge"), laminate it, and
 keep it by the radio. Works in black and white.
 
-**[Download the PDF](https://github.com/travislhilton/ham-net-speech-to-text/raw/master/docs/HamNet_Station_Quick_Reference_Card.pdf)** ·
+**[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf)** ·
 [view it on GitHub](https://github.com/travislhilton/ham-net-speech-to-text/blob/master/docs/HamNet_Station_Quick_Reference_Card.pdf) ·
 on the station: **Help** (top right of the dashboard) opens the same card; the browser's Print prints it.
 
