@@ -1680,7 +1680,7 @@ function connect(){
   const es=new EventSource("/events");
   es.onopen=()=>{$("conn").textContent="● live";$("conn").className="ok"};
   es.onerror=()=>{$("conn").textContent="● reconnecting…";$("conn").className="bad"};
-  es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HAM Sidekick Station";renderEngine(d.engines);all();renderPCNote()});
+  es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HAM Sidekick Station";renderEngine(d.engines);all();renderPCNote();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(false)});   // Nets opened before the first data arrived fills in
   es.addEventListener("tx",e=>{const t=JSON.parse(e.data);upsertTx(t);if(t.status==="final")boardSoon(t.radio)});
   es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
     if(m.chat){if(SK&&SK.rid===m.chat.radio){SK.chat=[...SK.chat.filter(x=>x.id!==m.chat.id),m.chat];if(m.chat.role==="assistant")SK.busy=false;if(SK.tab==="chat")skRender()}return}
