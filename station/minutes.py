@@ -361,6 +361,15 @@ def similar(a: str, b: str, th=0.6) -> bool:
     return bool(x and y) and len(x & y) / len(x | y) >= th
 
 
+def _in_spelled_call(s: str, m: re.Match) -> bool:
+    """A capitals cue hyphened into a spelled-out call sign ("K27-CPR-Block", "KQ7-EMS"): letters, not a report."""
+    w = m.group(0)
+    if not w.isupper():
+        return False
+    before, after = s[max(0, m.start() - 2):m.start()], s[m.end():m.end() + 2]
+    return bool(re.fullmatch(r"\w-", before) or re.fullmatch(r"-\w", after))
+
+
 def urgent_categories(s: str) -> list[str]:
     """The urgent categories a sentence reports, leaving out cues said with a negation ("no injuries")."""
     out = []
@@ -368,6 +377,8 @@ def urgent_categories(s: str) -> list[str]:
         for m in rx.finditer(s):
             if k == "fire" and (_fire_is_a_name(s, m) or _fire_not_a_fire(s, m)):
                 continue                                  # "Shelbyville Fire": a station; "fire tower": a thing
+            if _in_spelled_call(s, m):
+                continue
             if not NEGATED.search(s[max(0, m.start() - 30):m.start()]):
                 out.append(k)
                 break

@@ -182,3 +182,9 @@ def test_greetings_and_old_stories_are_not_urgent(text, urgent):
     got = [i for i in minutes.extract([{"id": "t", "start": "2026-11-12T20:00:00", "text": text, "speaker": "K7ABC"}])
            if i["kind"] == "urgent"]
     assert bool(got) is urgent, got
+
+
+def test_a_cue_spelled_into_a_call_sign_is_not_urgent():
+    roll = "And I want to thank Tony, K27-CPR-Block, IC-CAM-NIC-CIR, KQ7-EMS, this is K7ABC."
+    assert minutes.urgent_categories(roll) == []
+    assert minutes.urgent_categories("He needed CPR at the trailhead, the ambulance is on scene.") != []
