@@ -133,6 +133,9 @@ class Walk:
 
     def h_station_first_7(self):
         self.goto()
+        self.p.wait_for_timeout(3000)                                # the radio cards draw a moment after the page loads
+        if self.mode != "sandbox" and self.p.locator("[data-level]").count() == 0:
+            raise Skip("no radio is set up on this station yet, so there is no radio card with Set level…")
         b = self.p.locator("[data-level]").first
         b.wait_for(state="visible", timeout=15000)
         b.click()
@@ -215,6 +218,9 @@ class Walk:
 
     def h_station_log_net_board(self):
         self.goto()
+        self.p.wait_for_timeout(3000)
+        if self.mode != "sandbox" and self.p.locator("[data-tab=board]").count() == 0:
+            raise Skip("no radio is set up on this station yet, so there is no radio card with a Net board tab")
         tab = self.p.locator("[data-tab=board]").first
         tab.wait_for(state="visible", timeout=15000)
         tab.click()
@@ -252,8 +258,10 @@ class Walk:
         assert "ICS-309" in t and "ICS-213" in t, "no ICS-309 / ICS-213 in the preview"
         send = self.p.locator("#wlSend").first.inner_text() if self.p.locator("#wlSend").count() else ""
         btn = "Outbox" in send
-        assert btn or "Winlink Express folder" in send, f"no Outbox button and no Settings prompt (button says {send!r})"
+        wx_open = "Close Winlink Express" in send
+        assert btn or wx_open or "Winlink Express folder" in send, f"no Outbox button and no Settings prompt (button says {send!r})"
         return ("Winlink messages… shows the ICS-309 / ICS-213 preview and 'Put in Winlink Express Outbox' (never pressed)" if btn else
+                "Winlink messages… shows the ICS-309 / ICS-213 preview; Winlink Express is open on this PC, so the button says to close it first (step 5 of the card)" if wx_open else
                 "Winlink messages… shows the ICS-309 / ICS-213 preview; the Outbox button says 'Choose the Winlink Express folder in Settings' "
                 "until that is set (the card now says so)")
 
