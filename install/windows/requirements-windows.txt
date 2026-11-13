@@ -16,3 +16,4 @@ keyring>=25           # QRZ password in Windows Credential Manager
 segno>=1.6           # QR codes for "Open on a phone" (pure Python, works offline)
 anthropic>=2.8           # station agent: Claude as an optional comparison model (Draft mode)
 pycaw>=20240316       # Set level…: read/set the Windows recording level of a radio's sound input
+pypdf>=4.0            # Sidekick's knowledge library: text of PDFs the operator adds (pure Python, no dependencies)

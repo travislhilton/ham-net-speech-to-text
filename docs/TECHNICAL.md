@@ -184,6 +184,48 @@ net 5–7 minutes).
   .\.venv\Scripts\python.exe -m hamkit.qrz set-login     # asks for callsign + password, then tests
   ```
 
+## Sidekick's knowledge library
+
+`station/knowledge.py` gives Sidekick material to answer questions and give prepared talks from ("present this
+project and how to use it", "explain our EOC's Winlink setup"), with the source of every piece, instead of guessing.
+
+**Where it lives** (all under the data folder, which git ignores; nothing in it is ever committed):
+
+| Path | What |
+|---|---|
+| `data\knowledge\` | the operator's own files: `.md .txt .html .pdf .docx .csv`, subfolders too; copy files in or upload them |
+| `data\knowledge\notes\` | short notes with a title, one `.md` each (first line `Title: …`) |
+| `data\knowledge\web\` | pages fetched once from a URL (first line `URL: …`); fetched again only on demand |
+| `data\knowledge\index.db` | the search index (SQLite FTS5, bm25 ranking, porter stemming); a cache: delete it and it is rebuilt |
+
+Built in, from the install folder: `README.md`, `docs/MANUAL.md`, `docs/TECHNICAL.md`, `docs/ARCHITECTURE.md`,
+`station/static/card.html` and `station/static/sidekick_card.html`, re-indexed whenever one changes (an update).
+They cannot be removed.
+
+**Indexing.** Text is cut at headings (and at a manual-style `- **Feature**` bullet, so one long feature list is not
+one section), then at paragraphs and lines, into chunks of about 800–1200 characters with a 150-character overlap;
+each chunk keeps its source, its section heading and a stable id (a hash of all three). A file whose size and
+modification time have not changed is not read again; one whose bytes have not changed is not chunked again. A file
+that cannot be read (a damaged document, a scanned PDF with no text, `pypdf` missing) is listed with the reason and
+does not stop the rest. PDFs need `pypdf` (in `requirements-windows.txt`); `.docx` is read with `python-docx` if it
+is installed, otherwise straight from the file's `word/document.xml`. Limits: 20 MB a file, 200 MB for the operator's
+files, notes and pages together (the built-in documents do not count), 2 MB and 15 s for a web page, which must be
+`text/html` or `text/plain`. Without FTS5 in the PC's SQLite (the Windows Python 3.12 build has it) a slower LIKE
+search with a tf-idf score is used instead.
+
+**Questions from speech.** A question is lower-cased, spoken filler and small words are dropped ("um, so, how do
+I…"), spelled letters are joined ("E O C" → eoc), ham abbreviations are kept as words and a few get their long form
+too (EOC, ARES, RACES, RMS, CW → morse, PTT), and the remaining terms are searched with OR so a chunk need not hold
+every word; bm25 ranks chunks with more of the rarer terms first, a match in a section heading counting double.
+
+```python
+lib = Library(data_dir, install_dir)
+lib.search("how do I set the audio level", k=6)   # [{id, source, section, text, score, kind, name}]
+lib.context_for(question, budget_chars=6000)      # best chunks under [name › section] labels, for a prompt
+lib.outline(topic, budget_chars=12000)            # more chunks, grouped by source in document order: a talk
+lib.add_note(title, text); lib.add_url(url); lib.add_file(name, data); lib.remove(source); lib.list()
+```
+
 ## Home-network server (optional)
 
 When the station is on the home network it can upload each transmission to the home server
