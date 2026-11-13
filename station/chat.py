@@ -101,7 +101,7 @@ class Chat:
         return msg
 
     # ----- what the model is told -----
-    def context(self, rid: str, question: str) -> list[str]:
+    def context(self, rid: str, question: str, tools: bool = False) -> list[str]:
         from .agent import facts, privileges
         a, st = self.agent, self.st
         now = st.clock()
@@ -138,6 +138,8 @@ class Chat:
             for t in rows:
                 who = t.get("speaker") or (t.get("callsigns") or ["?"])[0]
                 out.append(f"[{str(t.get('start', ''))[11:19]}] {who}: {(t.get('text') or '').strip()}")
+        if tools:                                               # xAI chat: it has the tools instead
+            return out
         try:
             lib = a.library().context_for(question, 5000)
             if lib:
@@ -206,16 +208,22 @@ class Chat:
         def run():
             t0 = datetime.now()
             try:
-                from .agent import ANSWER_WORDS
+                from .agent import ANSWER_WORDS, TOOLS_NOTE, call_xai, call_xai_tools
                 system = CHAT_SYSTEM.format(name=a.name, call=self.st.me or "N0CALL",
                                             op=a.cfg.get("operator") or "the operator", words=ANSWER_WORDS)
                 past = [m for m in self.thread(rid, HISTORY_TURNS * 2 + 1) if m["id"] != q["id"]][-HISTORY_TURNS * 2:]
-                user = "\n".join([*self.context(rid, message), "", "The chat so far:",
+                user = "\n".join([*self.context(rid, message, fn is call_xai), "", "The chat so far:",
                                   *[f"{'Operator' if m['role'] == 'operator' else 'You'}: {m.get('text', '')}"
                                     + (f"\n  (words for the air: {m['say']})" if m.get("say") else "") for m in past],
                                   "", f"Operator: {message}"])
-                out, usage = fn(key, model, system, user, timeout=CHAT_TIMEOUT_S, schema=CHAT_SCHEMA,
-                                max_tokens=6000 if deep else 2500, name="chat")
+                if fn is call_xai:                              # xAI: the model asks for the library / a path itself
+                    from .toolbox import Toolbox
+                    out, usage = call_xai_tools(key, model, system + TOOLS_NOTE, user, Toolbox(a, rid),
+                                                timeout=CHAT_TIMEOUT_S, schema=CHAT_SCHEMA,
+                                                max_tokens=6000 if deep else 2500, name="chat")
+                else:
+                    out, usage = fn(key, model, system, user, timeout=CHAT_TIMEOUT_S, schema=CHAT_SCHEMA,
+                                    max_tokens=6000 if deep else 2500, name="chat")
                 msg = {"id": uuid.uuid4().hex[:8], "role": "assistant", "text": str(out.get("reply") or "").strip(),
                        "say": str(out.get("say") or "").strip(), "title": str(out.get("title") or "")[:80],
                        "model": model, "took_s": round((datetime.now() - t0).total_seconds(), 1),

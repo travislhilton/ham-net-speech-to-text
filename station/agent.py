@@ -598,6 +598,49 @@ def call_xai(key, model, system, user, timeout=MODEL_TIMEOUT_S, schema=SCHEMA, m
     return json.loads(d["choices"][0]["message"]["content"]), d.get("usage") or {}
 
 
+def _xai_post(key, body, timeout):
+    req = urllib.request.Request("https://api.x.ai/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def call_xai_tools(key, model, system, user, toolbox, timeout=MODEL_TIMEOUT_S, schema=SCHEMA, max_tokens=300,
+                   name="draft", rounds=4, post=None):
+    """call_xai, but the model may first call the toolbox's tools (station/toolbox.py) for up to `rounds` rounds; the
+    answer is then asked for in the schema with no tools (so its shape never depends on tool calling). Same return
+    as call_xai; usage also lists the tools called."""
+    post = post or _xai_post
+    msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    end = time.monotonic() + timeout
+    usage = {"tools": []}
+
+    def add(d):
+        for k, v in (d.get("usage") or {}).items():
+            if isinstance(v, (int, float)):
+                usage[k] = usage.get(k, 0) + v
+    for _ in range(rounds):
+        d = post(key, {"model": model, "max_tokens": max_tokens, "messages": msgs, "tools": toolbox.specs,
+                       "tool_choice": "auto"}, max(5.0, end - time.monotonic()))
+        add(d)
+        m = d["choices"][0]["message"]
+        calls = m.get("tool_calls") or []
+        if not calls:
+            break
+        msgs.append({"role": "assistant", "content": m.get("content") or "", "tool_calls": calls})
+        for c in calls:
+            fn = c.get("function") or {}
+            usage["tools"].append(fn.get("name"))
+            msgs.append({"role": "tool", "tool_call_id": c.get("id"),
+                         "content": toolbox.run(fn.get("name"), fn.get("arguments"))})
+    d = post(key, {"model": model, "max_tokens": max_tokens, "messages": msgs,
+                   "response_format": {"type": "json_schema", "json_schema": {"name": name, "schema": schema,
+                                                                              "strict": True}}},
+             max(5.0, end - time.monotonic()))
+    add(d)
+    return json.loads(d["choices"][0]["message"]["content"]), usage
+
+
 def call_anthropic(key, model, system, user, timeout=MODEL_TIMEOUT_S, schema=SCHEMA, max_tokens=1000, name="draft"):
     import anthropic                                   # install/windows/requirements-windows.txt
     client = anthropic.Anthropic(api_key=key, timeout=timeout, max_retries=0)
@@ -608,6 +651,11 @@ def call_anthropic(key, model, system, user, timeout=MODEL_TIMEOUT_S, schema=SCH
     text = next(b.text for b in resp.content if b.type == "text")
     return json.loads(text), {"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens}
 
+
+TOOLS_NOTE = ("\n\nTools: you can call search_library (this station's library: the operator's documents and manual), "
+              "list_sites and path_analysis (computed terrain paths between the operator's named sites). Call them "
+              "BEFORE answering anything about this station, its procedures or whether two places can talk; use their "
+              "results as authoritative, never estimate a path, and say plainly when a tool found nothing.")
 
 PROVIDERS = {"xai": ("XAI_API_KEY", call_xai), "anthropic": ("ANTHROPIC_API_KEY", call_anthropic)}
 
@@ -1342,7 +1390,14 @@ class Agent:
                                     question=p["question"], words=ANSWER_WORDS - 5)
         r = self.st.radios.get(rid) or {}
         extra = []
+        tools = None
+        if fn is call_xai:                                      # xAI: the model asks for the library / a path itself
+            from .toolbox import Toolbox
+            tools = Toolbox(self, rid)
+            system += TOOLS_NOTE
         try:
+            if tools:
+                raise LookupError                               # (no prefetched context: it has the tools)
             lib = self.library().context_for(p["question"], 6000)
             if lib:
                 extra = ["Reference material from the station's library (the operator's own documents and this "
@@ -1350,6 +1405,8 @@ class Agent:
         except Exception:  # noqa: BLE001 - the library is a help, never a failure
             pass
         try:
+            if tools:
+                raise LookupError
             from .topics import path_facts, sites_named
             named = sites_named(p["question"], self.topics.sites)
             if len(named) >= 2:
@@ -1365,8 +1422,12 @@ class Agent:
                           f"The question to answer: {p['question']} (asked by {p['asker']})."])
         t = time.monotonic()
         try:
-            out, usage = fn(key, model, system, user, timeout=DEEP_TIMEOUT_S, schema=THINK_SCHEMA, max_tokens=8000,
-                            name="answer")
+            if tools:
+                out, usage = call_xai_tools(key, model, system, user, tools, timeout=DEEP_TIMEOUT_S,
+                                            schema=THINK_SCHEMA, max_tokens=8000, name="answer")
+            else:
+                out, usage = fn(key, model, system, user, timeout=DEEP_TIMEOUT_S, schema=THINK_SCHEMA,
+                                max_tokens=8000, name="answer")
         except Exception as e:  # noqa: BLE001
             if is_network_error(e):
                 on.failed(e)
