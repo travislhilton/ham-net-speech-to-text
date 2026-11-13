@@ -94,8 +94,8 @@ accurate:                   # the accurate second pass: the home server when rea
   # the key goes in config\secrets.env as EMCOMM_STT_KEY=... (never in this file; kept across updates)
 
 # The download link printed on the reference card (Help) with its QR code, for people you train. Default: the public
-# project page, https://github.com/hamsidekick/hamsidekick; set your club's own copy here, or "" to print "ask the instructor" instead.
-# download_url: https://github.com/hamsidekick/hamsidekick
+# project page, https://github.com/travislhilton/hamsidekick; set your club's own copy here, or "" to print "ask the instructor" instead.
+# download_url: https://github.com/travislhilton/hamsidekick
 
 # A net still being heard after its scheduled end keeps going (recording, its own transmissions) until net control
 # closes it, it is quiet this many minutes, or just before the next net on the same radio; at most overrun_max_min.

@@ -4,7 +4,7 @@ $dl = "$env:USERPROFILE\hamsidekick-admin"; New-Item -ItemType Directory -Force 
 $zip = "$dl\hamsidekick-master.zip"; $dir = "$dl\hamsidekick-public"
 Remove-Item -Force $zip -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
 [Net.ServicePointManager]::SecurityProtocol = 'Tls12'
-Invoke-WebRequest -UseBasicParsing 'https://github.com/hamsidekick/hamsidekick/archive/refs/heads/master.zip' -OutFile $zip
+Invoke-WebRequest -UseBasicParsing 'https://github.com/travislhilton/hamsidekick/archive/refs/heads/master.zip' -OutFile $zip
 "zip bytes: $((Get-Item $zip).Length)"
 Expand-Archive $zip $dir
 $src = Get-ChildItem $dir -Directory | Select-Object -First 1

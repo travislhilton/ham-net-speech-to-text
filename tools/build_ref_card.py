@@ -36,10 +36,10 @@ def chrome() -> str:
     return shutil.which("google-chrome") or shutil.which("chromium") or ""
 
 
-PUBLIC_PDF = "https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/" \
+PUBLIC_PDF = "https://cdn.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/" \
              "HAM_Sidekick_Station_Quick_Reference_Card.pdf"   # README's link: served as application/pdf, so a phone opens it
 #  (GitHub's raw link is application/octet-stream: iPhone Safari stays on the old page). The CDN keeps a branch's
-#  copy up to 12 h: after pushing a new card, open https://purge.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf
+#  copy up to 12 h: after pushing a new card, open https://purge.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf
 
 
 CARDS = [(SRC, NAME), (ROOT / "station" / "static" / "sidekick_card.html", "HAM_Sidekick_Assistant_Quick_Reference_Card")]

@@ -1,4 +1,4 @@
-# HAM Sidekick Station (repo hamsidekick/hamsidekick) — working notes for Claude
+# HAM Sidekick Station (repo travislhilton/hamsidekick) — working notes for Claude
 
 - **The product is a standalone Windows 10/11 station**: any PC, any GPU/CPU, one or more radios, works offline.
   A home server (Apple silicon, mlx-whisper, `transcribe/`) is an optional accurate second pass.
@@ -16,7 +16,7 @@
 - **README + installer evolve with every change**: update README "Status" and the install steps in the same
   commit as the feature; `install/windows/install.ps1` must stay idempotent.
 - Tests: `.venv/bin/python -m pytest -q` from the repo root (706 green 2026-11-13; the README card link is jsDelivr (application/pdf) — after pushing a new card PDF, purge it: see tools/build_ref_card.py; `EMCOMM_FORMS_REPO=<forms checkout>` also runs the read-out end to end against its real EOC server).
-- **The repo is PUBLIC** (MIT, https://github.com/hamsidekick/hamsidekick, since 2026-11-05): every push
+- **The repo is PUBLIC** (MIT, https://github.com/travislhilton/hamsidekick, since 2026-11-05): every push
   is published. The reference card's download link defaults to it (`station/phone.py` REPO_URL). Real callsigns
   heard on nets never go in tests: use calls checked unassigned in the FCC database.
 - Whisper runs only through `transcribe/engine.py` on the server; the station's engines are in `station/engine.py`.

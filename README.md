@@ -7,7 +7,7 @@ Live speech-to-text for **amateur radio voice nets**, on a Windows PC connected 
 HAM Sidekick Station listens to your radio and writes down every transmission a few seconds after the station unkeys. It shows who is talking, looks up every callsign in the FCC (Federal Communications Commission) database, explains Q-codes and prowords, coaches a newer operator through check-ins, relays and emergency traffic, and keeps each net's log, minutes and history. After the net it builds the **ICS-309** communications log and **ICS-213** summary for Winlink Express. It works with **no internet** once installed; a bigger home computer, when there is one, can re-read the net more accurately.
 
 > **Renamed 2026-11:** this project was called *HamNet Station* (repository `ham-net-speech-to-text`). It is now **HAM Sidekick Station**
-> (`hamsidekick/hamsidekick`; the old address redirects). Run the installer again on an existing PC: it moves the scheduled tasks,
+> (`travislhilton/hamsidekick`; the old address redirects). Run the installer again on an existing PC: it moves the scheduled tasks,
 > firewall rule and desktop shortcut to the new names and keeps your folder (`C:\ham-net-speech-to-text`), settings, logs and
 > recordings. A new PC installs to `C:\HAM-Sidekick-Station`. *Sidekick* is also the on-air name of the optional assistant.
 
@@ -39,15 +39,15 @@ HAM Sidekick Station listens to your radio and writes down every transmission a 
 
 | | Best for | Link |
 |---|---|---|
-| **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/hamsidekick/hamsidekick/archive/refs/heads/master.zip)** |
-| **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf)** |
+| **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/travislhilton/hamsidekick/archive/refs/heads/master.zip)** |
+| **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf)** |
 | Sidekick: **up to 3 questions** worked on at once, answered in the order asked; outside a net a ready answer is **given at a pause** (3.5 s quiet, a turn-over, or when asked: "This is W9XYZ Sidekick, for K7ABC: …"), with the disclosure when it is the first transmission; in a net it still announces and waits for net control. "What did you find?" / "give us your answer" ask for it | built 2026-11-12 |
 | Sidekick **Chat & prepared…** (`station/chat.py`, `station/topics.py`; a dialog from each radio's Sidekick card): a private **chat** with Grok, never transmitted, told this radio's frequency, band and your privileges, the net on now (net control, check-ins with names and towns, traffic, regulars not heard), the last transmissions, the last session's minutes, the **Library** and computed terrain paths between your **Sites** (name | lat, lon | height | note; kept on the PC only); words for the air it writes are Part 97 checked and can be **saved to Prepared**. **Prepared**: saved words and **talks** (a training topic written by the thinking model from the Library, split into one-transmission parts that end handing back to net control with the ID); every item has **▶ Hear** (this PC only, never the radio), edit, **Approve** (bound to the words: an edit un-approves), **Send now** (Send mode only) and **Arm**: then *"Sidekick, present the topic"* / *"continue"* on the net says the approved words exactly, no model in the loop | built 2026-11-12, browser-tested on the demo station (`tests/test_topics_chat.py`) |
 | Sidekick **Send** (a third position on a radio's Sidekick switch, offered only when that radio's Transmit switch is on; off by default): a draft that would speak is said on the air after a **3 s countdown** ("Sending in 3… Stop (Esc)"), only while the control operator is **at the station** (keyboard or mouse on the dashboard in the last 3 min), with listen-before-talk (carrier or voice, or anything new heard, cancels it), the frequency known, PTT through the radio's transmitter watchdog. **Esc, Stop or any click drops PTT at once.** The chosen Grok voice, else this PC's Windows voice offline. The ID clock, disclosure, check-in and prepared answers move on only when really sent. Logged to `data/agent_sends.jsonl` (`station/sender.py`, `tests/test_send.py`) | built 2026-11-12, not yet keyed on a real radio |
 | **Transmit test…** (Radios… → a radio with Transmit on: tick *a dummy load is connected*, then **Tone + ID** (5 s 1 kHz tone, then your call by voice) or **Phrase + ID**): same 3 s countdown, presence, listen-before-talk and Esc as Send, never moves Sidekick's ID clock; sets **Drive level** (0.02-1.0, the deviation), **Lead** and **Tail**, which Send then uses too (`station/sender.py`, `tests/test_send.py`) | built 2026-11-13, not yet keyed on a real radio |
 | **Fixed lines kept ahead** (`station/tts.py` `prerender`): when Sidekick is on (at station start, and when its name, operator, voice or speed change) the voice clips of the rules' fixed words (check-in, acknowledgement, first-time introduction, the transmitter test) are made and kept in the chosen voice, so the first check-in on the air does not wait on the voice service; quiet with no key or no internet | built 2026-11-13 |
 | **Tools for the thinking model** (`station/toolbox.py`, `agent.call_xai_tools`): with xAI, a deep answer and the private chat no longer get the library and path analyses pasted in as context; the model calls `search_library`, `list_sites` and `path_analysis` itself (up to 4 rounds, results bounded, failures returned as text), then gives its answer in the fixed schema. Other providers keep the pasted context | built 2026-11-13, tested with a scripted xAI (`tests/test_toolbox.py`) |
-| **Sidekick card** (two sides, US Letter) | Setting up Sidekick and reading it on a net | **[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf)** |
+| **Sidekick card** (two sides, US Letter) | Setting up Sidekick and reading it on a net | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf)** |
 
 The same ZIP is on this page under the green **Code** button → **Download ZIP**.
 
@@ -55,7 +55,7 @@ The same ZIP is on this page under the green **Code** button → **Download ZIP*
 
 ## Install
 
-1. **Download** the [ZIP package](https://github.com/hamsidekick/hamsidekick/archive/refs/heads/master.zip) and save it anywhere.
+1. **Download** the [ZIP package](https://github.com/travislhilton/hamsidekick/archive/refs/heads/master.zip) and save it anywhere.
 2. **Unblock** — right-click the ZIP → Properties → tick **Unblock** → OK *(skip it if there is no Unblock box)*.
 3. **Extract** — right-click the ZIP → **Extract All** → Extract.
 4. **Run the installer** — in the extracted folder open `install` → `windows` and double-click **`install.cmd`**. Press **Yes** when Windows asks for administrator rights. If Windows shows "Windows protected your PC", click **More info** → **Run anyway**.
@@ -192,12 +192,12 @@ Two sides on one sheet: **Install and Get Started** on the front, **Running a Ne
 Church of Jesus Christ EMCOMM quick reference cards. Print it double-sided ("flip on long edge"), laminate it, and
 keep it by the radio. Works in black and white.
 
-**[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf)** ·
-[view it on GitHub](https://github.com/hamsidekick/hamsidekick/blob/master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf) ·
+**[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf)** ·
+[view it on GitHub](https://github.com/travislhilton/hamsidekick/blob/master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf) ·
 on the station: **Help** (top right of the dashboard) opens the same card; the browser's Print prints it.
 
 **Sidekick card** (two sides: setting up Sidekick, and Sidekick on a net):
-**[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf)** ·
+**[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf)** ·
 on the station: **Settings → Station agent → Sidekick card**, or **Card** on Sidekick's card on a radio.
 
 The card's QR code opens this download page. A club handing out its own copy sets `download_url:` in
@@ -314,7 +314,7 @@ segmenting, the accurate pass, the home server.
 
 ## Support, feedback and bug reports
 
-Found a problem, or have an idea? Anyone with a GitHub account can **[open an issue](https://github.com/hamsidekick/hamsidekick/issues/new)**: say what you did, what you saw, the radio and interface, and the time of the transmission. Please don't post recordings of other operators' transmissions or their personal details.
+Found a problem, or have an idea? Anyone with a GitHub account can **[open an issue](https://github.com/travislhilton/hamsidekick/issues/new)**: say what you did, what you saw, the radio and interface, and the time of the transmission. Please don't post recordings of other operators' transmissions or their personal details.
 
 ## Contributing — developing this project
 
