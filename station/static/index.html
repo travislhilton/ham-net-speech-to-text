@@ -540,6 +540,7 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamsidekick.display
   <h4>Net alerts</h4><div id="alertSet" class="small"></div>
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <h4>Local names</h4><div id="lnSet" class="small"></div>
+  <h4>Share settings with another station</h4><div id="shareSet" class="small"></div>
   <h4>Station agent (optional) <a class="small" href="/help/sidekick" target="_blank" rel="noopener" style="font-weight:400">Sidekick card (set up and use, printable)</a></h4><div id="agentSet" class="small"></div><div id="keySet" class="small"></div>
   <h4>Sidekick's voice</h4><div id="voiceSet" class="small"></div>
   <h4>Grok speech-to-text (compared)</h4><div id="grokSet" class="small"></div>
@@ -1475,7 +1476,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";f.keep_weeks.value=op.keep_weeks||6;f.keep_weeks.dataset.was=op.keep_weeks||6;
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";loadPC();renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();loadVoice();loadGrok();$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";loadPC();renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();renderShare();loadVoice();loadGrok();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -2531,6 +2532,46 @@ function renderGrok(msg){
       out.innerHTML=c.items.length?`<table class="small"><tr><th>against</th><th>n</th><th>word errors: this station</th><th>Grok</th><th>calls found: this station</th><th>Grok</th><th>Grok time</th></tr>${rows}</table><p class="muted">${esc(c.note)}</p>`
         +c.items.slice(-40).reverse().map(i=>`<div class="meta">${esc((i.start||"").slice(11,19))} ${esc(i.radio)}${i.live_wer?` · this station ${pc(i.live_wer.wer)} · Grok ${pc(i.grok_wer.wer)}`:""}<br>station: ${esc(i.live||"")}<br>Grok: ${esc(i.grok||"")}${i.ref?`<br>${i.ref_from}: ${esc(i.ref)}`:""}</div>`).join(""):'<p class="muted">Nothing compared today yet.</p>'}
     catch(e){out.textContent=e.message}};
+}
+// ----- Settings -> Share settings (station/portable.py): export this station's schedule + Sidekick choices + local names, import another's -----
+let SH={doc:null,prev:null,map:{},msg:null};
+function renderShare(){
+  const box=$("shareSet");if(!box)return;
+  if(!$("shExport")){                                   // the static part: built once, so the chosen file survives redraws
+    box.innerHTML=`<p class="muted">Move your <b>net schedule</b>, <b>Sidekick's choices</b> and <b>local names</b> to another station, or take another station's. The file holds no keys, no call sign and nothing about your radios; a net names its radio by a hint (name, band, mode) and you choose the matching radio here when you import. Importing never deletes: a net with the same name and start time is updated, new ones are added, and your current files are saved first.</p>
+     <div class="row"><label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="shIdent" style="width:auto"> include my Sidekick identity (its on-air name, my check-in line, my first name, region)</label></div>
+     <div class="row"><button type="button" id="shExport">Export settings…</button>
+      <input type="file" id="shFile" accept=".json,application/json"> <button type="button" id="shPrev">Preview import…</button> <span id="shMsg"></span></div>
+     <div id="shBox"></div>`;
+    $("shExport").onclick=()=>{location.href="/api/settings-pack"+($("shIdent").checked?"?identity=1":"")};
+    $("shFile").onchange=()=>{SH.prev=null;SH.doc=null;SH.msg=null;renderShare()};
+    $("shPrev").onclick=async()=>{try{const f=$("shFile").files[0];if(!f){SH.msg={text:"Choose a settings file first.",bad:true};renderShare();return}
+      SH.doc=JSON.parse(await f.text());SH.map={};SH.prev=await post("/api/settings-pack/preview",{doc:SH.doc});SH.msg=null;renderShare()}
+      catch(e){SH.prev=null;SH.msg={text:e.message,bad:true};renderShare()}};
+  }
+  const m=$("shMsg");m.className=SH.msg&&SH.msg.bad?"bad":"ok";m.textContent=(SH.msg||{}).text||"";
+  const p=SH.prev;let h="";
+  if(p){
+    const n=p.nets;
+    h+=`<div class="rad"><b>What this import would do</b><ul>
+      <li>Nets: <b>${n.add}</b> new, <b>${n.update}</b> updated, ${n.unchanged} already the same${n.invalid.length?`, <span class="bad">${n.invalid.length} skipped</span>`:""} (of ${n.total}).</li>
+      <li>Local names: ${p.local_names.added} new, ${p.local_names.updated} updated.</li>
+      <li>Sidekick: ${p.sidekick.length?p.sidekick.map(c=>`<code>${esc(c.field)}</code>`).join(", ")+" would change":"nothing changes"}${p.identity?"":" (the file has no Sidekick identity)"}.</li></ul>
+      ${p.radios.length?`<p class="small">Which radio here does each of the other station's radios become? <span class="muted">A net whose radio is left at “none” is kept on the schedule and not recorded until you pick one (Nets).</span></p>
+      <table class="tier-table">${p.radios.map(r=>`<tr><td>${esc(r.name||r.key)} <span class="muted">${esc(r.freq_mhz||"")} ${esc(r.mode||"")} · ${r.nets} net${r.nets===1?"":"s"}</span></td>
+        <td><select data-shmap="${esc(r.key)}"><option value="">none</option>${p.targets.map(t=>`<option value="${esc(t.id)}"${(SH.map[r.key]!==undefined?SH.map[r.key]:r.chosen)===t.id?" selected":""}>${esc(t.name||t.id)} (${esc(t.freq_mhz||"")} ${esc(t.mode||"")})</option>`).join("")}</select></td></tr>`).join("")}</table>`:""}
+      ${n.invalid.length?`<p class="small bad">Skipped: ${n.invalid.map(b=>esc(b.name+": "+b.why)).join("; ")}</p>`:""}
+      <div class="row"><button type="button" class="primary" id="shApply">Import these settings</button> <button type="button" id="shCancel">Cancel</button></div></div>`;
+  }
+  const box2=$("shBox");box2.innerHTML=h;
+  box2.querySelectorAll("[data-shmap]").forEach(s=>s.onchange=async()=>{SH.map[s.dataset.shmap]=s.value;
+    try{SH.prev=await post("/api/settings-pack/preview",{doc:SH.doc,radio_map:SH.map});renderShare()}catch(e){}});
+  const ap=$("shApply");if(ap)ap.onclick=async()=>{try{
+    const map={};for(const r of SH.prev.radios)map[r.key]=SH.map[r.key]!==undefined?SH.map[r.key]:(r.chosen||"");
+    const r=await post("/api/settings-pack/apply",{doc:SH.doc,radio_map:map});SH.prev=null;SH.doc=null;
+    SH.msg={text:`Imported: ${r.added} nets added, ${r.updated} updated${r.sidekick_fields.length?`; Sidekick: ${r.sidekick_fields.join(", ")}`:""}. Your earlier files are in ${r.backup||"(nothing to back up)"}.`};
+    $("shFile").value="";renderShare()}catch(e){SH.msg={text:e.message,bad:true};renderShare()}};
+  const cn=$("shCancel");if(cn)cn.onclick=()=>{SH.prev=null;SH.doc=null;SH.msg=null;$("shFile").value="";renderShare()};
 }
 // ----- Settings → Local names (station/localnames.py): the area's clubs, repeaters and web sites -----
 let LN=null;

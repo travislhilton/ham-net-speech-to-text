@@ -166,6 +166,18 @@ you chose is remembered. Each column shows:
     station stopped. **Export area pack** saves the list (no callsigns, nothing personal) for other operators in
     your area; they **Import** it (a file or an https address) or put it beside `install.cmd`
     (`install.ps1 -AreaPack <file or address>` also works). Kept in `data\local_names.json`.
+  - **Share settings with another station** (Settings → the section of that name; `station/portable.py`): **Export
+    settings…** saves one file with this station's **net schedule**, **Sidekick's choices** and **local names**. A net
+    names its radio by a hint (the radio's name, band and mode), because a radio's id means nothing on another PC.
+    Tick *include my Sidekick identity* to take the on-air name, your check-in line, first name and region too (leave
+    it off for a file you give to other people). On the other station choose the file and press **Preview import…**:
+    it lists what would be added or updated, suggests which of that station's radios each radio becomes (the same
+    name, else the only one of the same band and mode; pick another or *none*), and **Import these settings** applies
+    it. A net left on *none* stays on the schedule and is not recorded until you give it a radio (Nets). Never in the
+    file: keys, call sign, radios, sound inputs, PTT, history, which radios Sidekick is on, whether it is switched on.
+    Importing never deletes (a net with the same name and start time is updated and keeps its clash settings), and the
+    files it replaces are first copied to `data\settings_backups\<time>\`. For a whole-PC backup (including keys) use
+    `tools\settings_bundle.ps1 -Backup` instead.
   - **Accuracy (from your corrections)** (in **Test transcription…**, under the test history): the word error rate
     of the live text, the accurate pass and the consensus text against everything you corrected, per radio, mode
     and net, with how many lines it is based on (under 20 is a rough guide; your eye starts from the text shown).

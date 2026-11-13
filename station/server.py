@@ -6,6 +6,7 @@ import queue
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from datetime import datetime
 from urllib.parse import unquote, parse_qs, urlparse
 
 from .schedule import NoSuchNet
@@ -142,6 +143,12 @@ def make_handler(station):
                 return self._json(station.learned())
             if u.path == "/api/local-names":                     # Settings → Local names (station/localnames.py)
                 return self._json(station.local_names())
+            if u.path == "/api/settings-pack":                   # Settings -> Share settings: the export, as a download
+                from . import portable
+                ident = (parse_qs(u.query).get("identity") or ["0"])[0] == "1"
+                body = json.dumps(portable.export(station, ident), indent=1, ensure_ascii=False).encode("utf-8")
+                return self._send(200, body, "application/json; charset=utf-8",
+                                  {"Content-Disposition": f'attachment; filename="hamsidekick-settings-{datetime.now():%Y%m%d}.json"'})
             if u.path == "/api/local-names/pack":                # the area pack, as a download
                 from . import localnames
                 d = station.local_names()
@@ -209,7 +216,7 @@ def make_handler(station):
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes", "/api/learned", "/api/local-names", "/api/local-names/import",
-                      "/api/pc/measure", "/api/pc/seen"}
+                      "/api/pc/measure", "/api/pc/seen", "/api/settings-pack/preview", "/api/settings-pack/apply"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
@@ -281,6 +288,10 @@ def make_handler(station):
                                                                          noise=bool(body.get("noise")))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
+                if u.path in ("/api/settings-pack/preview", "/api/settings-pack/apply"):    # {"doc", "radio_map"}
+                    from . import portable
+                    fn = portable.preview if u.path.endswith("preview") else portable.apply
+                    return self._json(fn(station, body.get("doc"), body.get("radio_map")))
                 if u.path in ("/api/local-names", "/api/local-names/import"):    # {"names", "area"} | {"pack"} | {"url"}
                     return self._json(station.local_names("import" if u.path.endswith("import") else "save", body))
                 if u.path == "/api/learned":                    # {"action": accept|ignore|unignore|remove, heard, say}
