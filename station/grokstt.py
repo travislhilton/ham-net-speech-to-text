@@ -43,7 +43,7 @@ KEYTERMS_MAX = 100        # xAI's limits: 100 terms, 50 characters each
 
 def multipart(fields: list[tuple[str, str]], wav: bytes, filename="clip.wav") -> tuple[bytes, str]:
     """multipart/form-data with `file` LAST (xAI: fields after the file may be ignored)."""
-    b = "----hamnet" + uuid.uuid4().hex
+    b = "----hamsidekick" + uuid.uuid4().hex
     out = []
     for k, v in fields:
         out.append(f"--{b}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())

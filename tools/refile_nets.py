@@ -7,7 +7,7 @@ For transmissions filed under the wrong net (2026-11-11: two nets on one radio, 
 filed under the club net). Each final transmission in the window is given station/schedule.occurrence_at(...) for its
 start and frequency, with nothing counted as ended; the net closes are left alone. --apply appends one
 {"update": id, "net": ...} line per change to the day log (the station and its history index apply them as they do a
-net close's re-tag) — stop the station first (schtasks /end /tn "HamNet Station") and start it after, so its memory
+net close's re-tag) — stop the station first (schtasks /end /tn "HAM Sidekick Station") and start it after, so its memory
 reloads the log.
 """
 from __future__ import annotations

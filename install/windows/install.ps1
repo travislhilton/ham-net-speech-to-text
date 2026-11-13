@@ -1,16 +1,16 @@
 <#
-ham-net-speech-to-text: install or update the standalone Windows station. Idempotent: run it again
+HAM Sidekick Station: install or update the standalone Windows station. Idempotent: run it again
 after every update. Needs administrator rights and internet the first time (~4 GB of downloads:
 Python packages, four Whisper models, the FCC license database; more with an NVIDIA card).
 
   install.cmd                              (double-click; elevates and runs this)
-  install.ps1 [-InstallDir C:\ham-net-speech-to-text] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz] [-SkipVoice]
+  install.ps1 [-InstallDir C:\HAM-Sidekick-Station] [-Callsign W9XYZ] [-SkipModels] [-SkipCallbook] [-SkipQrz] [-SkipVoice]
               [-AreaPack <file or https address>]   (else an area-pack.json beside install.cmd is imported)
               [-KeepAwake traffic|listening|always|off]   (answers the power-settings question)
               [-Remeasure]                         (measure this PC again on an update)
 #>
 param(
-  [string]$InstallDir = 'C:\ham-net-speech-to-text',
+  [string]$InstallDir = '',
   [string]$Callsign = '',
   [switch]$SkipModels,
   [switch]$SkipCallbook,
@@ -21,6 +21,9 @@ param(
   [switch]$Remeasure
 )
 $ErrorActionPreference = 'Stop'
+# A PC installed before the 2026-11 rename (as ham-net-speech-to-text) keeps its folder: moving a 4 GB environment, the models and
+# the logs gains nothing. A new PC gets C:\HAM-Sidekick-Station.
+if (-not $InstallDir) { $InstallDir = if (Test-Path 'C:\ham-net-speech-to-text\.venv') { 'C:\ham-net-speech-to-text' } else { 'C:\HAM-Sidekick-Station' } }
 $Src = (Resolve-Path "$PSScriptRoot\..\..").Path
 function Step($m) { Write-Host "`n== $m" -ForegroundColor Cyan }
 # Windows PowerShell 5.1 turns a native program's stderr (progress bars, pip warnings) into a
@@ -104,14 +107,28 @@ Run { & $vpy -m pip install -q --upgrade pip }
 Run { & $vpy -m pip install -q torch --index-url https://download.pytorch.org/whl/cpu }
 Run { & $vpy -m pip install -q -r "$InstallDir\install\windows\requirements-windows.txt" }
 # Let `python -m hamkit...` work from any folder (not only when PowerShell is in the install dir)
-Set-Content -Path "$venv\Lib\site-packages\ham-net-speech-to-text.pth" -Value $InstallDir -Encoding ascii
+Set-Content -Path "$venv\Lib\site-packages\hamsidekick.pth" -Value $InstallDir -Encoding ascii
+Remove-Item "$venv\Lib\site-packages\ham-net-speech-to-text.pth" -ErrorAction SilentlyContinue
 
 Step "Machine settings"
 $data = "$InstallDir\data"
 New-Item -ItemType Directory -Force "$data\callbook", "$data\recordings", "$InstallDir\models" | Out-Null
-[Environment]::SetEnvironmentVariable('HAMNET_HOME', $InstallDir, 'Machine')
+[Environment]::SetEnvironmentVariable('HAMSIDEKICK_HOME', $InstallDir, 'Machine')
 [Environment]::SetEnvironmentVariable('CALLBOOK_DIR', "$data\callbook", 'Machine')
-$env:HAMNET_HOME = $InstallDir; $env:CALLBOOK_DIR = "$data\callbook"
+$env:HAMSIDEKICK_HOME = $InstallDir; $env:CALLBOOK_DIR = "$data\callbook"
+Step "Older names (this program was called HamNet Station until 2026-11)"
+foreach ($old in 'HamNet Station', 'HamNet Callbook Update') {
+  if (Get-ScheduledTask -TaskName $old -ErrorAction SilentlyContinue) {
+    Stop-ScheduledTask -TaskName $old -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $old -Confirm:$false
+    Write-Host "  removed the old scheduled task '$old' (re-registered below under the new name)"
+  }
+}
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*-m station*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Remove-NetFirewallRule -Name 'HamNet-Station-8091' -ErrorAction SilentlyContinue
+Remove-Item "$env:PUBLIC\Desktop\HamNet Station.url" -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable('HAMNET_HOME', $null, 'Machine')
 $station = "$InstallDir\config\station.yaml"
 if (-not (Test-Path $station)) {
   if (-not $Callsign) { $Callsign = Read-Host 'Your callsign (for hints and IDs)' }
@@ -203,15 +220,15 @@ if (-not $SkipQrz) {
   Pop-Location
 }
 
-Step "Power plan 'HamNet Station' (the station switches to it only while transcribing)"
+Step "Power plan 'HAM Sidekick Station' (the station switches to it only while transcribing)"
 # Laptops slow themselves right down when the screen goes dark (README "On a laptop"). While a radio listens or the
 # accurate pass runs, the station saves the operator's own plan + power mode, switches to this one (and Best
-# performance), and puts them back afterwards (station/awake.py). Same GUID as station/awake.py HAMNET_PLAN.
+# performance), and puts them back afterwards (station/awake.py). Same GUID as station/awake.py STATION_PLAN.
 $hn = '6f1c2d4e-8a3b-4c5d-9e7f-48616d4e6574'
 $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 powercfg /query $hn 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) { powercfg /duplicatescheme 381b4222-f694-41f0-9685-ff5bb260df2e $hn | Out-Null }   # from Balanced
-powercfg /changename $hn 'HamNet Station' 'Full speed while HamNet Station transcribes; switched on and off by the station' | Out-Null
+powercfg /changename $hn 'HAM Sidekick Station' 'Full speed while HAM Sidekick Station transcribes; switched on and off by the station' | Out-Null
 $hnSet = @(   # subgroup, setting, value (on mains AND battery: it is active only while transcribing)
   @('SUB_SLEEP', 'STANDBYIDLE', 0), @('SUB_SLEEP', 'HIBERNATEIDLE', 0), @('SUB_SLEEP', 'UNATTENDSLEEP', 0),
   @('SUB_VIDEO', 'VIDEOIDLE', 0), @('SUB_VIDEO', 'VIDEOCONLOCK', 0), @('SUB_BUTTONS', 'LIDACTION', 0),
@@ -229,7 +246,7 @@ $ErrorActionPreference = $old
 Write-Host '  ready (your own power plan stays active; set it for battery life as you like)'
 
 if (-not $SkipModels) {
-  # Both benchmarks with the screen and system held awake on the HamNet plan (station/pccheck.py): a laptop measured
+  # Both benchmarks with the screen and system held awake on the HAM Sidekick power plan (station/pccheck.py): a laptop measured
   # with its screen off runs at a quarter of its speed and would get a slower engine than it can run (2026-11-12).
   # An update keeps the earlier measurement unless -Remeasure or there is none yet.
   $eng = "$InstallDir\config\engine.yaml"
@@ -237,12 +254,12 @@ if (-not $SkipModels) {
     Step "Measuring this PC at full speed (screen held on; ~3-8 min, leave the PC plugged in)"
     # The station shares the graphics and switches power plans: off for the measurement. Its task is DISABLED, not
     # only stopped: the 2-minute watchdog trigger started it again mid-measurement (2026-11-12, a test install).
-    $task = Get-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue
-    if ($task) { Disable-ScheduledTask -TaskName 'HamNet Station' | Out-Null; Stop-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue }
+    $task = Get-ScheduledTask -TaskName 'HAM Sidekick Station' -ErrorAction SilentlyContinue
+    if ($task) { Disable-ScheduledTask -TaskName 'HAM Sidekick Station' | Out-Null; Stop-ScheduledTask -TaskName 'HAM Sidekick Station' -ErrorAction SilentlyContinue }
     Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*-m station*' -and $_.CommandLine -notlike '*pccheck*' } |
       ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     try { Run { & $vpy -m station.pccheck measure --data "$InstallDir\data" --models "$InstallDir\models" --out $eng } }
-    finally { if ($task) { Enable-ScheduledTask -TaskName 'HamNet Station' | Out-Null } }   # re-registered + started below
+    finally { if ($task) { Enable-ScheduledTask -TaskName 'HAM Sidekick Station' | Out-Null } }   # re-registered + started below
   } else {
     Step "This PC was measured before (kept; -Remeasure or Settings -> This PC measures again)"
   }
@@ -255,7 +272,7 @@ $asked = $false
 $mode = $KeepAwake
 if (-not $mode -and -not $asked) {
   Write-Host '  Laptops run several times slower once the screen goes dark, so while the station transcribes it can keep'
-  Write-Host '  the screen on and switch to its own "HamNet Station" power plan at Best performance, then put your own'
+  Write-Host '  the screen on and switch to its own "HAM Sidekick Station" power plan at Best performance, then put your own'
   Write-Host '  plan back. When should it do that?'
   Write-Host '    1  During nets and traffic (recommended)'
   Write-Host '    2  The whole time a radio listens'
@@ -275,17 +292,17 @@ $act = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.fcc update' -W
 $act2 = New-ScheduledTaskAction -Execute $vpy -Argument '-m hamkit.dxcc update' -WorkingDirectory $InstallDir
 $trg = New-ScheduledTaskTrigger -Daily -At 4:15am
 $set = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
-Register-ScheduledTask -TaskName 'HamNet Callbook Update' -Action $act, $act2 -Trigger $trg -Settings $set `
+Register-ScheduledTask -TaskName 'HAM Sidekick Callbook Update' -Action $act, $act2 -Trigger $trg -Settings $set `
   -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
 Write-Host '  registered (runs when online; catches up after a missed day)'
 
 Step "Station service (dashboard http://localhost:8091/)"
 # Port 8091 from this PC's home network and Tailscale only (the dashboard shows callbook addresses)
-if (-not (Get-NetFirewallRule -Name 'HamNet-Station-8091' -ErrorAction SilentlyContinue)) {
-  New-NetFirewallRule -Name 'HamNet-Station-8091' -DisplayName 'HamNet Station dashboard' -Direction Inbound `
+if (-not (Get-NetFirewallRule -Name 'HAM-Sidekick-Station-8091' -ErrorAction SilentlyContinue)) {
+  New-NetFirewallRule -Name 'HAM-Sidekick-Station-8091' -DisplayName 'HAM Sidekick Station dashboard' -Direction Inbound `
     -Protocol TCP -LocalPort 8091 -Action Allow | Out-Null
 }
-Set-NetFirewallRule -Name 'HamNet-Station-8091' -Enabled True -Profile Any `
+Set-NetFirewallRule -Name 'HAM-Sidekick-Station-8091' -Enabled True -Profile Any `
   -RemoteAddress @('LocalSubnet', '100.64.0.0/10', '127.0.0.1')
 # Start at logon in the operator's own session: audio inputs and the QRZ password (Credential Manager)
 # belong to that session. pythonw = no console window; output goes to data\station.log.
@@ -300,14 +317,14 @@ $sTrg2 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval 
 $sSet = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 `
   -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
 $sPrn = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName 'HamNet Station' -Action $sAct -Trigger $sTrg, $sTrg2 -Settings $sSet -Principal $sPrn `
-  -Description 'Live voice-net transcription and dashboard (ham-net-speech-to-text)' -Force | Out-Null
-Set-Content -Path "$env:PUBLIC\Desktop\HamNet Station.url" -Value "[InternetShortcut]`r`nURL=http://localhost:8091/" -Encoding ascii
-Stop-ScheduledTask -TaskName 'HamNet Station' -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName 'HAM Sidekick Station' -Action $sAct -Trigger $sTrg, $sTrg2 -Settings $sSet -Principal $sPrn `
+  -Description 'Live voice-net transcription and dashboard (HAM Sidekick Station)' -Force | Out-Null
+Set-Content -Path "$env:PUBLIC\Desktop\HAM Sidekick Station.url" -Value "[InternetShortcut]`r`nURL=http://localhost:8091/" -Encoding ascii
+Stop-ScheduledTask -TaskName 'HAM Sidekick Station' -ErrorAction SilentlyContinue
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*-m station*' } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-Start-ScheduledTask -TaskName 'HamNet Station'
-Write-Host "  started; it also starts at every logon for $user. Open the 'HamNet Station' shortcut on the desktop."
+Start-ScheduledTask -TaskName 'HAM Sidekick Station'
+Write-Host "  started; it also starts at every logon for $user. Open the 'HAM Sidekick Station' shortcut on the desktop."
 
 Step "Done"
 $gpu = (Get-CimInstance Win32_VideoController | ForEach-Object { "$($_.Name) (driver $($_.DriverVersion))" }) -join '; '

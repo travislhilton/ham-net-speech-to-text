@@ -137,7 +137,7 @@ def _meta(con, k, v=None):
     con.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", (k, v)); con.commit()
 
 
-UA = "ham-net-speech-to-text"
+UA = "HAM-Sidekick-Station"
 
 
 def _curl(*args) -> bytes:

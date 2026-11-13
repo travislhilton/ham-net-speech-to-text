@@ -25,7 +25,7 @@ from .meter import Meter
 from .segmenter import Segmenter
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = Path(os.environ.get("HAMNET_DATA", ROOT / "data"))
+DATA = Path(os.environ.get("HAMSIDEKICK_DATA") or os.environ.get("HAMNET_DATA") or ROOT / "data")   # HAMNET_DATA: the old name
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 SR = 16000
 
@@ -609,7 +609,7 @@ class Station:
 
         def go():
             self.bus.publish("restarting", {"in_s": 5})
-            subprocess.Popen('cmd /c "ping -n 5 127.0.0.1 >nul & schtasks /run /tn "HamNet Station""',   # no console:
+            subprocess.Popen('cmd /c "ping -n 5 127.0.0.1 >nul & schtasks /run /tn "HAM Sidekick Station""',   # no console:
                              creationflags=0x00000008 | 0x08000000)          # DETACHED_PROCESS | CREATE_NO_WINDOW
             self.stop.set()
             time.sleep(1.5)

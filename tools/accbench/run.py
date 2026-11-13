@@ -2,7 +2,7 @@
 
     python -m tools.accbench.run METHOD NETDIR...          a synthetic net from gen.py (log.jsonl + WAVs + truth)
     python -m tools.accbench.run METHOD STATION_DATA:FREQ  a real net: the station's data dir (logs/ + recordings/)
-                                                           and a frequency in MHz, e.g. ~/hamnet-copy:442.1
+                                                           and a frequency in MHz, e.g. ~/ham-copy:442.1
     --backend=ENGINE:MODEL@DEVICE   prov/final/long on another recogniser (transcribe/decoders.py), e.g. on a station
                                     PC: --backend=openvino:C:/models/whisper-large-v3-int8-ov@GPU
                                     or --backend=faster-whisper:large-v3@cpu; saved as METHOD-TAG.json (--tag=NAME)

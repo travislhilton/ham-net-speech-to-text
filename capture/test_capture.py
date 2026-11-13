@@ -1,8 +1,8 @@
 """Test capture from NET-REC: streams to disk as it records, so stopping early keeps the audio.
-Usage: rec.py [seconds=30] [out=C:\\ham-net-speech-to-text\\setup\\test.wav]"""
+Usage: rec.py [seconds=30] [out=C:\\HAM-Sidekick-Station\\setup\\test.wav]"""
 import sys, numpy as np, sounddevice as sd, soundfile as sf
 secs = int(sys.argv[1]) if len(sys.argv) > 1 else 30
-path = sys.argv[2] if len(sys.argv) > 2 else r"C:\ham-net-speech-to-text\setup\test.wav"
+path = sys.argv[2] if len(sys.argv) > 2 else r"C:\HAM-Sidekick-Station\setup\test.wav"
 dev = next(i for i, d in enumerate(sd.query_devices()) if "net-rec" in d["name"].lower() and d["max_input_channels"] > 0)
 db = lambda v: 20 * np.log10(max(float(v), 1e-9))
 per_sec, peak = [], 0.0

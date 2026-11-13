@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HamNet Station</title>
+<title>HAM Sidekick Station</title>
 <style>
 :root{--bg:#f2f4f7;--panel:#fff;--ink:#0f172a;--muted:#4b5563;--line:#d4d9e1;--accent:#1e40af;--ok:#065f46;--okbg:#ecfdf5;
 --warn:#92400e;--warnc:#d97706;--warnbg:#fffbeb;--bad:#be123c;--badbg:#fff1f2;--chip:#dbeafe;--partial:#64748b;--term:#1d4ed8;
@@ -476,13 +476,14 @@ button:disabled{cursor:not-allowed}
   header button{min-height:36px}
 }
 </style>
+<script>try{for(const k of Object.keys(localStorage))if(k.startsWith("hamnet.")){const n="hamsidekick."+k.slice(7);if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k))}}catch(e){}</script>
 <script>
 // Display choices, per browser (Settings → Display): colours and the clock. Applied before the page draws.
-const DISP=(()=>{let d={};try{d=JSON.parse(localStorage.getItem("hamnet.display")||"{}")}catch(e){}
+const DISP=(()=>{let d={};try{d=JSON.parse(localStorage.getItem("hamsidekick.display")||"{}")}catch(e){}
   return {theme:d.theme||"auto",clock:d.clock||"24"}})();
 if(DISP.theme!=="auto")document.documentElement.dataset.theme=DISP.theme;
 const TOPT=()=>DISP.clock==="12"?{hour:"numeric",minute:"2-digit"}:{hour:"2-digit",minute:"2-digit",hourCycle:"h23"};
-function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamnet.display",JSON.stringify(DISP))}catch(e){}
+function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamsidekick.display",JSON.stringify(DISP))}catch(e){}
   if(k==="theme"){if(v==="auto")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=v;
     const b=document.getElementById("nightBtn");if(b)b.setAttribute("aria-pressed",v==="night")}
   if(typeof all==="function"){try{tick();all()}catch(e){}}}
@@ -491,7 +492,7 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamnet.display",JSO
 <body>
 <div id="alert"></div>
 <header>
-  <h1 id="me">HamNet Station</h1>
+  <h1 id="me">HAM Sidekick Station</h1>
   <div class="net" id="net"></div>
   <span id="nettype" class="badge">Net type: listening…</span>
   <span class="clock" id="clock"></span>
@@ -756,18 +757,18 @@ function groupSessions(list){
   return out;
 }
 // Net headers start open; the ones the operator closes stay closed (remembered in this browser).
-const SESS_CLOSED=new Set((()=>{try{return JSON.parse(localStorage.getItem("hamnet.sessClosed")||"[]")}catch(e){return []}})());
+const SESS_CLOSED=new Set((()=>{try{return JSON.parse(localStorage.getItem("hamsidekick.sessClosed")||"[]")}catch(e){return []}})());
 // Completed nets and conversations start collapsed; the ones the operator opens stay open (this browser).
-const SESS_OPEN=new Set((()=>{try{return JSON.parse(localStorage.getItem("hamnet.sessOpen")||"[]")}catch(e){return []}})());
+const SESS_OPEN=new Set((()=>{try{return JSON.parse(localStorage.getItem("hamsidekick.sessOpen")||"[]")}catch(e){return []}})());
 const FEED={};   // rid -> {row key: session} of the last render: an opened completed row fills in its transmissions
 const HEARD_OPEN=new Set();   // Stations heard rows start collapsed; the ones opened stay open across updates
 document.addEventListener("toggle",e=>{const d=e.target;
   if(d.matches&&d.matches("details.sess.done")){d.open?SESS_OPEN.add(d.dataset.sk):SESS_OPEN.delete(d.dataset.sk);
-    try{localStorage.setItem("hamnet.sessOpen",JSON.stringify([...SESS_OPEN].slice(-100)))}catch(err){}
+    try{localStorage.setItem("hamsidekick.sessOpen",JSON.stringify([...SESS_OPEN].slice(-100)))}catch(err){}
     const b=d.querySelector(".txs"),s=(FEED[d.dataset.rid]||{})[d.dataset.sk];
     if(d.open&&b&&!b.childElementCount&&s)b.innerHTML=doneBody(d.dataset.rid,s);}
   else if(d.matches&&d.matches("details.sess")){d.open?SESS_CLOSED.delete(d.dataset.sk):SESS_CLOSED.add(d.dataset.sk);
-    try{localStorage.setItem("hamnet.sessClosed",JSON.stringify([...SESS_CLOSED].slice(-200)))}catch(err){}}
+    try{localStorage.setItem("hamsidekick.sessClosed",JSON.stringify([...SESS_CLOSED].slice(-200)))}catch(err){}}
   if(d.matches&&d.matches("details.hrow"))d.open?HEARD_OPEN.add(d.dataset.hk):HEARD_OPEN.delete(d.dataset.hk);},true);
 // The callsigns a transmission is counted under: corrected > agreed (consensus) > accurate > live (station/ics.py view)
 function callsOf(t){
@@ -1233,7 +1234,7 @@ function ensureCard(r){
   top.innerHTML=`<div class="tabs" role="tablist"><button class="on" data-tab="radio" data-rid="${id}" role="tab">Radio</button><button data-tab="guide" data-rid="${id}" role="tab"><span class="lg">Coach</span><span class="sm">Coach</span><span class="gn"></span></button><button data-tab="board" data-rid="${id}" role="tab" title="The net on the air: who is in, who to ask again, traffic, regulars not heard yet"><span class="lg">Net board</span><span class="sm">Board</span> <span class="bn"></span></button><button data-tab="heard" data-rid="${id}" role="tab"><span class="lg">Stations heard</span><span class="sm">Heard</span> <span class="hn"></span></button><button class="fold" data-fold="${id}" title="Fold this panel away to see more of the log (or tap the open tab)"></button></div>
     <div class="stack"><div class="pane guide" id="guide-${id}"></div><div class="pane heard" id="heard-${id}"><p class="muted small">None yet.</p></div><div class="pane board" id="board-${id}"></div></div>`;
   el.classList.add("pane","show");top.querySelector(".stack").prepend(el);
-  try{if(localStorage.getItem("hamnet.fold."+r.id))col.classList.add("folded")}catch(e){}
+  try{if(localStorage.getItem("hamsidekick.fold."+r.id))col.classList.add("folded")}catch(e){}
   const sec=document.createElement("section");sec.className="logbox";
   sec.innerHTML=`<div class="urg" id="urg-${id}" hidden></div><div class="nowbar" id="now-${id}" hidden></div><div class="feed" id="feed-${id}"><p class="muted">Waiting for the first transmission.</p></div>`;
   const sp=document.createElement("div");sp.className="split";sp.title="Drag to resize · double-click to reset";
@@ -1244,8 +1245,8 @@ function ensureCard(r){
   const ec=document.createElement("div");ec.className="echo";ec.id="echo-"+r.id;ec.hidden=true;
   col.append(dv,rn,ec,ab,top,sp,sec);if(r.id===SEL)col.classList.add("sel");$("radios").appendChild(col);renderFeed(r.id);renderGuide(r.id);renderHeard(r.id);return el}
 // ---------- splitter (guidance / stations tabs) ----------
-const splitKey=rid=>"hamnet.split."+rid;
-function setFold(rid,f){$("col-"+rid).classList.toggle("folded",f);try{localStorage.setItem("hamnet.fold."+rid,f?"1":"")}catch(e){}}
+const splitKey=rid=>"hamsidekick.split."+rid;
+function setFold(rid,f){$("col-"+rid).classList.toggle("folded",f);try{localStorage.setItem("hamsidekick.fold."+rid,f?"1":"")}catch(e){}}
 function applySplit(rid,tab){
   const col=$("col-"+rid),st=col.querySelector(".stack");
   if(tab==="radio"){col.classList.remove("sized");st.style.height="";return}
@@ -1271,11 +1272,11 @@ document.addEventListener("dblclick",e=>{const sp=e.target.closest(".split");if(
   try{localStorage.removeItem(splitKey(sp.dataset.rid))}catch(err){}
   const tab=($("col-"+sp.dataset.rid).querySelector(".toptabs .on")||{}).dataset?.tab||"guide";applySplit(sp.dataset.rid,tab)});
 // "Explain radio terms" (on by default; remembered per browser)
-(()=>{const cb=$("explain");let on=true;try{on=localStorage.getItem("hamnet.explain")!=="0"}catch(e){}
-  const apply=()=>{document.body.classList.toggle("noterms",!cb.checked);try{localStorage.setItem("hamnet.explain",cb.checked?"1":"0")}catch(e){}};
+(()=>{const cb=$("explain");let on=true;try{on=localStorage.getItem("hamsidekick.explain")!=="0"}catch(e){}
+  const apply=()=>{document.body.classList.toggle("noterms",!cb.checked);try{localStorage.setItem("hamsidekick.explain",cb.checked?"1":"0")}catch(e){}};
   cb.checked=on;apply();cb.onchange=apply})();
-let SEL=null;try{SEL=localStorage.getItem("hamnet.radio")}catch(e){}
-function selectRadio(id){SEL=id;try{localStorage.setItem("hamnet.radio",id)}catch(e){}
+let SEL=null;try{SEL=localStorage.getItem("hamsidekick.radio")}catch(e){}
+function selectRadio(id){SEL=id;try{localStorage.setItem("hamsidekick.radio",id)}catch(e){}
   document.querySelectorAll(".rcol").forEach(c=>c.classList.toggle("sel",c.id==="col-"+id));
   document.querySelectorAll("#rtabs button").forEach(b=>{b.classList.toggle("on",b.dataset.r===id);b.setAttribute("aria-selected",b.dataset.r===id)})}
 function renderRtabs(){
@@ -1490,7 +1491,7 @@ function renderPCNote(){
   const pc=S.pc||{},el=$("pcNote");let h="";
   if(pc.slow)h+=`<div class="pcn slow">⚠ ${esc(pc.slow.say)} <button onclick="$('openSettings').click()">This PC…</button></div>`;
   if(pc.notice)h+=`<div class="pcn"><b>While it transcribes, this station changes your PC's power settings.</b>
-    During nets and traffic it keeps the screen on and switches to its own “HamNet Station” power plan at Best performance,
+    During nets and traffic it keeps the screen on and switches to its own “HAM Sidekick Station” power plan at Best performance,
     then puts your own plan back (laptops run several times slower with the screen off).
     <button onclick="$('openSettings').click()">See or change it</button><button onclick="pcSeen()">OK</button></div>`;
   el.innerHTML=h;
@@ -1678,7 +1679,7 @@ function connect(){
   const es=new EventSource("/events");
   es.onopen=()=>{$("conn").textContent="● live";$("conn").className="ok"};
   es.onerror=()=>{$("conn").textContent="● reconnecting…";$("conn").className="bad"};
-  es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HamNet Station";renderEngine(d.engines);all();renderPCNote()});
+  es.addEventListener("snapshot",e=>{const d=JSON.parse(e.data);Object.assign(S,d);$("me").textContent=d.callsign?d.callsign+" station":"HAM Sidekick Station";renderEngine(d.engines);all();renderPCNote()});
   es.addEventListener("tx",e=>{const t=JSON.parse(e.data);upsertTx(t);if(t.status==="final")boardSoon(t.radio)});
   es.addEventListener("agent",e=>{const m=JSON.parse(e.data);if(!AG)return;
     if(m.chat){if(SK&&SK.rid===m.chat.radio){SK.chat=[...SK.chat.filter(x=>x.id!==m.chat.id),m.chat];if(m.chat.role==="assistant")SK.busy=false;if(SK.tab==="chat")skRender()}return}
@@ -2074,7 +2075,7 @@ function radioMeetings(rid){
 function renderRadioNets(r){
   const box=document.getElementById("rn-"+r.id);if(!box)return;
   if(document.body.classList.contains("dragging"))return;              // never re-render under a drag
-  let open=false;try{open=localStorage.getItem("hamnet.rnets."+r.id)==="1"}catch(e){}
+  let open=false;try{open=localStorage.getItem("hamsidekick.rnets."+r.id)==="1"}catch(e){}
   const all=radioMeetings(r.id),now=Date.now(),td=new Date().toDateString();
   const isOn=x=>new Date(x.w.start).getTime()<=now;
   const today=all.filter(x=>new Date(x.w.start).toDateString()===td);
@@ -2092,7 +2093,7 @@ function renderRadioNets(r){
   box.innerHTML=`<div class="rh"><span>Nets</span>${tog}<span class="sp"></span><button data-nets="${esc(r.id)}">This week…</button></div>
     <div class="rlist">${shown.length?shown.map(line).join(""):`<div class="none">${(S.schedule||[]).some(n=>n.radio===r.id)?"No more nets on this radio today.":"No nets on this radio. Drag one here, or add one in Nets."}</div>`}</div>`}
 document.addEventListener("click",e=>{const t=e.target.closest("[data-rntog]");if(!t)return;const rid=t.dataset.rntog;
-  try{const k="hamnet.rnets."+rid;localStorage.setItem(k,localStorage.getItem(k)==="1"?"0":"1")}catch(err){}
+  try{const k="hamsidekick.rnets."+rid;localStorage.setItem(k,localStorage.getItem(k)==="1"?"0":"1")}catch(err){}
   const r=S.radios.find(x=>x.id===rid);if(r)renderRadioNets(r)});
 document.addEventListener("click",e=>{const b=e.target.closest("[data-rn]");if(!b||document.body.classList.contains("dragging"))return;e.preventDefault();openPick(b,b.dataset.rn,{date:b.dataset.date,from:b.dataset.from})});
 function toast(html,acts=[]){const t=$("hamtoast");t.innerHTML=`<span>${html}</span>`;for(const[l,f]of acts){const b=document.createElement("button");b.textContent=l;b.onclick=()=>{t.hidden=true;f()};t.append(b)}
@@ -2262,13 +2263,13 @@ $("searchForm").addEventListener("submit",e=>{e.preventDefault();openSearch($("q
 document.addEventListener("keydown",e=>{if(e.key!=="/"||e.ctrlKey||e.metaKey||e.altKey)return;const t=e.target;if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;if(document.querySelector("dialog[open]"))return;e.preventDefault();openSearch("",undefined)});
 $("searchClose").onclick=()=>$("searchDlg").close();
 // ---------- the pre-net alert (station/alerts.py): banner on the radio's column + the header, chime, title, notification ----------
-let CHIME=true;try{CHIME=localStorage.getItem("hamnet.chime")!=="0"}catch(e){}
+let CHIME=true;try{CHIME=localStorage.getItem("hamsidekick.chime")!=="0"}catch(e){}
 const SEEN_ALERTS=new Set();let AUDIO=null,FLASH=null,BASE_TITLE=document.title;
 function chime(){if(!CHIME)return;try{AUDIO=AUDIO||new (window.AudioContext||window.webkitAudioContext)();const t=AUDIO.currentTime;
   [[880,0],[1175,.18],[880,.36]].forEach(([f,d])=>{const o=AUDIO.createOscillator(),g=AUDIO.createGain();o.frequency.value=f;o.type="sine";
     g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.25,t+d+.02);g.gain.exponentialRampToValueAtTime(.001,t+d+.3);o.connect(g).connect(AUDIO.destination);o.start(t+d);o.stop(t+d+.32)})}catch(e){}}
 const canNotify=()=>window.isSecureContext&&"Notification" in window;
-function notify(a){if(canNotify()&&Notification.permission==="granted"){try{new Notification("HamNet Station",{body:a.text,tag:a.key})}catch(e){}}}
+function notify(a){if(canNotify()&&Notification.permission==="granted"){try{new Notification("HAM Sidekick Station",{body:a.text,tag:a.key})}catch(e){}}}
 function alertWhen(a){return a.phase==="started"?`started at ${hhmm(a.start)}`:a.minutes<=1?`starts in 1 minute (${hhmm(a.start)})`:`starts in ${a.minutes} min (${hhmm(a.start)})`}
 function alertBody(a){
   const f=a.freq_mhz?mhz(a.freq_mhz,a.mode):"";
@@ -2294,7 +2295,7 @@ function renderAlerts(){
 }
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-alert]");if(b){b.disabled=true;try{const d=await post(`/api/alerts/${enc(b.dataset.alert)}/${b.dataset.act}`,{});S.alerts=d.alerts;renderAlerts()}catch(err){alert(err.message);b.disabled=false}return}
-  if(e.target.closest("[data-chime]")){CHIME=!CHIME;try{localStorage.setItem("hamnet.chime",CHIME?"1":"0")}catch(err){}if(CHIME)chime();renderAlerts();return}
+  if(e.target.closest("[data-chime]")){CHIME=!CHIME;try{localStorage.setItem("hamsidekick.chime",CHIME?"1":"0")}catch(err){}if(CHIME)chime();renderAlerts();return}
   const s=e.target.closest("[data-ar]");if(s){selectRadio(s.dataset.ar);const box=$("ab-"+s.dataset.ar);if(box)box.scrollIntoView({block:"nearest"})}
 });
 // ---------- the Urgent board (emergency nets): pinned above the log of the radio it was heard on ----------
@@ -2615,7 +2616,7 @@ function renderAlertSettings(){
     :Notification.permission==="denied"?"Blocked in this browser's site settings. Allow notifications for this page there to turn them on.":"";
   box.innerHTML=`<label class="chk"><input type="checkbox" id="setChime"${CHIME?" checked":""}> Chime when a net alert comes up (remembered in this browser)</label>
    <div class="small">${canNotify()&&Notification.permission==="default"?'<button type="button" id="setNotif">Allow notifications</button> ':""}<span class="muted">${why}</span></div>`;
-  $("setChime").onchange=e=>{CHIME=e.target.checked;try{localStorage.setItem("hamnet.chime",CHIME?"1":"0")}catch(err){}if(CHIME)chime();renderAlerts()};
+  $("setChime").onchange=e=>{CHIME=e.target.checked;try{localStorage.setItem("hamsidekick.chime",CHIME?"1":"0")}catch(err){}if(CHIME)chime();renderAlerts()};
   const n=$("setNotif");if(n)n.onclick=async()=>{await Notification.requestPermission();renderAlertSettings()};
 }
 

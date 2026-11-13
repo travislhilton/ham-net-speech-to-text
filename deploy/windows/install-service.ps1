@@ -1,6 +1,6 @@
 # Run as Administrator on the puck. Installs recorder.py as a Windows service via NSSM.
 # choco install nssm   (or download nssm.cc)
-$root = "C:\ham-net-speech-to-text\capture"
+$root = if (Test-Path "C:\ham-net-speech-to-text\capture") { "C:\ham-net-speech-to-text\capture" } else { "C:\HAM-Sidekick-Station\capture" }   # PCs installed before the rename keep the old folder
 $py   = "$root\.venv\Scripts\python.exe"
 nssm install EmcommVoiceCapture $py "$root\recorder.py" "--config" "$root\config.yaml"
 nssm set EmcommVoiceCapture AppDirectory $root

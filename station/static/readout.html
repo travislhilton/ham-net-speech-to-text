@@ -33,7 +33,8 @@ table{border-collapse:collapse;width:100%;font-size:.92rem}td{padding:5px 6px;bo
 #card .ctl{display:flex;gap:10px}#card .ctl button{flex:1;padding:14px;font-size:1.05rem;background:rgba(255,255,255,.12);color:inherit;border-color:rgba(255,255,255,.3)}
 #card .ctl button.next{background:#7cc3f0;color:#062033;border-color:#7cc3f0}
 </style>
-<script>try{const d=JSON.parse(localStorage.getItem("hamnet.display")||"{}");if(d.theme&&d.theme!=="auto")document.documentElement.dataset.theme=d.theme}catch(e){}</script>
+<script>try{for(const k of Object.keys(localStorage))if(k.startsWith("hamnet.")){const n="hamsidekick."+k.slice(7);if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k))}}catch(e){}</script>
+<script>try{const d=JSON.parse(localStorage.getItem("hamsidekick.display")||"{}");if(d.theme&&d.theme!=="auto")document.documentElement.dataset.theme=d.theme}catch(e){}</script>
 </head>
 <body>
 <main>

@@ -442,7 +442,7 @@ def _header(text: str) -> tuple[dict, str]:
 
 def default_fetch(url: str, timeout: float = URL_TIMEOUT_S, max_bytes: int = MAX_URL) -> tuple[str, bytes]:
     """(Content-Type, body) of a URL; at most max_bytes + 1 bytes are read."""
-    req = urllib.request.Request(url, headers={"User-Agent": "HamNet-Station knowledge library"})
+    req = urllib.request.Request(url, headers={"User-Agent": "HAM-Sidekick-Station knowledge library"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.headers.get("Content-Type", ""), r.read(max_bytes + 1)
 
@@ -508,6 +508,7 @@ class Library:
 
     def _walk(self) -> list[tuple[str, Path]]:
         """[(kind, path)] of everything that should be indexed."""
+        # kind "hamnet" / keys "hamnet:<path>" are stored identifiers in each PC's library database: not renamed
         out = [("hamnet", self.install / rel) for rel in self.builtin_docs if (self.install / rel).is_file()]
         for kind, folder in (("note", self.notes_dir), ("url", self.web_dir)):
             out += [(kind, p) for p in sorted(folder.glob("*")) if p.is_file() and not p.name.startswith(".")]

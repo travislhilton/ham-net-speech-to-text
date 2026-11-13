@@ -1,10 +1,10 @@
 # Install from the PUBLIC GitHub ZIP, exactly as a new user would (models/callbook/QRZ already present).
 $ErrorActionPreference = 'Stop'
-$dl = "$env:USERPROFILE\hamnet-admin"; New-Item -ItemType Directory -Force $dl | Out-Null
-$zip = "$dl\ham-net-speech-to-text-master.zip"; $dir = "$dl\hamnet-public"
+$dl = "$env:USERPROFILE\hamsidekick-admin"; New-Item -ItemType Directory -Force $dl | Out-Null
+$zip = "$dl\hamsidekick-master.zip"; $dir = "$dl\hamsidekick-public"
 Remove-Item -Force $zip -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
 [Net.ServicePointManager]::SecurityProtocol = 'Tls12'
-Invoke-WebRequest -UseBasicParsing 'https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip' -OutFile $zip
+Invoke-WebRequest -UseBasicParsing 'https://github.com/hamsidekick/hamsidekick/archive/refs/heads/master.zip' -OutFile $zip
 "zip bytes: $((Get-Item $zip).Length)"
 Expand-Archive $zip $dir
 $src = Get-ChildItem $dir -Directory | Select-Object -First 1

@@ -1,4 +1,4 @@
-# HamNet Station — the manual
+# HAM Sidekick Station — the manual
 
 Every feature of the station in detail. New to it? Start with the [README](../README.md): install, first steps,
 [running a net](../README.md#running-a-net) and the quick reference card. How it works inside:
@@ -10,7 +10,7 @@ Measured on a 2026 Intel Core Ultra laptop with Modern Standby and an OLED scree
 slow themselves to about a fifth of their speed whenever the screen is dark, even on mains power with sleep set to
 never. So while the station is transcribing (by default: during a scheduled net, while a transmission is received or
 transcribed or the accurate pass has work, and for 10 minutes after the last transmission) it saves your own
-Windows power plan and power mode, switches to the installer's **HamNet Station** plan (screen on, no sleep, lid does
+Windows power plan and power mode, switches to the installer's **HAM Sidekick Station** plan (screen on, no sleep, lid does
 nothing, USB / Wi-Fi / PCIe power saving off, Intel graphics at maximum) with Best performance, and holds the screen
 on; when it is done it puts your plan and mode back (also at its next start, if it stopped mid-net). Your own plan
 can favour the battery. Measured: the station's hold brought the laptop out of Modern Standby by itself, and the
@@ -24,7 +24,7 @@ why), shows the speeds this PC measured and the processor's speed while it measu
 slow it (on battery, Best power efficiency, hibernate on mains power, Modern Standby, a graphics driver over 18 months
 old, a processor held back even at full power = the maker's quiet / fan profile, with the maker's app named) and has
 **Measure this PC again** (between nets; the station restarts to use the result). The installer measures with the
-screen and system held awake on the HamNet plan (`python -m station.pccheck measure`), asks the *Full speed and
+screen and system held awake on the HAM Sidekick power plan (`python -m station.pccheck measure`), asks the *Full speed and
 screen on* question once (`-KeepAwake traffic|listening|always|off` answers it unattended) and ends with the same
 **This PC** list. The dashboard shows a one-time notice of what the station changes, and a warning when live
 transcription runs over 4× slower than measured (screen off, battery, a quiet profile).
@@ -34,7 +34,7 @@ comes back as one word or nothing, it re-reads a recent transmission that read w
 any more, it loads a fresh one and reads the transmission again (logged as "live engine: … reloading it"; at most
 once per 5 minutes). The same check runs when a dashboard is opened. Measured on the test laptop: after Modern
 Standby between transmissions, its live engine wrote "The." for every transmission until it was reloaded.
-With "Listen only during nets" on a radio, the HamNet plan is on only during nets. Between nets the station keeps
+With "Listen only during nets" on a radio, the HAM Sidekick power plan is on only during nets. Between nets the station keeps
 running in Modern Standby (it answered every 30 s with the screen off). The NPU is not used: with OpenVINO 2026.4 its Whisper pipeline refused the
 station's callsign prompt and the large models did not finish compiling for it; at full speed the graphics did the
 final text at 0.07x real time anyway. Set once on the laptop itself:
@@ -46,7 +46,7 @@ final text at 0.07x real time anyway. Set once on the laptop itself:
 ## Using it, feature by feature
 
 After installing, the station starts by itself whenever you sign in to Windows. Open the
-**HamNet Station** shortcut on the desktop, or browse to `http://localhost:8091/` on the station PC,
+**HAM Sidekick Station** shortcut on the desktop, or browse to `http://localhost:8091/` on the station PC,
 or `http://<station-name>:8091/` from another PC or phone on your home network or Tailscale. On a phone, press
 **Open on phone** at the top of the dashboard and point the phone's camera at the code.
 
@@ -281,7 +281,7 @@ you chose is remembered. Each column shows:
   quiet). Frequencies with conversations are **remembered** (hours, days, count, calls heard; Pin or Hide them) in
   `data\scan_spots.json`. Turning the dial yourself pauses the scan for 30 minutes; when it stops, the radio goes
   back to where it was. Receive only: the only CAT commands are frequency, mode and the S-meter read.
-- **Sidekick, the station agent (Draft mode)**: an optional AI operator's assistant. Its own two-sided card (set up; on a net) opens from **Settings → Station agent → Sidekick card**, from **Card** on Sidekick's card, or at `/help/sidekick`; the PDF is `docs/HamNet_Sidekick_Quick_Reference_Card.pdf`. Its on-air name is yours to
+- **Sidekick, the station agent (Draft mode)**: an optional AI operator's assistant. Its own two-sided card (set up; on a net) opens from **Settings → Station agent → Sidekick card**, from **Card** on Sidekick's card, or at `/help/sidekick`; the PDF is `docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf`. Its on-air name is yours to
   choose (**Settings → Station agent → On-air name**, default **Sidekick**); a name that is a phonetic-alphabet word
   (Echo, Victor…), a number or a procedure word (Portable, Mobile, Break, Over) is refused, because it is said right
   after the call and listeners would hear it as part of the call. **Off by default**: the operator turns it on in
@@ -554,13 +554,13 @@ you chose is remembered. Each column shows:
   notifications on the station PC; **VHF/UHF reach, km** (300 by default: calls licensed farther away that nothing
   else confirms are not counted; raise it for a linked repeater system); **Learned fixes** (your ✎ Fix corrections).
 
-Which radios exist (and their sound inputs) and the first nets are set in `C:\ham-net-speech-to-text\config\station.yaml` (every option is explained in
-`config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HamNet Station** →
+Which radios exist (and their sound inputs) and the first nets are set in `C:\HAM-Sidekick-Station\config\station.yaml` (every option is explained in
+`config\station.example.yaml`). After editing it, restart the station: Task Scheduler → **HAM Sidekick Station** →
 End, then Run (or sign out and back in; after End it also comes back by itself within 2 minutes). Everything heard is kept in `data\logs\<date>.jsonl` and
 `data\recordings\<date>\`; the nets' history, minutes and search index in `data\history.db` (rebuilt from the logs if
 deleted, except your edits to the minutes); problems are written to `data\station.log`.
 
-Handy commands (PowerShell, from `C:\ham-net-speech-to-text`):
+Handy commands (PowerShell, from `C:\HAM-Sidekick-Station`):
 ```powershell
 .\.venv\Scripts\python.exe capture\recorder.py --list-devices      # find your radio's input
 .\.venv\Scripts\python.exe capture\test_capture.py 30              # 30-second test: levels per second

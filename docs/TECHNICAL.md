@@ -1,4 +1,4 @@
-# HamNet Station — how it works inside
+# HAM Sidekick Station — how it works inside
 
 For developers and the curious. Operators: the [README](../README.md) and the [manual](MANUAL.md).
 
@@ -180,7 +180,7 @@ net 5–7 minutes).
   for lookups, so the password is stored in Windows Credential Manager / macOS Keychain, typed at a
   hidden prompt:
   ```powershell
-  cd C:\ham-net-speech-to-text
+  cd C:\HAM-Sidekick-Station
   .\.venv\Scripts\python.exe -m hamkit.qrz set-login     # asks for callsign + password, then tests
   ```
 

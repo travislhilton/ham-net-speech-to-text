@@ -233,7 +233,7 @@ def footer(entries) -> str:
 
 
 # ---------- area packs ----------
-PACK_SCHEMA = "hamnet-area/1"
+PACK_SCHEMA = "hamnet-area/1"   # a file-format identifier of area packs already shared: not renamed
 
 
 def pack(entries, area: str = "") -> dict:

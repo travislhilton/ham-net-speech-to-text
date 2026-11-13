@@ -12,6 +12,6 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
-  <key>StandardOutPath</key><string>__HOME__/Library/Logs/hamnet/emcomm-stt.log</string>
-  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/hamnet/emcomm-stt.err</string>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/hamsidekick/emcomm-stt.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/hamsidekick/emcomm-stt.err</string>
 </dict></plist>

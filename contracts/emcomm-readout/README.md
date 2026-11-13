@@ -1,6 +1,6 @@
 # emcomm-readout/1 — the incident read-out contract
 
-The one thing **church-emcomm-wnlk-forms** (the EOC Message Center) and **ham-net-speech-to-text** (the station)
+The one thing **church-emcomm-wnlk-forms** (the EOC Message Center) and **HAM Sidekick Station** (the station)
 share, so net control can read the current incident report on a voice net. Neither project imports the other's
 code; either works without the other.
 

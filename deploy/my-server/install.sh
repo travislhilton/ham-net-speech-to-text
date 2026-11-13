@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Install / upgrade the transcribe service ON THE MAC SERVER. Idempotent; re-run after git pull.
-#   ssh <server> 'cd ~/Projects/ham-net-speech-to-text && git pull && deploy/my-server/install.sh'
+#   ssh <server> 'cd ~/Projects/hamsidekick && git pull && deploy/my-server/install.sh'
 # Does: venv (python3.11) → pip → private env file with a fresh
 # EMCOMM_STT_KEY (first run only) → emcomm_voice database + schema → launchd plist → /health.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 PY="${PY:-/opt/homebrew/bin/python3.11}"
 ENV_FILE="$HOME/.config/emcomm-stt/env"
-LABEL="${LABEL:-org.hamnet.emcomm-stt}"   # set LABEL in the environment to keep an existing service name
+LABEL="${LABEL:-org.hamsidekick.emcomm-stt}"   # set LABEL in the environment to keep an existing service name
 export PATH="/opt/homebrew/opt/postgresql@17/bin:/opt/homebrew/bin:$PATH"
 cd "$REPO"
 
@@ -21,7 +21,7 @@ if [ ! -f "$ENV_FILE" ]; then
   mkdir -p "$(dirname "$ENV_FILE")"; chmod 700 "$(dirname "$ENV_FILE")"
   umask 077
   cat > "$ENV_FILE" <<ENV
-# ham-net-speech-to-text transcribe service — sourced by deploy/my-server/run.sh. Mode 600.
+# HAM Sidekick Station transcribe service — sourced by deploy/my-server/run.sh. Mode 600.
 EMCOMM_STT_KEY=$(openssl rand -hex 24)
 EMCOMM_DB_DSN=postgresql+psycopg://$USER@localhost:5432/emcomm_voice
 STT_DATA_DIR=$HOME/data/emcomm-voice
@@ -33,7 +33,7 @@ ENV
   umask 022
 fi
 set -a; . "$ENV_FILE"; set +a
-mkdir -p "$STT_DATA_DIR" "$HOME/Library/Logs/hamnet"
+mkdir -p "$STT_DATA_DIR" "$HOME/Library/Logs/hamsidekick"
 
 echo "→ database emcomm_voice"
 pg_isready -q
@@ -46,4 +46,4 @@ sed -e "s|__LABEL__|$LABEL|g" -e "s|__REPO__|$REPO|g" -e "s|__HOME__|$HOME|g" \
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$LABEL.plist"
 for i in $(seq 1 30); do curl -sf "localhost:${STT_PORT:-8090}/health" && { echo; echo "✓ up"; exit 0; }; sleep 1; done
-echo "!! service did not answer /health; see ~/Library/Logs/hamnet/emcomm-stt.err" >&2; exit 1
+echo "!! service did not answer /health; see ~/Library/Logs/hamsidekick/emcomm-stt.err" >&2; exit 1

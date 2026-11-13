@@ -64,7 +64,7 @@ def qr_svg(text: str) -> str:
     return segno.make(text, error="m").svg_inline(scale=5, border=2, dark="#000", light="#fff", omitsize=True)
 
 
-REPO_URL = "https://github.com/travislhilton/ham-net-speech-to-text"   # the public project page (Code → Download ZIP)
+REPO_URL = "https://github.com/hamsidekick/hamsidekick"   # the public project page (Code → Download ZIP)
 
 
 def card_with_download(html: str, url: str | None = REPO_URL) -> str:

@@ -162,7 +162,7 @@ def bearing(a: Point, b: Point) -> float:
 def _usgs_fetch(lat: float, lon: float, timeout: float = 30.0) -> float:
     """One USGS EPQS query -> metres. The service answers JSON {"value": "1620.83", ...}; off its coverage (the sea,
     outside the US) it answers a plain-text "Call failed." or a value of -1000000."""
-    req = urllib.request.Request(EPQS_URL.format(lat=lat, lon=lon), headers={"User-Agent": "ham-net-speech-to-text"})
+    req = urllib.request.Request(EPQS_URL.format(lat=lat, lon=lon), headers={"User-Agent": "HAM-Sidekick-Station"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         body = r.read().decode("utf-8", "replace")
     if not body.strip():                                 # seen 2026-11-12 under load: a 200 with nothing in it
@@ -187,7 +187,7 @@ def _open_meteo_fetch(pts: list[tuple[float, float]], timeout: float = 30.0) -> 
     lat = ",".join(f"{p[0]:.5f}" for p in pts)
     lon = ",".join(f"{p[1]:.5f}" for p in pts)
     req = urllib.request.Request(OPEN_METEO_URL.format(lat=lat, lon=lon),
-                                 headers={"User-Agent": "ham-net-speech-to-text"})
+                                 headers={"User-Agent": "HAM-Sidekick-Station"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         body = r.read().decode("utf-8", "replace")
     try:

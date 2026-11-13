@@ -231,7 +231,7 @@ def put_in_outbox(install: str, account: str, messages: list[dict], check_runnin
     (data / "Backup").mkdir(exist_ok=True)
     for name in ("Registry.txt", "Mids Seen.txt", "Destinations.txt"):
         if (data / name).exists():
-            shutil.copy2(data / name, data / "Backup" / f"{Path(name).stem}_hamnet_{stamp}{Path(name).suffix}")
+            shutil.copy2(data / name, data / "Backup" / f"{Path(name).stem}_hamsidekick_{stamp}{Path(name).suffix}")
     (acc / "MessagesBackup").mkdir(exist_ok=True)
 
     def append(path: Path, line: str, bom=False):

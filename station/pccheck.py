@@ -8,7 +8,7 @@ Standby held the processor at 25% of its speed — and chose a slower accurate p
 audio; with the screen held on 0.03 s). So:
 
 * MEASURE (`python -m station.pccheck measure`, the installer and Settings → This PC → Measure this PC again): hold
-  the screen and system awake and switch to the HamNet Station power plan (station/awake.py, as during a net), wait for
+  the screen and system awake and switch to the HAM Sidekick Station power plan (station/awake.py, as during a net), wait for
   the processor to come up to speed, run tools/pick_engine.py and tools/pick_accurate.py, put the operator's plan back.
   The processor's speed before and while holding is kept with the result; a measurement taken slowed is marked.
 * CHECK (`check`): on battery, the Windows power mode, hibernate on mains power, Modern Standby (the screen-off slow
@@ -57,7 +57,7 @@ def explain(mode: str = "traffic") -> list[str]:
                 "laptop may transcribe several times slower."]
     return [f"Full speed and screen on: {when}, the station",
             "  - keeps the screen on and the PC awake (the same request a video player makes),",
-            "  - switches Windows to its 'HamNet Station' power plan (no sleep, lid does nothing, USB / Wi-Fi / PCIe "
+            "  - switches Windows to its 'HAM Sidekick Station' power plan (no sleep, lid does nothing, USB / Wi-Fi / PCIe "
             "power saving off, graphics at maximum) and the power mode to Best performance,",
             "  - and then puts your own power plan and power mode back. Your plan can favour the battery.",
             "Change it any time: Settings -> Full speed and screen on."]
@@ -186,7 +186,7 @@ def measure(data: Path, models: Path, out: Path, py: str = sys.executable, run=s
         if held is not None and held < FULL_SPEED_PCT:
             say("  !! the processor is held back: the results below may be too slow (see 'This PC' at the end)")
         import os
-        env = dict(os.environ, HAMNET_PLAN_HELD="1")      # the benchmarks leave the plan to us (tools/pick_*.py)
+        env = dict(os.environ, STATION_PLAN_HELD="1")      # the benchmarks leave the plan to us (tools/pick_*.py)
         for tool in ("pick_engine.py", "pick_accurate.py"):
             run([py, str(ROOT / "tools" / tool), "--models", str(models), "--out", str(out)], check=False, env=env)
         after = pct(1)
@@ -200,20 +200,20 @@ def measure(data: Path, models: Path, out: Path, py: str = sys.executable, run=s
 
 
 def _keeper(data: Path):
-    """The screen + system power request, and the HamNet plan unless the station already has it on (then the
+    """The screen + system power request, and the HAM Sidekick power plan unless the station already has it on (then the
     station owns the plan: switching back here would undo its hold mid-net)."""
-    from .awake import HAMNET_PLAN, KeepAwake, PowerPlan
+    from .awake import STATION_PLAN, KeepAwake, PowerPlan
     if not station_running():
         # The installer stopped it: share its file, so a plan it left on (killed while holding) is put back first
         # and the operator's own plan is the one restored afterwards.
-        return KeepAwake(reason="HamNet Station is measuring this PC", snapshot=data / "power_snapshot.json")
+        return KeepAwake(reason="HAM Sidekick Station is measuring this PC", snapshot=data / "power_snapshot.json")
     snap = data / "power_snapshot_measure.json"
     try:
-        if sys.platform == "win32" and PowerPlan(snap).active() == HAMNET_PLAN and not snap.exists():
+        if sys.platform == "win32" and PowerPlan(snap).active() == STATION_PLAN and not snap.exists():
             snap = None
     except Exception:  # noqa: BLE001
         snap = None
-    return KeepAwake(reason="HamNet Station is measuring this PC", snapshot=snap)
+    return KeepAwake(reason="HAM Sidekick Station is measuring this PC", snapshot=snap)
 
 
 def station_running(port: int = 8091) -> bool:

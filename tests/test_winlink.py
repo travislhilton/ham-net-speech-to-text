@@ -121,7 +121,7 @@ def test_outbox_write_backup_and_refusal(install):
     assert (p / "Messages" / f"{m['mid']}.mime").read_bytes() == m["mime"] == (p / "MessagesBackup" / f"{m['mid']}.mime").read_bytes()
     assert (p / "Data" / "Registry.txt").read_bytes().decode().endswith("\r\n") and m["mid"] in (p / "Data" / "Registry.txt").read_text()
     assert (p / "Data" / "Destinations.txt").read_bytes().startswith(b"\xef\xbb\xbf")
-    assert list((p / "Data" / "Backup").glob("Registry_hamnet_*.txt")) and r["written"][0]["mid"] == m["mid"]
+    assert list((p / "Data" / "Backup").glob("Registry_hamsidekick_*.txt")) and r["written"][0]["mid"] == m["mid"]
     m2 = winlink.build("ics213", t, {"Subjectline": "y"}, "W9XYZ-5", ["W9XYZ", "K7ABC"])
     winlink.put_in_outbox(install, "W9XYZ-5", [m2], check_running=lambda: False)
     dest = [l.lstrip("\ufeff").split("\x01") for l in (p / "Data" / "Destinations.txt").read_text(encoding="utf-8").splitlines() if m2["mid"] in l]

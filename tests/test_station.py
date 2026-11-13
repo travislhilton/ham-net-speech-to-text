@@ -175,7 +175,7 @@ def test_server_state_events_audio_lookup(station):
         assert wait_for(lambda: station.tx and station.tx[-1]["status"] == "final")
         s = json.loads(urllib.request.urlopen(base + "/api/state").read())
         assert s["callsign"] == "W9XYZ" and s["radios"][0]["band"]["band"] == "2 m" and s["tx"]
-        assert b"HamNet Station" in urllib.request.urlopen(base + "/").read()
+        assert b"HAM Sidekick Station" in urllib.request.urlopen(base + "/").read()
         wav = urllib.request.urlopen(f"{base}/audio/{station.tx[-1]['id']}").read()
         assert wav[:4] == b"RIFF"
         with pytest.raises(urllib.error.HTTPError):

@@ -1,5 +1,5 @@
-"""Build the printable reference cards: docs/HamNet_Station_Quick_Reference_Card.pdf and
-docs/HamNet_Sidekick_Quick_Reference_Card.pdf (and their .html).
+"""Build the printable reference cards: docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf and
+docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf (and their .html).
 
     python -m tools.build_ref_card
 
@@ -24,7 +24,7 @@ from station import phone
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "station" / "static" / "card.html"
 OUT = ROOT / "docs"
-NAME = "HamNet_Station_Quick_Reference_Card"
+NAME = "HAM_Sidekick_Station_Quick_Reference_Card"
 
 
 def chrome() -> str:
@@ -36,13 +36,13 @@ def chrome() -> str:
     return shutil.which("google-chrome") or shutil.which("chromium") or ""
 
 
-PUBLIC_PDF = "https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/" \
-             "HamNet_Station_Quick_Reference_Card.pdf"   # README's link: served as application/pdf, so a phone opens it
+PUBLIC_PDF = "https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/" \
+             "HAM_Sidekick_Station_Quick_Reference_Card.pdf"   # README's link: served as application/pdf, so a phone opens it
 #  (GitHub's raw link is application/octet-stream: iPhone Safari stays on the old page). The CDN keeps a branch's
-#  copy up to 12 h: after pushing a new card, open https://purge.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf
+#  copy up to 12 h: after pushing a new card, open https://purge.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf
 
 
-CARDS = [(SRC, NAME), (ROOT / "station" / "static" / "sidekick_card.html", "HamNet_Sidekick_Quick_Reference_Card")]
+CARDS = [(SRC, NAME), (ROOT / "station" / "static" / "sidekick_card.html", "HAM_Sidekick_Assistant_Quick_Reference_Card")]
 
 
 def main() -> int:

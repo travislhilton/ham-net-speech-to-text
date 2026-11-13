@@ -9,7 +9,7 @@ import pytest
 from station import knowledge
 from station.knowledge import Library, LibraryError
 
-MANUAL = """# HamNet manual
+MANUAL = """# HAM Sidekick manual
 
 Intro text about the station.
 
@@ -28,7 +28,7 @@ def _install(tmp_path):
     inst = tmp_path / "install"
     (inst / "docs").mkdir(parents=True)
     (inst / "station" / "static").mkdir(parents=True)
-    (inst / "README.md").write_text("# HamNet Station\n\nA Windows station that transcribes nets.\n")
+    (inst / "README.md").write_text("# HAM Sidekick Station\n\nA Windows station that transcribes nets.\n")
     (inst / "docs" / "MANUAL.md").write_text(MANUAL)
     (inst / "station" / "static" / "card.html").write_text(
         "<html><head><title>Card</title><style>.x{color:red}</style></head><body><h2>On a net</h2>"
@@ -266,7 +266,7 @@ def test_damaged_index_rebuilt(tmp_path):
 def test_pdf_text_with_pypdf(lib):
     pytest.importorskip("pypdf")
     from pathlib import Path
-    card = Path(__file__).resolve().parent.parent / "docs" / "HamNet_Sidekick_Quick_Reference_Card.pdf"
+    card = Path(__file__).resolve().parent.parent / "docs" / "HAM_Sidekick_Assistant_Quick_Reference_Card.pdf"
     e = lib.add_file("card.pdf", card.read_bytes())
     assert e["error"] is None and e["chunks"] > 0
     assert lib.search("sidekick check in")[0]["source"] == "file:card.pdf"

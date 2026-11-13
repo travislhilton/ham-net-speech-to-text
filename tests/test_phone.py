@@ -26,5 +26,5 @@ def test_card_download_link_from_config():
     out = phone.card_with_download(html, "https://example.org/get")
     assert "https://example.org/get" in out and "<svg" in out
     assert phone.REPO_URL in phone.card_with_download(html, None)           # not set: the public project page
-    assert phone.REPO_URL.startswith("https://github.com/") and phone.REPO_URL.endswith("/ham-net-speech-to-text")
+    assert phone.REPO_URL.startswith("https://github.com/") and phone.REPO_URL.endswith("/hamsidekick")
     assert "Ask the instructor" in phone.card_with_download(html, "")       # "" = no link on the card

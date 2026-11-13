@@ -8,7 +8,7 @@ paused: with "listen only during nets", that is during nets) or the accurate pas
 Windows power request for the display and the system, the same request a video player makes, and drops it
 otherwise so the PC can idle (and an OLED screen can rest) between nets.
 
-While it holds, the station also switches Windows to the "HamNet Station" power plan the installer makes (full
+While it holds, the station also switches Windows to the "HAM Sidekick Station" power plan the installer makes (full
 speed, no sleep, lid does nothing, USB / Wi-Fi / PCIe power saving off, Intel graphics at maximum) and the power mode
 to Best performance, after saving the operator's own plan and mode to data/power_snapshot.json; it puts them back
 when it lets go, or at its next start if it stopped while holding. The operator's plan can then favour the battery.
@@ -28,7 +28,7 @@ import sys
 import uuid
 from pathlib import Path
 
-HAMNET_PLAN = "6f1c2d4e-8a3b-4c5d-9e7f-48616d4e6574"   # the installer's "HamNet Station" plan
+STATION_PLAN = "6f1c2d4e-8a3b-4c5d-9e7f-48616d4e6574"   # the installer's "HAM Sidekick Station" plan
 BEST_PERFORMANCE = "ded574b5-45a0-4f42-8737-46345c09c238"                 # Windows power mode overlay
 BALANCED = "381b4222-f694-41f0-9685-ff5bb260df2e"                         # Windows' own Balanced plan
 
@@ -135,25 +135,25 @@ class PowerPlan:
 
     def refresh(self):
         """While holding: Windows switches the mode itself when the power source changes; put full speed back."""
-        if self.active() != HAMNET_PLAN or self.overlay() != BEST_PERFORMANCE:
-            self.set(HAMNET_PLAN, BEST_PERFORMANCE)
+        if self.active() != STATION_PLAN or self.overlay() != BEST_PERFORMANCE:
+            self.set(STATION_PLAN, BEST_PERFORMANCE)
 
     def switch(self) -> bool:
-        """Save the operator's plan + mode and switch to the HamNet plan. False when the plan is not installed."""
-        if not self.exists(HAMNET_PLAN):
+        """Save the operator's plan + mode and switch to the HAM Sidekick power plan. False when the plan is not installed."""
+        if not self.exists(STATION_PLAN):
             return False
         if not self.snapshot.exists():                           # never overwrite a saved plan with our own
             cur = self.active()
-            if cur != HAMNET_PLAN:
+            if cur != STATION_PLAN:
                 self.snapshot.write_text(json.dumps({"plan": cur, "overlay": self.overlay()}))
-        self.set(HAMNET_PLAN, BEST_PERFORMANCE)
+        self.set(STATION_PLAN, BEST_PERFORMANCE)
         return True
 
     def restore(self) -> dict | None:
-        """Put back the saved plan + mode (and forget them). None when nothing was saved. Stuck on the HamNet plan
+        """Put back the saved plan + mode (and forget them). None when nothing was saved. Stuck on the HAM Sidekick power plan
         with nothing saved (the snapshot lost): Windows' Balanced plan and the operator's own power mode."""
         if not self.snapshot.exists():
-            if self.active() == HAMNET_PLAN:
+            if self.active() == STATION_PLAN:
                 self.set(BALANCED, self.own_mode())
                 return {"plan": BALANCED, "overlay": None}
             return None
@@ -164,10 +164,10 @@ class PowerPlan:
 
 
 class KeepAwake:
-    """One Windows power request (display + system required) and the HamNet power plan, set and cleared on change.
+    """One Windows power request (display + system required) and the HAM Sidekick power plan, set and cleared on change.
     A no-op elsewhere."""
 
-    def __init__(self, reason: str = "HamNet Station is transcribing", snapshot: Path | None = None):
+    def __init__(self, reason: str = "HAM Sidekick Station is transcribing", snapshot: Path | None = None):
         self.held = False
         self.handle = None
         self.ok = sys.platform == "win32"
@@ -218,7 +218,7 @@ class KeepAwake:
                 try:
                     if want:
                         if not self.plan.switch():
-                            print("keep awake: no HamNet Station power plan (re-run the installer)", flush=True)
+                            print("keep awake: no HAM Sidekick Station power plan (re-run the installer)", flush=True)
                     else:
                         self.plan.restore()
                 except Exception as e:  # noqa: BLE001 — the power request still holds

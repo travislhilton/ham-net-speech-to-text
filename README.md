@@ -1,10 +1,15 @@
-# HamNet Station — ham net speech-to-text
+# HAM Sidekick Station — ham net speech-to-text
 
 Live speech-to-text for **amateur radio voice nets**, on a Windows PC connected to one or more radios.
 
 > **An independent volunteer project** (MIT License), offered freely to any amateur radio club, ARES (Amateur Radio Emergency Service) group or EOC (Emergency Operations Center) that can use it. A companion to the [Church of Jesus Christ EMCOMM forms](https://github.com/travislhilton/church-emcomm-wnlk-forms): the station writes the net's ICS (Incident Command System) 309 and 213 messages for Winlink, and can read an EOC's situation report out on a voice net. Machine transcription: the operator reviews everything before it is sent.
 
-HamNet Station listens to your radio and writes down every transmission a few seconds after the station unkeys. It shows who is talking, looks up every callsign in the FCC (Federal Communications Commission) database, explains Q-codes and prowords, coaches a newer operator through check-ins, relays and emergency traffic, and keeps each net's log, minutes and history. After the net it builds the **ICS-309** communications log and **ICS-213** summary for Winlink Express. It works with **no internet** once installed; a bigger home computer, when there is one, can re-read the net more accurately.
+HAM Sidekick Station listens to your radio and writes down every transmission a few seconds after the station unkeys. It shows who is talking, looks up every callsign in the FCC (Federal Communications Commission) database, explains Q-codes and prowords, coaches a newer operator through check-ins, relays and emergency traffic, and keeps each net's log, minutes and history. After the net it builds the **ICS-309** communications log and **ICS-213** summary for Winlink Express. It works with **no internet** once installed; a bigger home computer, when there is one, can re-read the net more accurately.
+
+> **Renamed 2026-11:** this project was called *HamNet Station* (repository `ham-net-speech-to-text`). It is now **HAM Sidekick Station**
+> (`hamsidekick/hamsidekick`; the old address redirects). Run the installer again on an existing PC: it moves the scheduled tasks,
+> firewall rule and desktop shortcut to the new names and keeps your folder (`C:\ham-net-speech-to-text`), settings, logs and
+> recordings. A new PC installs to `C:\HAM-Sidekick-Station`. *Sidekick* is also the on-air name of the optional assistant.
 
 ## Find your role
 
@@ -34,15 +39,15 @@ HamNet Station listens to your radio and writes down every transmission a few se
 
 | | Best for | Link |
 |---|---|---|
-| **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip)** |
-| **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf)** |
+| **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/hamsidekick/hamsidekick/archive/refs/heads/master.zip)** |
+| **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf)** |
 | Sidekick: **up to 3 questions** worked on at once, answered in the order asked; outside a net a ready answer is **given at a pause** (3.5 s quiet, a turn-over, or when asked: "This is W9XYZ Sidekick, for K7ABC: …"), with the disclosure when it is the first transmission; in a net it still announces and waits for net control. "What did you find?" / "give us your answer" ask for it | built 2026-11-12 |
 | Sidekick **Chat & prepared…** (`station/chat.py`, `station/topics.py`; a dialog from each radio's Sidekick card): a private **chat** with Grok, never transmitted, told this radio's frequency, band and your privileges, the net on now (net control, check-ins with names and towns, traffic, regulars not heard), the last transmissions, the last session's minutes, the **Library** and computed terrain paths between your **Sites** (name | lat, lon | height | note; kept on the PC only); words for the air it writes are Part 97 checked and can be **saved to Prepared**. **Prepared**: saved words and **talks** (a training topic written by the thinking model from the Library, split into one-transmission parts that end handing back to net control with the ID); every item has **▶ Hear** (this PC only, never the radio), edit, **Approve** (bound to the words: an edit un-approves), **Send now** (Send mode only) and **Arm**: then *"Sidekick, present the topic"* / *"continue"* on the net says the approved words exactly, no model in the loop | built 2026-11-12, browser-tested on the demo station (`tests/test_topics_chat.py`) |
 | Sidekick **Send** (a third position on a radio's Sidekick switch, offered only when that radio's Transmit switch is on; off by default): a draft that would speak is said on the air after a **3 s countdown** ("Sending in 3… Stop (Esc)"), only while the control operator is **at the station** (keyboard or mouse on the dashboard in the last 3 min), with listen-before-talk (carrier or voice, or anything new heard, cancels it), the frequency known, PTT through the radio's transmitter watchdog. **Esc, Stop or any click drops PTT at once.** The chosen Grok voice, else this PC's Windows voice offline. The ID clock, disclosure, check-in and prepared answers move on only when really sent. Logged to `data/agent_sends.jsonl` (`station/sender.py`, `tests/test_send.py`) | built 2026-11-12, not yet keyed on a real radio |
 | **Transmit test…** (Radios… → a radio with Transmit on: tick *a dummy load is connected*, then **Tone + ID** (5 s 1 kHz tone, then your call by voice) or **Phrase + ID**): same 3 s countdown, presence, listen-before-talk and Esc as Send, never moves Sidekick's ID clock; sets **Drive level** (0.02-1.0, the deviation), **Lead** and **Tail**, which Send then uses too (`station/sender.py`, `tests/test_send.py`) | built 2026-11-13, not yet keyed on a real radio |
 | **Fixed lines kept ahead** (`station/tts.py` `prerender`): when Sidekick is on (at station start, and when its name, operator, voice or speed change) the voice clips of the rules' fixed words (check-in, acknowledgement, first-time introduction, the transmitter test) are made and kept in the chosen voice, so the first check-in on the air does not wait on the voice service; quiet with no key or no internet | built 2026-11-13 |
 | **Tools for the thinking model** (`station/toolbox.py`, `agent.call_xai_tools`): with xAI, a deep answer and the private chat no longer get the library and path analyses pasted in as context; the model calls `search_library`, `list_sites` and `path_analysis` itself (up to 4 rounds, results bounded, failures returned as text), then gives its answer in the fixed schema. Other providers keep the pasted context | built 2026-11-13, tested with a scripted xAI (`tests/test_toolbox.py`) |
-| **Sidekick card** (two sides, US Letter) | Setting up Sidekick and reading it on a net | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Sidekick_Quick_Reference_Card.pdf)** |
+| **Sidekick card** (two sides, US Letter) | Setting up Sidekick and reading it on a net | **[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf)** |
 
 The same ZIP is on this page under the green **Code** button → **Download ZIP**.
 
@@ -50,13 +55,13 @@ The same ZIP is on this page under the green **Code** button → **Download ZIP*
 
 ## Install
 
-1. **Download** the [ZIP package](https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip) and save it anywhere.
+1. **Download** the [ZIP package](https://github.com/hamsidekick/hamsidekick/archive/refs/heads/master.zip) and save it anywhere.
 2. **Unblock** — right-click the ZIP → Properties → tick **Unblock** → OK *(skip it if there is no Unblock box)*.
 3. **Extract** — right-click the ZIP → **Extract All** → Extract.
 4. **Run the installer** — in the extracted folder open `install` → `windows` and double-click **`install.cmd`**. Press **Yes** when Windows asks for administrator rights. If Windows shows "Windows protected your PC", click **More info** → **Run anyway**.
 5. **Type your callsign** when asked. Press **Enter** to skip the QRZ.com question if you don't use QRZ (you can add it later).
 6. **Keep the PC plugged in and leave it alone while it measures.** The installer measures how fast this PC transcribes, with the screen held on (a laptop with its screen off runs several times slower and would get a slower setup).
-7. **Choose when the station may change your power settings** (it asks once; press **Enter** for the recommended choice). While it transcribes, the station keeps the screen on and switches to its own **HamNet Station** power plan at Best performance, then puts your own plan back. Settings → *Full speed and screen on* changes it later.
+7. **Choose when the station may change your power settings** (it asks once; press **Enter** for the recommended choice). While it transcribes, the station keeps the screen on and switches to its own **HAM Sidekick Station** power plan at Best performance, then puts your own plan back. Settings → *Full speed and screen on* changes it later.
 8. **Wait for `== Done`.** The first install downloads about 4 GB (Python packages, Whisper speech models, the FCC license database) and takes 10–30 minutes. It ends with **This PC**: anything in your power settings that would slow the station (on battery, power-saving mode, hibernate, an old graphics driver, a quiet fan profile), each with its fix. Then it lists the sound inputs this PC can record from: note your radio's.
 
 **Internet is needed for the first install only.** The station itself works with none.
@@ -72,7 +77,7 @@ or **Settings → This PC → Measure this PC again** measures again (after new 
 - checks the PC first (64-bit Windows 10/11, about 8 GB free, internet for the first install) and says what is missing;
 - installs the Microsoft Visual C++ runtime if it is missing (OpenVINO, PyTorch and faster-whisper need it);
 - installs Python 3.12 for all users (winget, or straight from python.org when winget is missing) and a private
-  environment in `C:\ham-net-speech-to-text\.venv` with every Python package the station uses;
+  environment in `C:\HAM-Sidekick-Station\.venv` with every Python package the station uses;
 - downloads four Whisper models in Intel OpenVINO format (three for the live text, Whisper large-v3 for the
   accurate pass; plus faster-whisper large-v3 on a PC with an NVIDIA card) and **benchmarks this PC** to choose the
   live engine (`tools/pick_engine.py` → `config/engine.yaml`): Intel graphics, NVIDIA (CUDA) or CPU;
@@ -80,21 +85,21 @@ or **Settings → This PC → Measure this PC again** measures again (after new 
   `config/engine.yaml`): each accurate model on each device (Intel GPU, CPU; NVIDIA; not the NPU, see below), then decides *both
   stages* (fast enough to follow every transmission), *final text only* (after each net) or *none*;
 - downloads the FCC amateur license database and the world country file, and schedules a daily
-  update (task "HamNet Callbook Update", 04:15, only when online);
+  update (task "HAM Sidekick Callbook Update", 04:15, only when online);
 - asks (once, optional) for a QRZ.com login: Enter skips it. It checks the login and says in plain words what the
   account gives (full records need QRZ's "XML Logbook Data" subscription; without it only names and countries; US
   callsigns are covered by the FCC database either way). The password goes to Windows Credential Manager;
 - reports the graphics card and driver (Intel/NVIDIA graphics are used only with a current driver);
 - keeps your settings (`config/station.yaml`, `config/engine.yaml`, `config/local.yaml`) across updates;
-- starts the station at every sign-in (task "HamNet Station", which also brings it back within 2 minutes if it
-  ever stops), puts a **HamNet Station** shortcut on the
+- starts the station at every sign-in (task "HAM Sidekick Station", which also brings it back within 2 minutes if it
+  ever stops), puts a **HAM Sidekick Station** shortcut on the
   desktop, and opens port 8091 to your home network and Tailscale only;
 - lists the audio inputs it can record from.
 
 **On a laptop:** keep it plugged in, set the maker's performance profile to **Performance** (ASUS: MyASUS → Fan
 Profile), turn off *Turn off my screen when I leave* (Settings → System → Power & battery → Presence sensing) and never
 let it hibernate on mains power. Laptops with Modern Standby slow to about a fifth of their speed once the screen is
-dark, so while the station transcribes it holds the screen on and switches to its own **HamNet Station** power plan,
+dark, so while the station transcribes it holds the screen on and switches to its own **HAM Sidekick Station** power plan,
 then puts yours back. **Settings → This PC** shows what it changes and anything that slows this PC. The details:
 [On a laptop](docs/MANUAL.md#on-a-laptop).
 
@@ -102,7 +107,7 @@ then puts yours back. **Settings → This PC** shows what it changes and anythin
 
 ## After installing — what to do
 
-1. **Open the dashboard:** double-click **HamNet Station** on the desktop (or browse to `http://localhost:8091/`).
+1. **Open the dashboard:** double-click **HAM Sidekick Station** on the desktop (or browse to `http://localhost:8091/`).
    The station starts by itself whenever you sign in to Windows.
 2. **Add your radio:** **Radios…** at the top → **+ Add a radio** → a name, its **sound input**, where its audio comes
    from (*speaker / earphone jack or SSB*, or *FM data jack*), mode and frequency → **Save and restart the station**.
@@ -187,12 +192,12 @@ Two sides on one sheet: **Install and Get Started** on the front, **Running a Ne
 Church of Jesus Christ EMCOMM quick reference cards. Print it double-sided ("flip on long edge"), laminate it, and
 keep it by the radio. Works in black and white.
 
-**[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf)** ·
-[view it on GitHub](https://github.com/travislhilton/ham-net-speech-to-text/blob/master/docs/HamNet_Station_Quick_Reference_Card.pdf) ·
+**[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf)** ·
+[view it on GitHub](https://github.com/hamsidekick/hamsidekick/blob/master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf) ·
 on the station: **Help** (top right of the dashboard) opens the same card; the browser's Print prints it.
 
 **Sidekick card** (two sides: setting up Sidekick, and Sidekick on a net):
-**[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Sidekick_Quick_Reference_Card.pdf)** ·
+**[Open the PDF](https://cdn.jsdelivr.net/gh/hamsidekick/hamsidekick@master/docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf)** ·
 on the station: **Settings → Station agent → Sidekick card**, or **Card** on Sidekick's card on a radio.
 
 The card's QR code opens this download page. A club handing out its own copy sets `download_url:` in
@@ -309,7 +314,7 @@ segmenting, the accurate pass, the home server.
 
 ## Support, feedback and bug reports
 
-Found a problem, or have an idea? Anyone with a GitHub account can **[open an issue](https://github.com/travislhilton/ham-net-speech-to-text/issues/new)**: say what you did, what you saw, the radio and interface, and the time of the transmission. Please don't post recordings of other operators' transmissions or their personal details.
+Found a problem, or have an idea? Anyone with a GitHub account can **[open an issue](https://github.com/hamsidekick/hamsidekick/issues/new)**: say what you did, what you saw, the radio and interface, and the time of the transmission. Please don't post recordings of other operators' transmissions or their personal details.
 
 ## Contributing — developing this project
 
@@ -379,7 +384,7 @@ server addresses, keys and logins go only in those files (`config/station.yaml`,
 | Live engine checked while a dashboard is open: a clear transmission read as one word re-checks the engine on a recent good read and reloads it if broken (`station/core.py`) | working (a fake engine in the tests; the failure seen once after Modern Standby) |
 | Recordings and net history kept 6 weeks by default (Settings: 1–104 weeks), swept every 6 hours: recordings, day logs, history database rows (then VACUUM), voiceprints, agent drafts, Grok comparisons; stale raw audio, OpenVINO cache over 3 GB, station.log over 10 MB (`station/retention.py`) | working, 2026-11-12 |
 | This PC: measured at full speed (screen held on, the processor's speed recorded, a slowed measurement marked), power settings checked with fixes (installer end + Settings), the keep-awake choice asked once at install, a one-time dashboard notice of what changes, a warning when live transcription runs >4× slower than measured, Measure this PC again (`station/pccheck.py`) | working, 2026-11-12 |
-| Full speed while transcribing on laptops: your power plan + mode saved, the installer's HamNet Station plan + Best performance + the screen held on during nets and traffic (+10 min; Settings: or the whole time a radio listens / always / never) or while the accurate pass has work, all put back after (and at the next start after a crash; left on the HamNet plan with nothing saved, it goes back to Windows' Balanced plan and your power mode) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
+| Full speed while transcribing on laptops: your power plan + mode saved, the installer's HAM Sidekick Station plan + Best performance + the screen held on during nets and traffic (+10 min; Settings: or the whole time a radio listens / always / never) or while the accurate pass has work, all put back after (and at the next start after a crash; left on the HAM Sidekick power plan with nothing saved, it goes back to Windows' Balanced plan and your power mode) (`station/awake.py`, `keep_awake:`) | working on the test laptop: out of Modern Standby by itself, 6 s → 0.5 s for the same work; plan restored after a hard stop |
 | Compiled-model cache for the live engine (`data/ov-cache`, shared with the accurate pass) | working; test laptop: turbo on the GPU 36 s → 16 s to load, small.en on the NPU 555 s → 11 s |
 | Over-the-air transcription test with word-error score and history | working |
 | Local names (Settings: name, meaning, said as a word/letters, sound-alikes, web site, also-heard phrases, nets by name) repaired in the agreement pass (joined forms, web sites said aloud, a guard for plain words), Local terms in the ICS-213, area packs (export / import file or https / installer `area-pack.json` or `-AreaPack`) | working (`station/localnames.py`), 2026-11-10 |
@@ -411,4 +416,4 @@ MIT — see [LICENSE](LICENSE). Use it, change it and share it, for your club, A
 
 ## About
 
-HamNet Station was created as a volunteer contribution to the amateur radio and EMCOMM (emergency communications) community, in the same family as the [Church of Jesus Christ EMCOMM forms](https://github.com/travislhilton/church-emcomm-wnlk-forms). It is offered freely to any club, ARES group or EOC that can use it. It is an independent project, not an official product of any church, club or agency.
+HAM Sidekick Station was created as a volunteer contribution to the amateur radio and EMCOMM (emergency communications) community, in the same family as the [Church of Jesus Christ EMCOMM forms](https://github.com/travislhilton/church-emcomm-wnlk-forms). It is offered freely to any club, ARES group or EOC that can use it. It is an independent project, not an official product of any church, club or agency.

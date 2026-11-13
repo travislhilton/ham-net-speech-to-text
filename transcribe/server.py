@@ -22,7 +22,7 @@ DATA = Path(os.environ.get("STT_DATA_DIR", os.path.expanduser("~/ham-net-speech-
 API_KEY = os.environ.get("EMCOMM_STT_KEY")
 DSN = os.environ.get("EMCOMM_DB_DSN")  # postgresql+psycopg://...
 
-app = FastAPI(title="ham-net-speech-to-text transcribe")
+app = FastAPI(title="HAM Sidekick Station transcribe")
 
 
 @app.on_event("startup")

@@ -39,7 +39,7 @@ def test_measure_holds_full_speed_waits_for_it_and_always_lets_go(tmp_path):
     ran, hold, envs = [], Hold(), []
 
     def fake(a, check=False, env=None):
-        ran.append(a[1]); envs.append(env["HAMNET_PLAN_HELD"])
+        ran.append(a[1]); envs.append(env["STATION_PLAN_HELD"])
     out = tmp_path / "engine.yaml"
     out.write_text("final: {device: GPU, model: m, rtf: 0.03}\naccurate: {mode: final_only, rtf: 0.3}\n")
     r = pccheck.measure(tmp_path, tmp_path, out, py="py", run=fake,

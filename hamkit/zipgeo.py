@@ -99,7 +99,7 @@ def parse(text: str) -> dict[str, tuple[float, float]]:
 
 
 def update(path: Path = DEFAULT_GEO, url: str = URL, log=print) -> int:
-    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "ham-net-speech-to-text"}),
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "HAM-Sidekick-Station"}),
                                 timeout=120) as r:
         data = r.read()
     with zipfile.ZipFile(io.BytesIO(data)) as z:

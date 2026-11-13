@@ -19,7 +19,7 @@ from pathlib import Path
 import yaml
 
 URL = "https://xmldata.qrz.com/xml/current/"
-AGENT = "ham-net-speech-to-text-0.1"
+AGENT = "HAM-Sidekick-Station-0.1"
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = Path(os.environ.get("CALLBOOK_DIR", Path.home() / "data" / "callbook")) / "qrz_cache.sqlite"
 TTL_S = 30 * 86400
@@ -33,8 +33,8 @@ class QRZError(RuntimeError):
     pass
 
 
-KEYRING_SERVICE = "ham-net-speech-to-text/qrz"
-ENV_FILE = Path(os.environ.get("HAMNET_ENV_FILE", Path.home() / ".config" / "emcomm-stt" / "env"))
+KEYRING_SERVICE = "ham-net-speech-to-text/qrz"   # a stored identifier (saved QRZ logins live under it): not renamed
+ENV_FILE = Path(os.environ.get("HAMSIDEKICK_ENV_FILE") or os.environ.get("HAMNET_ENV_FILE") or (Path.home() / ".config" / "emcomm-stt" / "env"))
 _cred_error = None
 
 

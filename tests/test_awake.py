@@ -29,9 +29,9 @@ def test_keep_awake_is_a_noop_off_windows(monkeypatch):
 
 def test_installer_and_station_use_the_same_plan_guid():
     from pathlib import Path
-    from station.awake import HAMNET_PLAN
+    from station.awake import STATION_PLAN
     ps1 = (Path(__file__).resolve().parent.parent / "install" / "windows" / "install.ps1").read_text()
-    assert f"$hn = '{HAMNET_PLAN}'" in ps1
+    assert f"$hn = '{STATION_PLAN}'" in ps1
 
 
 def _plan(tmp_path, active, saved=None):
@@ -49,13 +49,13 @@ def _plan(tmp_path, active, saved=None):
 
 
 def test_restore_puts_back_the_saved_plan(tmp_path):
-    p = _plan(tmp_path, awake.HAMNET_PLAN, {"plan": "my-plan", "overlay": "x"})
+    p = _plan(tmp_path, awake.STATION_PLAN, {"plan": "my-plan", "overlay": "x"})
     assert p.restore()["plan"] == "my-plan" and p.state == {"plan": "my-plan", "overlay": "own-mode"}
     assert not p.snapshot.exists()
 
 
-def test_restore_unsticks_the_hamnet_plan_when_nothing_was_saved(tmp_path):
-    p = _plan(tmp_path, awake.HAMNET_PLAN)
+def test_restore_unsticks_the_station_plan_when_nothing_was_saved(tmp_path):
+    p = _plan(tmp_path, awake.STATION_PLAN)
     assert p.restore()["plan"] == awake.BALANCED and p.state == {"plan": awake.BALANCED, "overlay": "own-mode"}
     q = _plan(tmp_path, "my-plan")                       # the operator's own plan: left alone
     assert q.restore() is None and q.state["plan"] == "my-plan"
