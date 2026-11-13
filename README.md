@@ -36,6 +36,7 @@ HamNet Station listens to your radio and writes down every transmission a few se
 |---|---|---|
 | **ZIP package** (the installer is inside: `install\windows\install.cmd`) | Every station PC — the first install and every update | **[Download the ZIP](https://github.com/travislhilton/ham-net-speech-to-text/archive/refs/heads/master.zip)** |
 | **Quick Reference Card** (two sides, US Letter) | Keeping by the radio; handing out at a class | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Station_Quick_Reference_Card.pdf)** |
+| Sidekick: **up to 3 questions** worked on at once, answered in the order asked; outside a net a ready answer is **given at a pause** (3.5 s quiet, a turn-over, or when asked: "This is W9XYZ Sidekick, for K7ABC: …"), with the disclosure when it is the first transmission; in a net it still announces and waits for net control. "What did you find?" / "give us your answer" ask for it | built 2026-11-12 |
 | **Sidekick card** (two sides, US Letter) | Setting up Sidekick and reading it on a net | **[Open the PDF](https://cdn.jsdelivr.net/gh/travislhilton/ham-net-speech-to-text@master/docs/HamNet_Sidekick_Quick_Reference_Card.pdf)** |
 
 The same ZIP is on this page under the green **Code** button → **Download ZIP**.

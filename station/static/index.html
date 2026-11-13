@@ -2318,7 +2318,7 @@ function renderEcho(rid){
   const L=(AG.drafts||[]).filter(d=>d.radio===rid),d=L[L.length-1];
   box.hidden=false;
   const pd=((AG||{}).pending||{})[rid],PS={working:"working on",ready:"answer ready for",announced:"announced the answer for",failed:"could not answer"};
-  const pend=pd?`<div class="meta">📝 ${esc(PS[pd.state]||pd.state)}: “${esc(pd.question||"")}” (${esc(pd.asker||"")}, ${esc((pd.at||"").slice(11,16))}${pd.took_s?`, ${pd.took_s}s ${esc(MODELN[pd.model]||pd.model||"")}`:""})${pd.answer?`<div class="say">“${esc(pd.answer)}”</div>`:""}${pd.error?` <span class="bad">${esc(pd.error)}</span>`:""}</div>`:"";
+  const pend=pd?`<div class="meta">📝 ${esc(PS[pd.state]||pd.state)}: “${esc(pd.question||"")}” (${esc(pd.asker||"")}, ${esc((pd.at||"").slice(11,16))}${pd.took_s?`, ${pd.took_s}s ${esc(MODELN[pd.model]||pd.model||"")}`:""})${pd.answer?`<div class="say">“${esc(pd.answer)}”</div>`:""}${pd.error?` <span class="bad">${esc(pd.error)}</span>`:""}${(pd.queue||[]).length?`<div class="small muted">Next: ${pd.queue.map(q=>`“${esc(q.question||"")}” (${esc(q.asker||"")}, ${esc(PS[q.state]||q.state)})`).join(" · ")}</div>`:""}</div>`:"";
   const T=((AG||{}).turn||{})[rid]||{state:"listening",say:"Listening"},mn=(AG||{}).mode_now||{};
   const TC={called:"bad",open:"ok",answer:"ok",in:"in",muted:"mute",listening:""}[T.state]||"";
   const show=T.last_speak||null,sp=(L.filter(x=>x.speak)).length;

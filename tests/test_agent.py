@@ -100,6 +100,7 @@ def test_a_draft_runs_the_model_checks_it_and_never_transmits(tmp_path):
 # ---------------------------------------------------------------- Sidekick (11-10 evening) -------------------------
 import json
 import os
+import threading
 import time
 import urllib.error
 
@@ -300,7 +301,7 @@ def test_a_question_that_needs_thinking_is_answered_when_net_control_gives_the_f
     assert r["kind"] == "ready" and r["ok"] and st.agent.view()["pending"]["ic"]["state"] == "announced"
     _say(st, "Sidekick, go ahead", speaker="K7QXN", minute=3)
     a = st.agent.draft("ic", "t2")
-    assert a["kind"] == "answer" and a["ok"]
+    assert a["kind"] == "answer" and a["ok"], [c for c in a.get("fcc", []) if not c["ok"]]
     assert a["say"].startswith("W9XYZ... K7ABC, sixty meters")          # the prepared words, not a paraphrase
     assert "ic" not in st.agent.view()["pending"]                    # delivered
 
@@ -464,10 +465,103 @@ def test_a_ready_answer_waits_for_its_place():
     assert "ready" not in allowed_kinds(net, True, p, "Let's talk about antennas before winter.")[0]
     assert "ready" in allowed_kinds(net, True, p, "Any comments or questions for the net?")[0]
     assert "ready" in allowed_kinds(net | {"addressed": True}, True, p, "Sidekick, do you have that?")[0]
-    assert "ready" in allowed_kinds(CTX_R | {"in_net": False, "trigger": "answer ready"}, True, p, "73")[0]
+    # outside a net (owner 11-12) the answer itself is given at the pause, not announced first
+    out = allowed_kinds(CTX_R | {"in_net": False, "trigger": "answer ready"}, True, p, "73")[0]
+    assert "answer" in out and "ready" not in out
 
 
 def test_the_thinking_model_gets_the_privileges_from_the_code():
     from station.agent import facts
     f = " ".join(facts())
     assert "General: 1.8-2, 3.8-4, 7.175-7.3, 14.225-14.35" in f and "30 m (10.1 MHz) has no phone" in f
+
+
+def test_outside_a_net_the_ready_answer_is_given_at_a_pause_and_says_whom_it_is_for(tmp_path, xai_key):
+    """Owner 11-12: in a conversation, the answer at the next lull (or a turn-over), not an announcement first."""
+    def down(key, model, system, user, **kw):
+        raise urllib.error.URLError("no route")
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", down), "anthropic": ("ANTHROPIC_API_KEY", down)})
+    st.agent._net = lambda *a, **k: {}                          # a conversation, no net on
+    st.agent.state["ic"] = {"pending": {"id": "p1", "state": "ready", "question": "60 m band plan",
+                                        "asker": "K7ABC", "at": T.isoformat(), "answer": "Five channels, USB."},
+                            "disclosed": f"ic@{T:%Y-%m-%d}", "last_id": T.replace(hour=20, minute=4)}
+    _say(st, "Yeah the antenna came down in the wind last week", speaker="K7ABC")
+    quiet = st.agent.draft("ic", "t0")                          # mid-conversation: not yet
+    assert not quiet["speak"]
+    assert st.agent.timers["ic"].is_alive()                     # a lull check is waiting
+    st.agent.timers["ic"].cancel()
+    a = st.agent.draft("ic", None, why="pause")                 # nobody keyed for PAUSE_S
+    assert a["kind"] == "answer" and a["ok"], [c for c in a.get("fcc", []) if not c["ok"]]
+    assert a["say"].startswith("This is W9XYZ Sidekick, for K7ABC: Five channels, USB.")
+    assert "pending" not in st.agent.state["ic"]
+
+
+def test_a_turn_over_or_being_asked_gives_the_answer_outside_a_net(tmp_path, xai_key):
+    from station.agent import allowed_kinds, GO_AHEAD
+    p = {"state": "ready", "question": "q", "asker": "K7ABC"}
+    conv = CTX_R | {"in_net": False}
+    assert "answer" in allowed_kinds(conv, True, p, "That's all I had, back to you.")[0]
+    assert "answer" not in allowed_kinds(conv, True, p, "So then I went to the swap meet and")[0]
+    assert "answer" in allowed_kinds(conv | {"addressed": True}, True, p, "Sidekick, what did you find?")[0]
+    for asked in ("W9XYZ Sidekick, what did you find?", "Sidekick, give us your answer", "Sidekick, are you ready?"):
+        assert GO_AHEAD.search(asked), asked
+
+
+def test_several_questions_wait_their_turn_in_order(tmp_path, xai_key):
+    """Owner 11-12: anyone may ask it anything; more than one question can be waiting."""
+    asked = []
+
+    def provider(key, model, system, user, **kw):
+        if kw.get("schema") is agent.THINK_SCHEMA:
+            q = [x for x in user.splitlines() if x.startswith("The question to answer:")][0]
+            return {"answer": "Answer to " + q.split(":", 1)[1].split("(asked")[0].strip(), "confident": True,
+                    "why": "x"}, {}
+        last = [x for x in user.splitlines() if x.startswith("[")][-1]
+        if "Sidekick," in last and "?" in last:
+            q = last.split("Sidekick,", 1)[1].strip()
+            asked.append(q)
+            return {"speak": True, "kind": "working", "say": "W9XYZ, Sidekick, an automated assistant, Pat is control "
+                    "operator, copy, working on it.", "wait_s": 1.5,
+                    "why": "x", "question": q}, {}
+        return {"speak": False, "kind": "none", "say": "", "wait_s": 2, "why": "-", "question": ""}, {}
+    st = _station(tmp_path, minute=3)                          # the conversation is still going on
+    _on(st, {"xai": ("XAI_API_KEY", provider), "anthropic": ("ANTHROPIC_API_KEY", provider)})
+    st.agent._net = lambda *a, **k: {}                          # a conversation: anyone asks, answers at the pauses
+    for i, (who, q) in enumerate((("K7ABC", "how high should a VHF antenna be?"),
+                                  ("N0CALL", "what is VARA FM?"),
+                                  ("K7QXN", "who runs the gateway?"))):
+        _say(st, f"Sidekick, {q}", speaker=who, minute=1 + i)
+        d = st.agent.draft("ic", f"t{i}")                        # asked back to back, before any answer is ready
+        assert d["kind"] == "working" and d["ok"], (q, [c for c in d.get("fcc", []) if not c["ok"]])
+    for th in [t for t in threading.enumerate() if t.name != "MainThread" and "Thread" in t.name]:
+        th.join(5)
+    for t in list(st.agent.timers.values()):
+        t.cancel()
+    s = st.agent.state["ic"]
+    assert s["pending"]["asker"] == "K7ABC" and [x["asker"] for x in s["queue"]] == ["N0CALL", "K7QXN"]
+    assert all(x["state"] == "ready" for x in [s["pending"], *s["queue"]])
+    _say(st, "Sidekick, what is a fourth question?", speaker="K7ABC", minute=5)   # the list is full
+    full = st.agent.draft("ic", "t9")
+    assert not full.get("ok", True) or full["kind"] != "working"
+    for t in list(st.agent.timers.values()):
+        t.cancel()
+    _say(st, "OK, we'll hear from it in a bit.", speaker="K7ABC", minute=3)
+    st.clock.t = st.clock.t.replace(second=10)                  # then nobody keys for 10 s: a pause
+    a = st.agent.draft("ic", None, why="pause")
+    assert a["kind"] == "answer" and "for K7ABC" in a["say"] and "how high" in a["say"]
+    assert st.agent.state["ic"]["pending"]["asker"] == "N0CALL"          # the next one moves up
+
+
+def test_the_first_answer_at_a_pause_carries_the_disclosure(tmp_path, xai_key):
+    def down(key, model, system, user, **kw):
+        raise urllib.error.URLError("no route")
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", down), "anthropic": ("ANTHROPIC_API_KEY", down)})
+    st.agent._net = lambda *a, **k: {}
+    st.agent.state["ic"] = {"pending": {"id": "p1", "state": "ready", "question": "q", "asker": "K7ABC",
+                                        "at": T.isoformat(), "answer": "Five channels, USB."}}
+    _say(st, "Well, that's about it, over.", speaker="K7ABC")
+    a = st.agent.draft("ic", "t0")
+    assert a["kind"] == "answer" and a["ok"], [c for c in a["fcc"] if not c["ok"]]
+    assert a["say"].startswith("This is W9XYZ, Sidekick, an automated assistant, Pat is control operator, for K7ABC:")

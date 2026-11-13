@@ -329,8 +329,10 @@ you chose is remembered. Each column shows:
     business it says "This is W9XYZ Sidekick, I have a response ready for the earlier inquiry from K7ABC"; told to go
     ahead, it reads the prepared answer word for word (the code puts the prepared words in; at most 70 words, checked
     against the FCC rules before it is ever offered). Outside a net it offers the answer once the frequency is open
-    after the station that asked. One prepared answer at a time; if the thinking fails it says so at the next opening
-    and that you will follow up. The card shows the answer's state (working, ready, announced, failed).
+    after the station that asked. Up to three questions are worked on at once and answered in the order asked (the card shows the next ones);
+    if the thinking fails it says so at the next opening and that you will follow up. **Outside a net** (a conversation) a
+    ready answer is given at a pause, not announced: after 3.5 s of quiet, when a station turns it over, or when someone
+    asks for it ("Sidekick, what did you find?"): "This is W9XYZ Sidekick, for K7ABC: …". The card shows the answer's state (working, ready, announced, failed).
   - **Offline it keeps working, nothing waits.** When the model cannot be reached (no internet, a timeout of 8 s)
     fixed rules write the draft at once: check in when net control opens check-ins to a station like yours (also at
     "next station, please" during open check-ins; not when the call is for maritime, mobile, city or county stations,

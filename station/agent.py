@@ -81,6 +81,8 @@ MODEL_TIMEOUT_S = 8       # a live draft that waits longer than this has missed 
 DEEP_MODEL = "grok-4.5"   # the thinking model for a question that needs it (reasoning: seconds to a minute)
 DEEP_TIMEOUT_S = 120      # past this the work has failed: said so at the next opening
 ANSWER_WORDS = 70         # a prepared answer fits one transmission (MAX_WORDS with the ID)
+QUEUE_MAX = 2             # questions waiting behind the one being answered (owner 11-12: anyone may ask it anything)
+PAUSE_S = 3.5             # outside a net, a ready answer is given after this long with nobody transmitting
 KEEP = 60                 # drafts kept in memory (all are appended to data/agent_drafts.jsonl)
 
 PHONETIC = {"A": "Alfa", "B": "Bravo", "C": "Charlie", "D": "Delta", "E": "Echo", "F": "Foxtrot", "G": "Golf",
@@ -177,7 +179,7 @@ Speak ONLY when:
 - someone asks this station a question that needs thinking, looking up or working out (anything you could not answer well in one breath): acknowledge it and say you are working on it and will report back (kind working), e.g. "{call} {name}, copy your question on <topic>, working on it, I'll report back when there's an opening." Put the question, restated clearly in one line with who asked, in "question". Never guess at the answer now;
 - net control acknowledges or recognizes {call} and expects an answer;
 - the copy was too poor to answer: ask them to say again (kind say_again).
-Prepared answers (see "Your prepared answer" below, when there is one): when it is READY, wait for your place: in a net, only when net control asks for input, comments, further business, questions or "anyone else"; outside a net, when the frequency is open after the station that asked. Then say only that you have it (kind ready): "This is {call} {name}, I have a response ready for the earlier inquiry from <station>." Never read it before you are told to go ahead. When net control or the asker then tells {call}/{name} to go ahead, give kind answer (the station reads the prepared words itself; leave "say" empty). If the work FAILED, at the same kind of opening say briefly that you could not get the answer and {op} will follow up (kind reply).
+Prepared answers (see "Your prepared answer" below, when there is one): IN A NET, when it is READY wait for your place: only when net control asks for input, comments, further business, questions or "anyone else". Then say only that you have it (kind ready): "This is {call} {name}, I have a response ready for the earlier inquiry from <station>." Never read it before you are told to go ahead. When net control or the asker tells {call}/{name} to go ahead, or the asker or {op} asks {call}/{name} for it, give kind answer (the station reads the prepared words itself; leave "say" empty). OUTSIDE A NET (a conversation), give it at a pause (kind answer): when the frequency has been quiet a few seconds, when a station turns it over, or when asked for it; the station says "This is {call} {name}, for <station>:" before the words. If the work FAILED, at the same kind of opening say briefly that you could not get the answer and {op} will follow up (kind reply). More than one question may be waiting: they are answered in the order asked.
 Otherwise stay silent (speak false, kind none). Never break into another conversation, never call CQ, never talk \
 just to fill silence. During emergency or priority traffic stay silent unless net control asks this station directly.
 
@@ -465,7 +467,19 @@ INPUT_CALL = re.compile(
     r"anyone else|anybody else|(further|other|new) business|open (the )?floor|comments or questions|"
     r"(the )?floor is open)", re.I)
 GO_AHEAD = re.compile(r"\b(go ahead|go on|let'?s hear it|proceed|you have the (floor|frequency)|"
-                      r"what (have you got|do you have|is it))\b", re.I)
+                      r"what (have you got|do you have|is it|did you (find|learn|come up with))|"
+                      r"(give|share|read) (us |me )?(your |the |that )?(answer|response|findings)|"
+                      r"(your|the) (answer|response) (please|now)|are you ready|do you have (an|the|that) answer)\b", re.I)
+# a station handing the frequency on in a conversation: the end of its transmission
+TURNOVER = re.compile(r"\b(over|back to you|back over to you|go ahead|your turn|what do you think|turn it over)\W*$", re.I)
+
+
+def _direct_answer_place(ctx: dict, p: dict, text: str) -> bool:
+    """Outside a net, a READY answer is given at a pause (owner 11-12): the frequency quiet PAUSE_S, a turn-over,
+    or the station called."""
+    return (p.get("state") == "ready" and not ctx.get("in_net")
+            and (ctx.get("trigger") in ("answer ready", "pause") or bool(TURNOVER.search(text or ""))
+                 or bool(ctx.get("addressed"))))
 
 
 def rules_draft(rows: list[dict], ctx: dict, checked_in: bool, pending: dict | None = None) -> dict:
@@ -480,7 +494,10 @@ def rules_draft(rows: list[dict], ctx: dict, checked_in: bool, pending: dict | N
     if ctx.get("emergency"):
         return silent | {"why": "emergency or priority traffic: silent"}
     p = pending or {}
-    if p.get("state") == "announced" and ctx.get("addressed") and GO_AHEAD.search(text):
+    if _direct_answer_place(ctx, p, text):
+        return {"speak": True, "kind": "answer", "say": "", "wait_s": 1.5, "question": "",
+                "why": "outside a net: the prepared answer at a pause"}
+    if p.get("state") in ("ready", "announced") and ctx.get("addressed") and GO_AHEAD.search(text):
         return {"speak": True, "kind": "answer", "say": "", "wait_s": 1.5, "question": "",
                 "why": "told to go ahead after announcing the answer"}
     if p.get("state") in ("ready", "failed") and INPUT_CALL.search(text):
@@ -536,14 +553,15 @@ def allowed_kinds(ctx: dict, checked_in: bool, pending: dict | None, text: str) 
         out.append("check_in")
     if ctx.get("addressed"):
         out += ["reply", "acknowledge", "say_again", "stand_by"]
-        if p.get("state") not in ("working", "ready", "announced"):
+        if p.get("state") not in ("working", "ready", "announced") or not ctx.get("queue_full"):
             out.append("working")
     # 11-11 rehearsal: offered whenever ready, the quick model announced it right after net control moved on to a
     # topic. Its place: net control asking for input, someone calling this station, or (outside a net) an open
     # frequency after the answer became ready.
-    if p.get("state") == "ready" and (INPUT_CALL.search(text or "") or ctx.get("addressed")
-                                      or (not ctx.get("in_net") and ctx.get("trigger") == "answer ready")):
+    if p.get("state") == "ready" and ctx.get("in_net") and (INPUT_CALL.search(text or "") or ctx.get("addressed")):
         out.append("ready")
+    if _direct_answer_place(ctx, p, text):
+        out.append("answer")
     if p.get("state") in ("ready", "announced") and (ctx.get("addressed") or GO_AHEAD.search(text or "")):
         out.append("answer")
     if p.get("state") == "failed" and (ctx.get("addressed") or INPUT_CALL.search(text or "")):
@@ -675,6 +693,9 @@ class Agent:
             d = {k: s[k] for k in ("disclosed", "checked_in", "checked_in_at", "checked_in_how", "muted") if s.get(k)}
             if isinstance(s.get("pending"), dict) and s["pending"].get("state") in ("ready", "announced", "failed"):
                 d["pending"] = s["pending"]                     # work in flight is lost with the process: not kept
+            qq = [x for x in s.get("queue") or [] if isinstance(x, dict) and x.get("state") in ("ready", "failed")]
+            if qq:
+                d["queue"] = qq
             try:
                 if s.get("last_id"):
                     d["last_id"] = datetime.fromisoformat(s["last_id"])
@@ -685,7 +706,8 @@ class Agent:
 
     def _save_state(self):
         doc = {rid: {k: (v.isoformat(timespec="seconds") if isinstance(v, datetime) else v) for k, v in s.items()
-                     if k in ("last_id", "disclosed", "checked_in", "checked_in_at", "checked_in_how", "muted", "pending")}
+                     if k in ("last_id", "disclosed", "checked_in", "checked_in_at", "checked_in_how", "muted", "pending",
+                              "queue")}
                for rid, s in self.state.items()}
         try:
             tmp = self.state_path.with_suffix(".tmp")
@@ -770,7 +792,9 @@ class Agent:
                 "models": [{"id": m, "label": v["label"], "ready": keys.get(v["provider"], False)}
                            for m, v in MODELS.items()],
                 "online": {p: o.view() for p, o in self.online.items()},
-                "pending": {rid: s["pending"] for rid, s in self.state.items() if s.get("pending")},
+                "pending": {rid: {**s["pending"], "queue": [dict(question=x.get("question"), asker=x.get("asker"),
+                                                                 state=x.get("state")) for x in s.get("queue") or []]}
+                            for rid, s in self.state.items() if s.get("pending")},
                 "classes": list(PHONE), "drafts": list(self.drafts),
                 "turn": {rid: self.turn(rid) for rid in self.st.radios if self.mode(rid) == "draft"},
                 "mode_now": self._mode_now(keys)}
@@ -908,7 +932,7 @@ class Agent:
                " - no general call for check-ins heard") + ". Do not check in."),
             f"Your first transmission in this contact: {'yes - disclose' if first else 'no'}.",
             f"Minutes since {call} last identified: {'never' if not last_id else int((now - last_id).total_seconds() // 60)}.",
-            *self._pending_lines(st.get("pending"), why, rows, now),
+            *self._pending_lines(st.get("pending"), why, rows, now, st.get("queue") or []),
             "Transcript (oldest first; speech recognition, may contain errors):",
             *(lines or ["(nothing heard yet)"]),
             "Should " + call + " transmit now? Answer with the JSON.",
@@ -924,6 +948,8 @@ class Agent:
                "busy": busy, "freq_mhz": r.get("freq_mhz") or lastrow.get("freq_mhz"), "mode": r.get("mode"),
                "license_class": self.cfg.get("license_class"), "addressed": addressed, "asked": asked,
                "in_net": bool(net.get("name")), "trigger": why,
+               "queue_full": len(st.get("queue") or []) >= QUEUE_MAX, "last_tx": lastrow.get("id"),
+               "asked_tx": {x.get("tx") for x in [st.get("pending") or {}, *(st.get("queue") or [])] if x.get("tx")},
                "roll_call": bool(rows) and bool(ROLL_CALL.search(lastrow.get("text", ""))),
                "invited": invited}
         main_model = self.cfg.get("model") or DEFAULT_MODEL
@@ -938,6 +964,16 @@ class Agent:
             # not this station's turn (not called, no check-ins open to it, no answer waiting): silent at once, no model
             models, rate_ok = [], False
             main = self._finish({"speak": False, "kind": "none", "say": "", "wait_s": 2.0, "why": gate_why}, ctx,
+                                "station", 0.0, addressed)
+        elif ("answer" in allowed and why in ("pause", "answer ready") and not ctx["in_net"] and not asked
+              and self._quiet_for(rows, now) < PAUSE_S - 0.05):
+            models, rate_ok = [], False                        # ready mid-conversation: wait for the lull
+            main = self._finish({"speak": False, "kind": "none", "say": "", "wait_s": 2.0,
+                                 "why": "answer ready: waiting for a pause"}, ctx, "station", 0.0, addressed)
+        elif "answer" in allowed and why in ("pause", "answer ready") and not ctx["in_net"] and not asked:
+            # outside a net, a lull with an answer ready: the station's own move, at once (owner 11-12), no model
+            models, rate_ok = [], False
+            main = self._finish(rules_draft(rows, ctx, st.get("checked_in") == contact, st.get("pending")), ctx,
                                 "station", 0.0, addressed)
         else:
             rate_ok = asked or self._rate_ok()
@@ -983,7 +1019,21 @@ class Agent:
                 pass
         keys = {p: secrets.status(self.st.root, k)["set"] for p, (k, _) in self.providers.items()}
         self.st.bus.publish("agent", {"draft": d, "turn": {rid: self.turn(rid)}, "mode_now": self._mode_now(keys)})
+        pend = st.get("pending") or {}
+        if (not ctx["in_net"] and pend.get("state") in ("ready", "failed") and not d.get("speak") and why != "pause"
+                and not asked and self.mode(rid) == "draft"):
+            self._later(rid, PAUSE_S - DEBOUNCE_S, None, why="pause")   # a conversation: the answer at the next lull
         return d
+
+    @staticmethod
+    def _quiet_for(rows, now) -> float:
+        """Seconds since the last transmission heard ended."""
+        try:
+            last = rows[-1]
+            end = datetime.fromisoformat(last["start"]) + timedelta(seconds=float(last.get("duration_s") or 0))
+            return max(0.0, (now - end).total_seconds())
+        except (IndexError, KeyError, ValueError, TypeError):
+            return 1e9
 
     def _checked_in(self, st, contact, now, how):
         st["checked_in"], st["checked_in_at"], st["checked_in_how"] = contact, now.isoformat(timespec="seconds"), how
@@ -1040,15 +1090,16 @@ class Agent:
         return v
 
     # ----- the prepared answer (two speeds) -----
-    def _pending_lines(self, p, why, rows, now) -> list[str]:
+    def _pending_lines(self, p, why, rows, now, queue=()) -> list[str]:
         if not p:
             return []
+        later = [f"Also waiting, after it: \"{x.get('question')}\" from {x.get('asker')} ({x.get('state')})." for x in queue]
         q, who, at = p.get("question") or "?", p.get("asker") or "a station", p.get("at", "")[11:16]
         state = p.get("state")
-        one = ("Only one prepared answer at a time: another question that needs thinking gets a short reply that "
-               "the control operator will follow up.")
+        one = (f"Up to {QUEUE_MAX + 1} questions are worked on at once; they are answered in the order asked. "
+               "Another question that needs thinking: kind working again (it joins the list).")
         if state == "working":
-            return [one, f"Your prepared answer: WORKING on \"{q}\" (asked by {who} at {at}). It is not ready: do not "
+            return later + [one, f"Your prepared answer: WORKING on \"{q}\" (asked by {who} at {at}). It is not ready: do not "
                     f"mention it, carry on as usual."]
         if state == "ready":
             out = [one, f"Your prepared answer: READY for \"{q}\" (asked by {who} at {at}). Announce it (kind ready) only "
@@ -1061,14 +1112,14 @@ class Agent:
                                f"s ago.)")
                 except (KeyError, ValueError):
                     pass
-            return out
+            return out + later
         if state == "announced":
             return [one, f"Your prepared answer: ANNOUNCED at {p.get('announced_at', '')[11:16]} (for \"{q}\" from {who}). "
                     f"If you are now told to go ahead, kind answer. If told to wait, or the net moved on, stay silent "
-                    f"until given the floor."]
+                    f"until given the floor."] + later
         if state == "failed":
             return [f"Your prepared answer: FAILED for \"{q}\" (asked by {who} at {at}). At the next opening say "
-                    f"briefly that you could not get it and the control operator will follow up (kind reply)."]
+                    f"briefly that you could not get it and the control operator will follow up (kind reply)."] + later
         return []
 
     def _protocol(self, d: dict, p: dict | None, ctx: dict) -> dict:
@@ -1096,9 +1147,14 @@ class Agent:
             d["ok"] = False
             return d
         if d["kind"] == "working":
-            if p.get("state") in ("working", "ready", "announced"):
+            if ctx.get("last_tx") and ctx["last_tx"] in (ctx.get("asked_tx") or ()):
+                d["fcc"] = d.get("fcc", []) + [{"rule": "protocol", "ok": False,
+                                                "note": "already working on the question in this transmission"}]
+                d["ok"] = False
+                return d
+            if p.get("state") in ("working", "ready", "announced") and ctx.get("queue_full"):
                 d["fcc"] = d.get("fcc", []) + [{"rule": "protocol", "ok": False, "note":
-                                                f"one prepared answer at a time (still on: {p.get('question')})"}]
+                                                f"{QUEUE_MAX + 1} questions already waiting (first: {p.get('question')})"}]
                 d["ok"] = False
             return d
         if d["kind"] == "ready" and p.get("state") not in ("ready", "announced"):
@@ -1112,6 +1168,10 @@ class Agent:
                 d["ok"] = False
                 return d
             say = p["answer"].strip()
+            if p.get("state") == "ready" and not ctx.get("in_net"):     # given at a pause: say whom it is for
+                who = f"for {p.get('asker') or 'the earlier question'}: {say}"
+                say = (f"This is {ctx['call']}, {ctx['name']}, an automated assistant, {ctx['op']} is control "
+                       f"operator, {who}" if ctx.get("first") else f"This is {ctx['call']} {ctx['name']}, {who}")
             if not _has_call(say, ctx["call"]):
                 say = f"{say.rstrip('.')}. {ctx['call']}."
             d["say"] = say
@@ -1123,24 +1183,44 @@ class Agent:
         """A draft the station would have sent moves the prepared answer along."""
         p, kind = st.get("pending"), d.get("kind")
         last = rows[-1] if rows else {}
-        if kind == "working" and not (p and p.get("state") == "working"):
+        if kind == "working":
             asker = last.get("speaker") or next((c for c in last.get("callsigns") or [] if c != ctx["call"]), None)
-            p = {"id": uuid.uuid4().hex[:8], "state": "working", "question": d.get("question") or last.get("text", ""),
+            q = {"id": uuid.uuid4().hex[:8], "state": "working", "question": d.get("question") or last.get("text", ""),
+                 "tx": last.get("id"),
                  "asker": asker or "a station", "at": now.isoformat(timespec="seconds"), "radio": rid,
                  "model": self.cfg.get("deep_model") or DEEP_MODEL, "contact": contact}
-            st["pending"] = p
-            th = threading.Thread(target=self._think_safe, args=(rid, dict(p), list(lines), ctx), daemon=True)
+            if p and p.get("state") in ("working", "ready", "announced"):
+                st.setdefault("queue", []).append(q)            # answered after the one before it, in order
+            else:
+                st["pending"] = p = q
+            th = threading.Thread(target=self._think_safe, args=(rid, dict(q), list(lines), ctx), daemon=True)
             th.start()
             self._thinking = th                                 # (tests join it)
         elif kind == "ready" and p:
             p.update(state="announced", announced_at=now.isoformat(timespec="seconds"))
         elif kind == "answer" and p:
-            st.pop("pending", None)
+            self._next_pending(rid, st)
         elif kind == "reply" and p and p.get("state") == "failed":
-            st.pop("pending", None)
+            self._next_pending(rid, st)
         cur = st.get("pending")
-        if kind in ("working", "ready", "answer") or (p and not cur):
-            self.st.bus.publish("agent", {"pending": {"radio": rid, **(cur or {"state": "none"})}})
+        if kind in ("working", "ready", "answer") or (p and cur is not p):
+            self._publish_pending(rid, st)
+
+    def _next_pending(self, rid, st):
+        """The answered question is done: the next one asked moves up (its own thinking already running or done)."""
+        st.pop("pending", None)
+        q = st.get("queue") or []
+        if q:
+            st["pending"] = q.pop(0)
+            if st["pending"].get("state") in ("ready", "failed") and self.mode(rid) == "draft":
+                self._later(rid, PAUSE_S, None, why="pause")    # its place comes at the next opening
+        self._save_state()
+
+    def _publish_pending(self, rid, st):
+        cur = st.get("pending")
+        self.st.bus.publish("agent", {"pending": {"radio": rid, **(cur or {"state": "none"}),
+                                                  "queue": [dict(question=x.get("question"), asker=x.get("asker"),
+                                                                 state=x.get("state")) for x in st.get("queue") or []]}})
 
     def _think_safe(self, rid, p, lines, ctx):
         try:
@@ -1200,10 +1280,15 @@ class Agent:
         st = self.state.setdefault(rid, {})
         p = st.get("pending")
         if not p or p.get("id") != pid:
-            return                                              # superseded (a new question, a restart)
+            q = next((x for x in st.get("queue") or [] if x.get("id") == pid), None)
+            if q:
+                q.update(upd)                                   # waiting its turn: kept, said after the one before
+                self._save_state()
+                self._publish_pending(rid, st)
+            return                                              # else superseded (a restart)
         p.update(upd)
         self._save_state()
-        self.st.bus.publish("agent", {"pending": {"radio": rid, **p}})
+        self._publish_pending(rid, st)
         try:
             with open(self.log_path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"pending": {"radio": rid, **p}}) + "\n")
