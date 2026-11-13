@@ -73,7 +73,11 @@ if ($vc -and $vc.Installed -eq 1 -and $vc.Major -ge 14 -and $vc.Minor -ge 40) {
 Step "Python 3.12"
 $py = 'C:\Program Files\Python312\python.exe'
 if (-not (Test-Path $py)) {
-  if (Get-Command winget -ErrorAction SilentlyContinue) {
+  # Windows on ARM (a Parallels or Surface PC): the station's packages (OpenVINO, PyTorch, hidapi) ship x64 wheels only, and
+  # winget would install the ARM64 Python. Use the x64 Python from python.org: Windows 11 runs it by emulation.
+  $arm = $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64'
+  if ($arm) { Write-Host '  Windows on ARM: using the x64 Python (runs by emulation; the station is built for x64 packages)' }
+  if (-not $arm -and (Get-Command winget -ErrorAction SilentlyContinue)) {
     Run { & winget install --id Python.Python.3.12 -e --source winget --scope machine --silent `
       --accept-source-agreements --accept-package-agreements --disable-interactivity }
   }
