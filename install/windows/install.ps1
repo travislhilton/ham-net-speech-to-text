@@ -8,6 +8,8 @@ Python packages, four Whisper models, the FCC license database; more with an NVI
               [-AreaPack <file or https address>]   (else an area-pack.json beside install.cmd is imported)
               [-KeepAwake traffic|listening|always|off]   (answers the power-settings question)
               [-Remeasure]                         (measure this PC again on an update)
+              [-ModelsFrom <folder>]               (copy the Whisper models from another station's models folder, a USB drive or a
+                                                    network share instead of downloading them: same folder names, e.g. D:\models)
 #>
 param(
   [string]$InstallDir = '',
@@ -18,7 +20,8 @@ param(
   [switch]$SkipVoice,
   [string]$AreaPack = '',
   [ValidateSet('', 'traffic', 'listening', 'always', 'off')][string]$KeepAwake = '',
-  [switch]$Remeasure
+  [switch]$Remeasure,
+  [string]$ModelsFrom = ''
 )
 $ErrorActionPreference = 'Stop'
 # A PC installed before the 2026-11 rename (as ham-net-speech-to-text) keeps its folder: moving a 4 GB environment, the models and
@@ -149,6 +152,12 @@ if (-not $SkipModels) {
   # live: turbo (final text), small.en (fallback), base.en (words while talking); accurate pass on this PC: large-v3
   foreach ($m in 'whisper-large-v3-turbo-int8-ov', 'whisper-small.en-int8-ov', 'whisper-base.en-int8-ov',
                  'whisper-large-v3-int8-ov') {
+    if ($ModelsFrom -and (Test-Path "$ModelsFrom\$m")) {
+      robocopy "$ModelsFrom\$m" "$InstallDir\models\$m" /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+      if ($LASTEXITCODE -ge 8) { throw "copying $m from $ModelsFrom failed (robocopy $LASTEXITCODE)" }
+      $global:LASTEXITCODE = 0
+      Write-Host "  $m copied from $ModelsFrom"; continue
+    }
     Run { & $vpy -c "from huggingface_hub import snapshot_download as s; s('OpenVINO/$m', local_dir=r'$InstallDir\models\$m')" }
     Write-Host "  $m ok"
   }

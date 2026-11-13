@@ -105,6 +105,8 @@ then puts yours back. **Settings → This PC** shows what it changes and anythin
 [On a laptop](docs/MANUAL.md#on-a-laptop).
 
 
+**No good internet?** `install.ps1 -ModelsFrom D:\models` copies the Whisper models from a folder you already have (another station's `models` folder, a USB drive, a network share) instead of downloading about 2.6 GB.
+
 **Start over without losing anything.** `tools\settings_bundle.ps1 -Backup <zip>` keeps your settings (net schedule, radios, Sidekick,
 local names, keys) in one file and `-Restore <zip>` puts them back; `tools\uninstall.ps1 -MoveAside` removes the program, its tasks and
 shortcut but leaves your folder (with history and recordings) beside the new install. Run them in PowerShell **as administrator** from the
