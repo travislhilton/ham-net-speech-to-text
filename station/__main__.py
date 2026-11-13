@@ -65,6 +65,8 @@ def main(argv=None):
             st._cpu_factory = lambda: engine.make({**choice["final"], "device": "CPU"})
     st.start(listen=not (a.no_listen or a.simulate))
     st.agent.start_probe()
+    if st.agent.cfg.get("enabled"):
+        st.tts.prerender()                                # clips of the fixed lines, made ahead (quiet if offline)
     try:
         from hamkit import places
         places.ensure()      # a station installed before 2026-11-12 fetches the state names once (2 KB)

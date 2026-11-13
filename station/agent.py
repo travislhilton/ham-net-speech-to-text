@@ -484,6 +484,16 @@ def _direct_answer_place(ctx: dict, p: dict, text: str) -> bool:
                  or bool(ctx.get("addressed"))))
 
 
+def fixed_lines(call: str, name: str, op: str) -> dict:
+    """The words the rules say, built in one place: rules_draft says them, and the voice keeps a clip of each ahead
+    of time (station/tts.py prerender) so a check-in or an acknowledgement is not waiting on the voice service."""
+    intro = f"{call}, {name}, an automated assistant, {op} is control operator"
+    return {"check_in_first": f"{intro}, checking in, no traffic. {call}.",
+            "check_in": f"{call}, checking in, no traffic.",
+            "ack_first": f"{intro}. I copy you; {op} will answer you personally. {call}.",
+            "ack": f"Copy, {op} will come back to you personally. {call}."}
+
+
 def rules_draft(rows: list[dict], ctx: dict, checked_in: bool, pending: dict | None = None) -> dict:
     """The draft without a model: the moments a station must not miss, written from fixed words."""
     call, name, op = ctx["call"], ctx["name"], ctx["op"]
@@ -513,8 +523,8 @@ def rules_draft(rows: list[dict], ctx: dict, checked_in: bool, pending: dict | N
         return {"speak": True, "kind": "reply", "say": say, "wait_s": 2.0, "question": "",
                 "why": "the thinking failed: say so at the opening"}
     if ctx.get("addressed"):
-        say = (f"{intro}. I copy you; {op} will answer you personally. {call}." if ctx["first"] else
-               f"Copy, {op} will come back to you personally. {call}.")
+        fl = fixed_lines(call, name, op)
+        say = fl["ack_first"] if ctx["first"] else fl["ack"]
         return {"speak": True, "kind": "acknowledge", "say": say, "wait_s": 1.5, "question": "",
                 "why": "called by call or name: acknowledge, the control operator answers"}
     invited, why = checkin_invited(rows)
@@ -523,7 +533,8 @@ def rules_draft(rows: list[dict], ctx: dict, checked_in: bool, pending: dict | N
             return silent | {"why": "check-ins called, already checked in"}
         if not invited:
             return silent | {"why": why + ": silent"}
-        say = f"{intro}, checking in, no traffic. {call}." if ctx["first"] else f"{call}, checking in, no traffic."
+        fl = fixed_lines(call, name, op)
+        say = fl["check_in_first"] if ctx["first"] else fl["check_in"]
         return {"speak": True, "kind": "check_in", "say": say, "wait_s": 2.0, "question": "", "why": why}
     return silent | {"why": "not called and no call for check-ins"}
 
@@ -777,6 +788,8 @@ class Agent:
                     raise ValueError("speed: 0.7 to 1.5")
                 self.cfg["speed"] = round(f, 2)
             self._save()
+        if self.cfg.get("enabled") and any(k in body for k in ("enabled", "name", "operator", "voice", "speed")):
+            self.st.tts.prerender()                             # the fixed lines' clips, ahead of the first send
         return self.view()
 
     def set_radio(self, rid: str, mode: str) -> dict:

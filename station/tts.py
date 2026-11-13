@@ -151,6 +151,34 @@ class Voice:
         tmp.replace(p)
         return audio
 
+    def prerender(self, wait: bool = False):
+        """Make (and keep) the clips for the rules' fixed lines and the transmitter test, in the chosen voice, so
+        the first check-in on the air does not wait on the voice service. Quiet when there is no key or no
+        internet; at most one run at a time; an unchanged line is never paid for twice (clips are kept by words)."""
+        import threading
+        from .agent import fixed_lines
+        if getattr(self, "_pre", None) and self._pre.is_alive():
+            return
+        s = self._settings()
+        a = getattr(self.st, "agent", None)
+        call = self.st.me or ""
+        if not call or not secrets.read(self.st.root, KEY) or not self.online.should_try():
+            return
+        name, op = (a.name if a else "Sidekick"), s.get("operator") or "the operator"
+        lines = list(fixed_lines(call, name, op).values()) + [
+            f"This is {call}, a transmitter test into a dummy load. {call}."]
+
+        def run():
+            for text in lines:
+                try:
+                    self.clip(text)
+                except Exception:  # noqa: BLE001 - offline / no key: the next change or restart tries again
+                    return
+        self._pre = threading.Thread(target=run, daemon=True, name="tts-prerender")
+        self._pre.start()
+        if wait:
+            self._pre.join(60)
+
     def audition(self, voice: str) -> bytes:
         return self.clip(self._audition_words(), voice, 1.0)
 

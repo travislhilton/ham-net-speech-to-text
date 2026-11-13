@@ -148,3 +148,20 @@ def test_a_call_grok_spells_letter_by_letter_is_joined():
     assert grokstt.join_spelled("Welcome, K I 5 Q X N. K I five Q X N.") == "Welcome, KI5QXN. KI5QXN."
     assert grokstt.join_spelled("Good evening N seven Q X J, over") == "Good evening N7QXJ, over"
     assert grokstt.join_spelled("I am a big fan of A B C D") == "I am a big fan of A B C D"   # no call shape
+
+
+def test_the_fixed_lines_are_made_ahead_in_the_chosen_voice_and_the_rules_use_the_same_words(st):
+    from station import agent as A
+    made = []
+    st.tts.synth_fn = lambda key, text, voice, speed, replace=None: made.append((text, voice)) or b"ID3mp3"
+    st.agent.cfg["enabled"] = True
+    st.agent.settings({"voice": "rex"})                  # a change of voice makes the clips again, in that voice
+    st.tts._pre.join(5)
+    fl = A.fixed_lines(st.me, st.agent.name, "the operator")
+    assert {t for t, v in made if v == "rex"} >= set(fl.values())
+    assert any("transmitter test" in t for t, _ in made)
+    n = len(made)
+    st.tts.prerender(wait=True)
+    assert len(made) == n                                # already kept: never paid for twice
+    ctx = {"call": st.me, "name": st.agent.name, "op": "the operator", "first": False, "addressed": True}
+    assert A.rules_draft([{"text": "x"}], ctx, False)["say"] == fl["ack"]
