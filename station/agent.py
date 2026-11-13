@@ -136,6 +136,7 @@ PHONE["advanced"] = [(1.800, 2.000), (3.700, 4.000), (7.125, 7.300), (14.175, 14
 SIXTY_M = (5.3305, 5.3465, 5.3570, 5.3715, 5.4035)    # channel centres (USB dial 1.5 kHz below)
 
 KINDS = ["check_in", "reply", "acknowledge", "stand_by", "say_again", "working", "ready", "answer", "sign_off", "none"]
+STATION_KINDS = KINDS + ["present"]          # "present": a segment of an approved topic, said word for word (topics.py)
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -298,7 +299,8 @@ def fcc_check(d: dict, ctx: dict) -> list[dict]:
          "net control called this station" if d.get("addressed") else "emergency/priority traffic: stay silent")
     rule("97.101(d) interference", not ctx["busy"], "the frequency is clear" if not ctx["busy"] else
          "someone is transmitting")
-    rule("transmit cap", words <= MAX_WORDS, f"{words} words (about {words * 0.4:.0f} s)")
+    cap = int(ctx.get("present_words") or MAX_WORDS) if d.get("kind") == "present" else MAX_WORDS
+    rule("transmit cap", words <= cap, f"{words} words (about {words * 0.4:.0f} s)")
     ok, why = privileges(ctx.get("freq_mhz"), ctx.get("mode"), ctx.get("license_class"))
     rule("97.301/97.305 privileges", ok is not False, why)
     rule("97.105/97.109(d) control operator", True, "Draft mode: nothing is transmitted")
@@ -637,6 +639,12 @@ class Agent:
         self.state: dict[str, dict] = self._load_state()   # radio -> {"last_id", "disclosed", "checked_in", "pending"}
         from .sender import Sender
         self.sender = Sender(station, self)                 # Send mode (station/sender.py): off unless chosen
+        from .topics import Topics
+        self.topics = Topics(station.data)                  # prepared talks and the operator's sites (data/, private)
+        from .chat import Chat
+        self.chat = Chat(self)                              # the operator's side chat (station/chat.py): never sent
+        self._lib = None
+        self._lib_lock = threading.Lock()
         self._to_send: dict[str, tuple] = {}
 
     # ----- is the model reachable? (Sidekick's card says so before a turn needs it) -----
@@ -800,6 +808,7 @@ class Agent:
                            for m, v in MODELS.items()],
                 "online": {p: o.view() for p, o in self.online.items()},
                 "send": self.sender.view(),
+                "topics": self.topics.view(),
                 "tx_ready": {rid: self.st.ptt.allowed(rid)[0] for rid in self.st.radios},
                 "pending": {rid: {**s["pending"], "queue": [dict(question=x.get("question"), asker=x.get("asker"),
                                                                  state=x.get("state")) for x in s.get("queue") or []]}
@@ -971,7 +980,13 @@ class Agent:
             gate_why = inv_why                                 # say whom net control called, not just "not called"
         if st.get("muted") == contact and not asked:
             allowed, gate_why = ["none"], "muted for this net"
-        if allowed == ["none"]:
+        tm = None if asked or st.get("muted") == contact else self._topic_move(rid, ctx, lastrow.get("text", ""))
+        if tm:
+            # the operator's approved words, said as written (no model): a prepared topic on the net
+            models, rate_ok = [], False
+            main = self._finish(tm, ctx | {"present_words": self._present_words(rid)}, "station", 0.0, addressed)
+            main.update(topic=tm["topic"], seg=tm["seg"])
+        elif allowed == ["none"]:
             # not this station's turn (not called, no check-ins open to it, no answer waiting): silent at once, no model
             models, rate_ok = [], False
             main = self._finish({"speak": False, "kind": "none", "say": "", "wait_s": 2.0, "why": gate_why}, ctx,
@@ -1044,18 +1059,56 @@ class Agent:
             st["disclosed"] = contact
         if d.get("kind") == "check_in":
             self._checked_in(st, contact, now, how)
+        if d.get("kind") == "present":
+            self.topics.said(rid, d.get("topic"), d.get("seg"))
         self._advance(rid, st, d, rows, now, ctx, contact, lines, user)
         self._save_state()
 
     def sent(self, rid, rec):
         """Sender: the draft was said on the air."""
         args = self._to_send.pop(rec.get("draft"), None)
-        if not args:
+        if not args:                                            # a prepared part the operator sent by hand
+            st = self.state.setdefault(rid, {})
+            if _has_call(rec.get("say", ""), self.st.me or ""):
+                st["last_id"] = self.st.clock()
+            m = re.fullmatch(r"prep-(\w+)-(\d+)", str(rec.get("draft") or ""))
+            if m:
+                self.topics.said(rid, m.group(1), int(m.group(2)))
+            self._save_state()
             return
         _, d, rows, _, ctx, contact, lines, user = args
         st = self.state.setdefault(rid, {})
         self._as_said(rid, st, d, rows, self.st.clock(), ctx, contact, lines, user, how="checked in on the air")
         self.st.bus.publish("agent", {"turn": {rid: self.turn(rid)}})
+
+    def library(self):
+        """Sidekick's knowledge library (station/knowledge.py): this project's docs + the operator's own material."""
+        with self._lib_lock:                                # several answers think at once: one library
+            if self._lib is None:
+                from .knowledge import Library
+                self._lib = Library(self.st.data, self.st.root)
+        return self._lib
+
+    def _present_words(self, rid) -> int:
+        from .topics import WORDS_PER_S
+        t = self.st.ptt.cfg(rid) or {}
+        return int((min(int(t.get("max_s") or 60), 180) - 3) * WORDS_PER_S)
+
+    def _topic_move(self, rid, ctx, text) -> dict | None:
+        """An approved topic armed on this radio, and the station asked to present it (or to continue)."""
+        from .topics import CONTINUE, PRESENT
+        nxt = self.topics.next_segment(rid)
+        if not nxt or not ctx.get("addressed") or ctx.get("emergency"):
+            return None
+        t, i, words = nxt
+        if not (PRESENT.search(text or "") or (i > 0 and CONTINUE.search(text or ""))):
+            return None
+        if i == 0 and ctx.get("first") and not re.search(r"\bautomat", words, re.I):
+            words = f"This is {ctx['call']}, {ctx['name']}, an automated assistant; {ctx['op']} is control operator. " \
+                    + words
+        return {"speak": True, "kind": "present", "say": words, "wait_s": 1.5, "question": "",
+                "why": f"presenting \u201c{t['title']}\u201d, part {i + 1} of {len(t['segments'])}",
+                "topic": t["id"], "seg": i}
 
     @staticmethod
     def _quiet_for(rows, now) -> float:
@@ -1273,7 +1326,23 @@ class Agent:
         system = DEEP_SYSTEM.format(name=ctx["name"], call=ctx["call"], op=ctx["op"], asker=p["asker"],
                                     question=p["question"], words=ANSWER_WORDS - 5)
         r = self.st.radios.get(rid) or {}
-        user = "\n".join([*facts(),
+        extra = []
+        try:
+            lib = self.library().context_for(p["question"], 6000)
+            if lib:
+                extra = ["Reference material from the station's library (the operator's own documents and this "
+                         "station's manual; authoritative where it applies; do not read the labels aloud):", lib]
+        except Exception:  # noqa: BLE001 - the library is a help, never a failure
+            pass
+        try:
+            from .topics import path_facts, sites_named
+            named = sites_named(p["question"], self.topics.sites)
+            if len(named) >= 2:
+                extra += path_facts(named[:4], float(r.get("freq_mhz") or 146.0) if 30 <= float(r.get("freq_mhz") or 146)
+                                    <= 1300 else 146.0)
+        except Exception:  # noqa: BLE001
+            pass
+        user = "\n".join([*facts(), *extra,
                           f"Station: {self.cfg.get('station') or 'a fixed home station'}; frequency "
                           f"{r.get('freq_mhz') or ctx.get('freq_mhz') or '?'} MHz; local time "
                           f"{self.st.clock():%A %Y-%m-%d %H:%M}.",
@@ -1360,7 +1429,8 @@ class Agent:
 
     def _finish(self, out, ctx, model, lat, addressed) -> dict:
         d = {"model": model, "latency_s": lat, "speak": bool(out.get("speak")),
-             "kind": out.get("kind") if out.get("kind") in KINDS else "none", "say": str(out.get("say") or "")[:600],
+             "kind": out.get("kind") if out.get("kind") in STATION_KINDS else "none",
+             "say": str(out.get("say") or "")[:600 if out.get("kind") != "present" else 3000],
              "wait_s": max(0.5, min(4.0, float(out.get("wait_s") or 2.0))), "why": str(out.get("why") or "")[:200],
              "addressed": bool(addressed), "question": str(out.get("question") or "")[:300]}
         d["fcc"] = fcc_check(d, ctx)
@@ -1384,13 +1454,138 @@ class Agent:
                 raise ValueError("no such draft")
         return self.view()
 
+    def topics_post(self, body: dict) -> dict:
+        """{"action": save|prepare|approve|unapprove|arm|remove|sites, ...}"""
+        a = str(body.get("action") or "")
+        T = self.topics
+        if a == "sites":
+            T.set_sites(str(body.get("text") or ""))
+        elif a == "save":
+            body = dict(body)
+            body.pop("action", None)
+            T.upsert(body)
+        elif a in ("approve", "unapprove"):
+            T.approve(str(body.get("id")), a == "approve")
+        elif a == "arm":
+            if body.get("radio") not in self.st.radios:
+                raise ValueError("no such radio")
+            T.arm(body["radio"], body.get("id") or None)
+        elif a == "remove":
+            T.remove(str(body.get("id")))
+        elif a == "prepare":
+            self._prepare(str(body.get("id")))
+        elif a == "save_say":                                   # from the chat: words the operator reviewed
+            from .topics import segment
+            text = re.sub(r"\s+", " ", str(body.get("text") or "")).strip()
+            if not text:
+                raise ValueError("nothing to save")
+            call = self.st.me or "N0CALL"
+            segs = segment(text, self._present_words(next(iter(self.st.radios), "")))
+            if not _has_call(segs[-1], call):
+                segs[-1] = segs[-1].rstrip(". ") + f". {call}."
+            t = T.upsert({"title": str(body.get("title") or text[:50]), "request": "(saved from the chat)",
+                          "segments": segs, "minutes": 1})
+            if body.get("approve"):
+                T.approve(t["id"], True)
+        elif a == "send":                                       # the operator sends one prepared part now
+            rid, tid, i = str(body.get("radio") or ""), str(body.get("id") or ""), int(body.get("seg") or 0)
+            if self.mode(rid) != "send":
+                raise ValueError("switch this radio's Sidekick to Send first (it needs the radio's Transmit switch)")
+            t = T.get(tid)
+            from .topics import fingerprint
+            if t.get("approved") != fingerprint(t.get("segments") or []):
+                raise ValueError("approve it first: the words you approve are the words it says")
+            if not 0 <= i < len(t["segments"]):
+                raise ValueError("no such part")
+            self.sender.presence()                              # the operator's own click
+            r = self.st.radios.get(rid) or {}
+            d = {"id": f"prep-{tid}-{i}", "kind": "present", "say": t["segments"][i], "topic": tid, "seg": i}
+            T.armed.setdefault(rid, {"topic": tid, "next": i})
+            return {"send": self.sender.offer(rid, d, {"freq_mhz": r.get("freq_mhz"), "emergency": False}),
+                    "topics": T.view()}
+        else:
+            raise ValueError("unknown topics action")
+        return {"topics": T.view()}
+
+    def _prepare(self, tid):
+        """Write a topic's script with the thinking model (a minute or two): in the background, the card follows."""
+        t = self.topics.get(tid)
+        model = self.cfg.get("deep_model") or DEEP_MODEL
+        prov = MODELS.get(model, MODELS[DEEP_MODEL])["provider"]
+        keyname, fn = self.providers[prov]
+        key = secrets.read(self.st.root, keyname)
+        if not key:
+            raise ValueError(f"preparing a topic needs the thinking model: set the {keyname} (Settings → Station agent)")
+        t["preparing"] = True
+        self.st.bus.publish("agent", {"topics": self.topics.view()})
+        from .topics import TOPIC_SCHEMA
+        ctx = {"call": self.st.me or "N0CALL", "name": self.name, "op": self.cfg.get("operator") or "the operator"}
+        max_s = min((self.st.ptt.cfg(rid) or {}).get("max_s", 60) for rid in self.st.radios) if self.st.radios else 60
+
+        def ask(system, user):
+            out, _ = fn(key, model, system, user, timeout=240, schema=TOPIC_SCHEMA, max_tokens=12000, name="topic")
+            return out
+
+        def run():
+            try:
+                r = self.topics.prepare(tid, ask, self.library(), ctx, max_s=min(max_s, 60))
+                r.pop("preparing", None)
+                self.topics.get(tid).pop("error", None)
+                self.topics.get(tid)["sources"] = r.get("sources") or []
+            except Exception as e:  # noqa: BLE001
+                try:
+                    self.topics.get(tid)["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+                except LookupError:
+                    pass
+            try:
+                self.topics.get(tid).pop("preparing", None)
+                self.topics._save()
+            except LookupError:
+                pass
+            self.st.bus.publish("agent", {"topics": self.topics.view()})
+        th = threading.Thread(target=run, daemon=True, name="topic")
+        th.start()
+        self._preparing = th
+
+    def library_post(self, body: dict) -> dict:
+        """{"action": note|url|file|remove|refresh|search, ...}"""
+        a, L = str(body.get("action") or ""), self.library()
+        if a == "note":
+            L.add_note(str(body.get("title") or ""), str(body.get("text") or ""))
+        elif a == "url":
+            L.add_url(str(body.get("url") or ""))
+        elif a == "file":
+            import base64
+            L.add_file(str(body.get("name") or ""), base64.b64decode(str(body.get("data") or "")))
+        elif a == "remove":
+            L.remove(str(body.get("source") or ""))
+        elif a == "refresh":
+            L.refresh(str(body.get("source") or ""))
+        elif a == "search":
+            return {"hits": L.search(str(body.get("q") or ""), 6)}
+        elif a != "list":
+            raise ValueError("unknown library action")
+        return {"library": L.list()}
+
     def post(self, path: str, body: dict) -> dict:
         """POST /api/agent/settings, /api/agent/radio/<rid> {"mode"}, /api/agent/ask/<rid> (draft now),
         /api/agent/rate/<draft id> {"good", "note"}."""
-        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark|stop|presence)(?:/([\w-]+))?", path)
+        m = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark|stop|presence|topics|library|chat)(?:/([\w-]+))?", path)
         if not m:
             raise ValueError("unknown agent request")
         what, arg = m.groups()
+        if what == "chat":                                      # {"radio", "message", "deep"} / {"radio", "clear"}
+            rid = str(body.get("radio") or arg or "")
+            if body.get("clear"):
+                self.chat.clear(rid)
+                return {"chat": []}
+            if body.get("message"):
+                self.chat.ask(rid, body["message"], bool(body.get("deep")))
+            return {"chat": self.chat.thread(rid), "busy": bool(self.chat.busy.get(rid))}
+        if what == "topics":
+            return self.topics_post(body)
+        if what == "library":
+            return self.library_post(body)
         if what == "presence":                                  # the dashboard: keyboard or mouse in use
             return self.sender.presence()
         if what == "stop":                                      # Esc / Stop / a click: drop it now

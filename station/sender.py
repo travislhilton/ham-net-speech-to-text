@@ -143,8 +143,11 @@ class Sender:
                 return self._end(rid, rec, "failed", "no voice: " + audio.get("error", "the voice took too long"),
                                  timing)
             dur = len(audio["pcm"]) / float(audio["sr"])
-            if dur > MAX_SAY_S:
-                return self._end(rid, rec, "failed", f"{dur:.0f} s is too long for one transmission", timing)
+            limit = min(MAX_SAY_S if rec.get("kind") != "present" else 175.0,
+                        float((self.st.ptt.cfg(rid) or {}).get("max_s") or 60) - LEAD_S - TAIL_S - 0.5)
+            if dur > limit:                                     # never cut off by the transmitter's own watchdog
+                return self._end(rid, rec, "failed", f"{dur:.0f} s is too long for one transmission "
+                                 f"(limit {limit:.0f} s)", timing)
             # listen before talk, and everything checked again at the moment of key-up
             if not self.present():
                 return self._end(rid, rec, "held", "the control operator left the station", timing)

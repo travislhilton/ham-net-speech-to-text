@@ -110,6 +110,12 @@ def make_handler(station):
                 return self._json(station.scan.view())
             if u.path == "/api/tts":                             # Sidekick's voice: the list, the choice, auditions
                 return self._json(station.tts.view())
+            if u.path == "/api/tts/say.mp3":                     # any saved words, heard here before they are sent
+                try:
+                    words = (parse_qs(u.query).get("text") or [""])[0][:3000]
+                    return self._send(200, station.tts.clip(words), "audio/mpeg")
+                except (LookupError, ValueError) as e:
+                    return self._json({"error": str(e)}, 503 if isinstance(e, LookupError) else 400)
             tt = re.fullmatch(r"/api/tts/(audition|draft)/([\w-]+)\.mp3", u.path)   # played in the browser only
             if tt:
                 try:
@@ -209,7 +215,7 @@ def make_handler(station):
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net
             sec = re.fullmatch(r"/api/secrets/([A-Z_]+)(/test)?", u.path)                               # Settings: a key
-            agent = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark|stop|presence)(/[\w-]+)?", u.path)               # station agent
+            agent = re.fullmatch(r"/api/agent/(settings|radio|ask|rate|mark|stop|presence|topics|library|chat)(/[\w-]+)?", u.path)               # station agent
             scan = re.fullmatch(r"/api/scan/[\w-]+(/antenna)?", u.path)                                   # HF scan
             rdo = re.fullmatch(r"/api/readout/(fetch|load|approve|read|url)", u.path)                      # read-out
             grk = re.fullmatch(r"/api/grokstt/(settings|run)", u.path)                                     # Grok STT

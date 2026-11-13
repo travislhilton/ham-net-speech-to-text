@@ -540,7 +540,7 @@ def test_several_questions_wait_their_turn_in_order(tmp_path, xai_key):
         t.cancel()
     s = st.agent.state["ic"]
     assert s["pending"]["asker"] == "K7ABC" and [x["asker"] for x in s["queue"]] == ["N0CALL", "K7QXN"]
-    assert all(x["state"] == "ready" for x in [s["pending"], *s["queue"]])
+    assert all(x["state"] == "ready" for x in [s["pending"], *s["queue"]]), [(x["state"], x.get("error")) for x in [s["pending"], *s["queue"]]]
     _say(st, "Sidekick, what is a fourth question?", speaker="K7ABC", minute=5)   # the list is full
     full = st.agent.draft("ic", "t9")
     assert not full.get("ok", True) or full["kind"] != "working"
