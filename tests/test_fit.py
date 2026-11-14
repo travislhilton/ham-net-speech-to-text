@@ -158,3 +158,72 @@ def test_a_net_silent_for_three_minutes_hands_the_radio_to_the_net_beside_it(tmp
     edge(st, clock, wed.replace(hour=19, minute=6))                  # 4 min silent (heard earlier): moves on
     L = st.radios["ic"]["listen"]
     assert L["now"] != first and L["switched"]["from"] == first
+
+
+def _unheard_station(tmp_path):
+    from tests.test_cat import CFG, Clock, TUE as T
+    import copy
+    from station import engine
+    from station.core import Station
+    st = Station(copy.deepcopy(CFG), lambda: engine.FakeEngine(), data_dir=tmp_path, clock=Clock(T))
+    return st, T
+
+
+def _miss(s, nid, at, times):
+    from datetime import timedelta
+    for i in range(times):
+        a = at + timedelta(days=7 * i)
+        s._quiet["ic"] = {"key": f"{nid}@{a.date().isoformat()}", "since": a, "dead": set()}
+        s._heard_end("ic", f"{nid}@{a.date().isoformat()}", a + timedelta(minutes=30))
+
+
+def test_a_net_not_heard_three_times_moves_to_not_heard_and_can_go_back(tmp_path):
+    """Owner 11-13: a net not heard several times goes into a Not heard list, off the schedule."""
+    st, T = _unheard_station(tmp_path)
+    s, net = st.nets, dict(st.cfg["schedule"][0])
+    _miss(s, net["id"], T, 3)
+    s._move_due()
+    assert all(n["id"] != net["id"] for n in st.cfg["schedule"])
+    u = s.list()["unheard"]
+    assert [x["name"] for x in u] == [net["name"]] and u[0]["by"] == "station" and u[0]["run"] == 3
+    assert (tmp_path / "nets_unheard.json").exists()
+    # survives a restart
+    assert [x["net"]["id"] for x in s._load_unheard()] == [net["id"]]
+    s.post(f"/api/schedule/{net['id']}/back", {})
+    assert any(n["name"] == net["name"] for n in st.cfg["schedule"]) and not s.unheard()
+    back = next(n for n in st.cfg["schedule"] if n["name"] == net["name"])
+    assert not s.heard_of(back["id"])["flag"]               # the count starts again
+
+
+def test_an_emergency_net_is_flagged_not_moved(tmp_path):
+    st, T = _unheard_station(tmp_path)
+    s, nid = st.nets, st.cfg["schedule"][0]["id"]
+    s.update(nid, dict(st.cfg["schedule"][0]) | {"emergency": True})
+    _miss(s, nid, T, 3)
+    s._move_due()
+    assert any(n["id"] == nid for n in st.cfg["schedule"]) and s.heard_of(nid)["flag"]
+    s.post(f"/api/schedule/{nid}/unheard", {})                 # the operator's Move to Not heard
+    assert not any(n["id"] == nid for n in st.cfg["schedule"])
+    assert s.unheard()[0]["by"] == "operator"
+    s.post(f"/api/schedule/{nid}/forget", {})
+    assert not s.unheard()
+
+
+def test_find_nets_does_not_offer_a_not_heard_net_unless_added_anyway(tmp_path):
+    import time
+    from station import netfind
+    st, T = _unheard_station(tmp_path)
+    s, net = st.nets, dict(st.cfg["schedule"][0])
+    s.move_unheard(net["id"])
+    found = {k: v for k, v in net.items() if k not in ("id", "radio")} | {
+        "id": "f1", "name": net["name"].upper() + " ", "band": "HF", "distance_km": 100,
+        "source_url": "https://example.org/n", "source_opened": True}   # the name differs only in case and spaces
+    netfind._save(st, {"last": {"at": time.time(), "nets": [found]}})
+    f = netfind.Finder(st)
+    d = f.state()
+    assert not d["nets"] and [n["id"] for n in d["unheard"]] == ["f1"]
+    r = f.add(["f1"])
+    assert not r["added"] and "Add anyway" in r["failed"][0]["why"]
+    r = f.add(["f1"], anyway=["f1"])
+    assert not r["failed"], r["failed"]
+    assert len(r["added"]) == 1 and not s.unheard()

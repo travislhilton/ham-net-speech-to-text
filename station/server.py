@@ -234,7 +234,7 @@ def make_handler(station):
                       "/api/history/minutes", "/api/learned", "/api/local-names", "/api/local-names/import",
                       "/api/pc/measure", "/api/pc/seen", "/api/settings-pack/preview", "/api/settings-pack/apply",
                       "/api/nets/assign", "/api/netfind/settings", "/api/netfind/search", "/api/netfind/add"}
-            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep))?)?", u.path)   # schedule
+            sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep|unheard|back|forget))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
             close = re.fullmatch(r"/api/netclose/([\w-]+)/(end|undo|save_ncs)", u.path)                  # end of a net
@@ -309,8 +309,8 @@ def make_handler(station):
                     return self._json(_finder(station).settings(body))
                 if u.path == "/api/netfind/search":              # {"bands": "HF"|"VU"|null, km, hf_km, hf, interests}
                     return self._json(_finder(station).search(body.get("bands"), body))
-                if u.path == "/api/netfind/add":                 # {"ids": [...], "radios": {found id: radio id}}
-                    return self._json(_finder(station).add(body.get("ids"), body.get("radios")))
+                if u.path == "/api/netfind/add":                 # {"ids", "radios": {found id: radio id}, "anyway": [ids]}
+                    return self._json(_finder(station).add(body.get("ids"), body.get("radios"), body.get("anyway")))
                 if u.path == "/api/nets/assign":                # {"choices": {group key: radio id}}
                     from . import netassign
                     return self._json(netassign.assign(station, body.get("choices") or {}))

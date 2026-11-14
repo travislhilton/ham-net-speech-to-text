@@ -396,17 +396,18 @@ def _midpoint(a: tuple, b: tuple) -> tuple:
 
 
 def _mark(st, nets: list[dict], hf: dict | None = None, sfi: float = hfprop.TYPICAL_SFI) -> list[dict]:
-    """Each found net: already on the schedule?  which radio here would record it?  HF: will this setup reach it?"""
+    """Each found net: already on the schedule?  not heard here before (Nets -> Not heard)?  which radio here would
+    record it?  HF: will this setup reach it?"""
     hf = hf or {"antenna": hfprop.DEFAULT["antenna"], "height_m": hfprop.DEFAULT["height_m"], "power_w": _power_default(st),
                 "ground": hfprop.DEFAULT["ground"]}
     have = st.cfg.get("schedule") or []
     home = location(st) or {}
     now = datetime.now()
     for n in nets:
-        dup = next((h for h in have if h.get("freq_mhz") and abs(float(h["freq_mhz"]) - n["freq_mhz"]) < 0.002
-                    and h.get("start") == n["start"]), None) or \
-            next((h for h in have if str(h.get("name") or "").casefold() == n["name"].casefold()), None)
+        dup = next((h for h in have if sched.same_net(h, n)), None)
         n["have"] = dup["name"] if dup else None
+        nets_ = getattr(st, "nets", None)              # moved to Nets -> Not heard: offered only with "Add anyway"
+        n["unheard"] = None if dup or nets_ is None else nets_.unheard_match(n)
         best, why = None, ""
         for kind in ("ready", "tune", "cant"):
             for r in st.radios.values():
@@ -461,7 +462,8 @@ class Finder:
             else (hfprop.TYPICAL_SFI, "typical")
         nets = _mark(self.st, [dict(n) for n in last.get("nets") or []], hf, sfi)
         have = [n for n in nets if n["have"]]                   # owner 11-14: only nets not already scheduled are shown
-        nets = [n for n in nets if not n["have"]]
+        gone = [n for n in nets if not n["have"] and n["unheard"]]   # owner 11-13: not re-added unless "Add anyway"
+        nets = [n for n in nets if not n["have"] and not n["unheard"]]
         order = {"likely": 0, "maybe": 1, "unlikely": 2}
         nets.sort(key=lambda n: (n["band"] == "HF", order.get((n.get("prop") or {}).get("chance"), 0),
                                  n["distance_km"] if n["distance_km"] is not None else 9999, n["name"].casefold()))
@@ -472,7 +474,7 @@ class Finder:
                 "interests": [{"id": k, "label": v[0], "on": k in self._interests(d)} for k, v in INTERESTS.items()],
                 "sfi": {"value": round(sfi), "source": sfi_src}, "address": d.get("address") or "",
                 "busy": self.busy, "at": last.get("at"), "nets": nets,
-                "scheduled": [{"name": n["name"], "as": n["have"]} for n in have], "left_out": last.get("left_out") or [],
+                "scheduled": [{"name": n["name"], "as": n["have"]} for n in have], "unheard": gone, "left_out": last.get("left_out") or [],
                 "error": last.get("error"), "cost_usd": last.get("cost_usd"), "searched": last.get("searched"),
                 "by_band": last.get("by_band") or {}}
 
@@ -636,9 +638,11 @@ class Finder:
             raise ValueError("; ".join(errors) + ": try again in a minute")
         return self.state()
 
-    def add(self, ids, radios: dict | None = None) -> dict:
-        """Add the ticked nets. radios = {found id: radio id or ""} overrides the suggestion."""
+    def add(self, ids, radios: dict | None = None, anyway=()) -> dict:
+        """Add the ticked nets. radios = {found id: radio id or ""} overrides the suggestion. A net in Nets -> Not heard
+        is added only when its id is in `anyway` (the operator's "Add anyway"); it then leaves Not heard."""
         want = [str(i) for i in ids or []]
+        anyway = {str(i) for i in anyway or ()}
         if not want:
             raise ValueError("tick the nets to add")
         found = {n["id"]: n for n in (_load(self.st).get("last") or {}).get("nets") or []}
@@ -648,6 +652,10 @@ class Finder:
             n = found.get(i)
             if not n:
                 failed.append({"name": i, "why": "no longer in the list: search again"})
+                continue
+            if n.get("unheard") and i not in anyway:
+                failed.append({"name": n["name"], "why": f"not heard here {n['unheard'].get('run') or 'several'} times "
+                                                          "in a row (Nets -> Not heard): use Add anyway"})
                 continue
             rid = (radios or {}).get(i, n.get("radio")) or None
             body = {k: n[k] for k in ("name", "freq_mhz", "mode", "start", "duration_min", "repeat", "offset_mhz",
@@ -664,4 +672,5 @@ class Finder:
                     added.append(n["name"])
                 except ValueError as e2:
                     failed.append({"name": n["name"], "why": str(e2 or e)})
-        return self.state() | {"added": added, "failed": failed, "schedule": self.st.nets.list().get("schedule")}
+        return self.state() | {"added": added, "failed": failed, "schedule": self.st.nets.list().get("schedule"),
+                                 "unheard_list": self.st.nets.unheard()}

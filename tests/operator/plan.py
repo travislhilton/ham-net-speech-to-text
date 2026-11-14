@@ -76,6 +76,7 @@ PLAN = {
     "conversation:wrong.nothing-written-down": ("b4ab9fa2", "human", 'Radio/squelch/meter checks need a real radio'),
     "conversation:wrong.filed-under-a-net": ("f53ba5ba", "unit", 'A net counts only on its own frequency: tests/test_schedule.py'),
     "conversation:wrong.split-in-two": ("78a75e32", "unit", 'A new conversation after 15 quiet minutes or a new frequency: tests/test_schedule.py, tests/test_history.py'),
+    "conversation:wrong.can-t-hear-the-radio": ("afa239f2", "human", 'Windows "Listen to this device" and the radio\'s speaker need a real radio and cable'),
     "conversation:wrong.wrong-call-or-speaker": ("ec857ea1", "ui", 'Who? and ✎ Fix open'),
     "conversation:wrong.stopped-listening": ("d2038836", "unit", 'End pauses the radio; Resume: tests/test_netclose.py, tests/test_station.py'),
 }

@@ -151,7 +151,21 @@ def on_radio(n: dict, o: dict) -> str | None:
 
 QUIET_MIN = 3           # an HF net on a CAT radio silent this long: try another net scheduled then (owner 11-10: 3)
 QUIET_MAX_MHZ = 54.0    # HF and 6 m (a repeater net is either up or it isn't)
-UNHEARD_RUN = 3         # a net not heard this many times in a row is flagged "Not heard" (Remove / Keep it)
+UNHEARD_RUN = 3         # a net not heard this many times in a row moves to Nets -> Not heard (off the schedule; an
+                        # emergency net stays on it, flagged, with Move to Not heard / Keep it). Owner 11-13.
+
+
+def same_net(a: dict, b: dict) -> bool:
+    """`a` and `b` are the same net: the same frequency (within 2 kHz) and start, or the same name. Find nets uses it
+    for "already on your schedule" and "not heard here"."""
+    try:
+        if a.get("freq_mhz") and b.get("freq_mhz") and abs(float(a["freq_mhz"]) - float(b["freq_mhz"])) < 0.002 \
+                and a.get("start") and a.get("start") == b.get("start"):
+            return True
+    except (TypeError, ValueError):
+        pass
+    na, nb = str(a.get("name") or "").strip().casefold(), str(b.get("name") or "").strip().casefold()
+    return bool(na) and na == nb
 
 
 def listen_window(nets: list[dict], rid: str, at: datetime, lead=LEAD_MIN, grace=GRACE_MIN, skip=(), usable=None,
@@ -280,6 +294,8 @@ class NetSchedule:
         self._want: dict[str, str | None] = {}    # radio -> the net window wanted at the last tick ("" = none)
         self._quiet: dict[str, dict] = {}         # radio -> {"key", "since": listening to it since, "dead": quiet keys}
         self._heard = self._load_heard()          # net id -> [{"date", "heard", "min"} | {"kept": date}] (newest last)
+        self._unheard = self._load_unheard()      # nets moved off the schedule: not heard UNHEARD_RUN times in a row
+        self._due: set[str] = set()               # net ids to move at the end of this tick (not inside its loop)
         self.st.cfg["schedule"] = self._load()
         self._apply_saved()
         from .alerts import Alerts
@@ -348,6 +364,9 @@ class NetSchedule:
         self._heard[nid] = rows[-12:]
         self._save_heard()
         if not heard:
+            n = next((x for x in self.st.cfg.get("schedule") or [] if x["id"] == nid), None)
+            if n and not n.get("emergency") and self.heard_of(nid)["flag"]:
+                self._due.add(nid)                # moved to Not heard when this tick's loop is done
             self.publish()
 
     def heard_of(self, nid: str) -> dict:
@@ -362,10 +381,120 @@ class NetSchedule:
     def keep(self, nid: str) -> dict:
         """The operator keeps a net flagged "Not heard": the count starts again."""
         self._find(nid)
-        self._heard.setdefault(nid, []).append({"kept": datetime.now().isoformat(timespec="minutes")})
+        self._kept(nid)
         self._save_heard()
         self.publish()
         return self.list()
+
+    def _kept(self, nid: str):
+        self._heard.setdefault(nid, []).append({"kept": datetime.now().isoformat(timespec="minutes")})
+
+    # ---------- Not heard: nets moved off the schedule (owner 2026-11-13) ----------
+    @property
+    def unheard_path(self):
+        return self.st.data / "nets_unheard.json"
+
+    def _load_unheard(self) -> list[dict]:
+        try:
+            return [x for x in json.loads(self.unheard_path.read_text(encoding="utf-8")).get("nets") or []
+                    if isinstance(x, dict) and isinstance(x.get("net"), dict) and x["net"].get("id")]
+        except (OSError, ValueError, AttributeError):
+            return []
+
+    def _save_unheard(self):
+        try:
+            self.unheard_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.unheard_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"nets": self._unheard}, indent=1), encoding="utf-8")
+            os.replace(tmp, self.unheard_path)
+        except OSError as e:
+            print(f"nets_unheard: {e}", flush=True)
+
+    def unheard(self) -> list[dict]:
+        """Nets -> Not heard: each moved net, what it was, when it moved and its last few tries."""
+        return [{"id": x["net"]["id"], "name": x["net"].get("name"), "summary": recur.summary(x["net"]),
+                 "freq_mhz": x["net"].get("freq_mhz"), "mode": x["net"].get("mode"), "start": x["net"].get("start"),
+                 "radio": x["net"].get("radio"), "source": x["net"].get("source"), "moved": x.get("moved"),
+                 "by": x.get("by"), "run": x.get("run"), "last": x.get("last") or []} for x in self._unheard]
+
+    def unheard_match(self, n: dict) -> dict | None:
+        """Find nets: the Not heard entry `n` is (same frequency and start, or same name), else None."""
+        x = next((x for x in self._unheard if same_net(x["net"], n)), None)
+        return None if x is None else {"name": x["net"].get("name"), "moved": x.get("moved"), "run": x.get("run")}
+
+    def move_unheard(self, nid: str, by: str = "operator") -> dict:
+        """Take a net off the schedule into Not heard (its history and minutes stay). `by`: "operator" (the button)
+        or "station" (not heard UNHEARD_RUN times in a row). Other nets' "beats" pointing at it are dropped."""
+        with self.lock:
+            nets, i = self._find(nid)
+            net = nets.pop(i)
+            for j, n in enumerate(nets):
+                if nid in (n.get("beats") or []):
+                    n = dict(n) | {"beats": [b for b in n["beats"] if b != nid]}
+                    if not n["beats"]:
+                        n.pop("beats")
+                    nets[j] = n
+            h = self.heard_of(nid)
+            self._unheard = [x for x in self._unheard if x["net"]["id"] != nid]
+            self._unheard.append({"net": net, "moved": datetime.now().isoformat(timespec="minutes"), "by": by,
+                                  "run": h["run"], "last": h["last"]})
+            self._save_unheard()
+            self._commit(nets)
+        print(f"{datetime.now():%H:%M:%S} net {net.get('name')!r} moved to Not heard ({by}, "
+              f"not heard {h['run']}x in a row)", flush=True)
+        return self.list()
+
+    def restore_unheard(self, nid: str) -> dict:
+        """Put a Not heard net back on the schedule as it was (a radio since removed: no radio); the count restarts."""
+        with self.lock:
+            x = next((x for x in self._unheard if x["net"]["id"] == nid), None)
+            if x is None:
+                raise NoSuchNet(nid)
+            net = dict(x["net"])
+            if net.get("radio") and net["radio"] not in self.st.radios:
+                net["radio"] = None
+            nets = list(self.st.cfg["schedule"])
+            ids = {n["id"] for n in nets}
+            if nid in ids:                        # an id reused since: a new one
+                nid = "n" + uuid.uuid4().hex[:6]
+                while nid in ids:
+                    nid = "n" + uuid.uuid4().hex[:6]
+            net.pop("beats", None)
+            nets.append({"id": nid} | validate(net, self.st.radios))
+            self._unheard = [y for y in self._unheard if y is not x]
+            self._kept(nid)
+            self._save_heard()
+            self._save_unheard()
+            self._commit(nets)
+        return self.list()
+
+    def forget_unheard(self, nid: str) -> dict:
+        """Drop a net from Not heard for good: Find nets may offer it again."""
+        with self.lock:
+            left = [x for x in self._unheard if x["net"]["id"] != nid]
+            if len(left) == len(self._unheard):
+                raise NoSuchNet(nid)
+            self._unheard = left
+            self._save_unheard()
+        self.publish()
+        return self.list()
+
+    def drop_unheard_like(self, n: dict):
+        """A net added again by hand or from Find nets (the operator's override): it leaves Not heard."""
+        left = [x for x in self._unheard if not same_net(x["net"], n)]
+        if len(left) != len(self._unheard):
+            self._unheard = left
+            self._save_unheard()
+
+    def _move_due(self):
+        due, self._due = self._due, set()
+        for nid in due:
+            try:
+                self.move_unheard(nid, by="station")
+            except NoSuchNet:
+                pass
+            except Exception as e:  # noqa: BLE001 - never stops listening
+                print(f"nets_unheard: {type(e).__name__}: {e}", flush=True)
 
     # ---------- storage ----------
     @property
@@ -456,10 +585,12 @@ class NetSchedule:
             self._commit(nets)
 
     def publish(self):
-        self.st.bus.publish("schedule", {"schedule": self.decorated(), "net": self.st.schedule_now()})
+        self.st.bus.publish("schedule", {"schedule": self.decorated(), "net": self.st.schedule_now(),
+                                         "unheard": self.unheard()})
 
     def list(self) -> dict:
-        return {"schedule": self.decorated(), "edited": self.path.exists(), "days": DAYS, "modes": list(MODES),
+        return {"schedule": self.decorated(), "unheard": self.unheard(), "edited": self.path.exists(), "days": DAYS,
+                "modes": list(MODES),
                 "radios": [{"id": r["id"], "name": r["name"], "freq_mhz": r.get("freq_mhz"), "mode": r.get("mode"),
                             "listen": r.get("listen"), "model": r.get("model"), "antenna": r.get("antenna"),
                             "role": r.get("role")} for r in self.st.radios.values()],
@@ -482,6 +613,7 @@ class NetSchedule:
             while nid in ids:
                 nid = "n" + uuid.uuid4().hex[:6]
             nets.append({"id": nid} | v)
+            self.drop_unheard_like(v)
             self._commit(nets)
         return self.list() | {"id": nid}
 
@@ -613,7 +745,7 @@ class NetSchedule:
         """POST /api/schedule (add), /api/schedule/preview, /api/schedule/<id> (replace), /api/schedule/<id>/delete,
         /api/schedule/<id>/skip|move|restore ({"date": the occurrence's own date; move: to_date, start, freq_mhz,
         mode, duration_min, note})."""
-        m = re.fullmatch(r"/api/schedule(?:/([\w-]+)(?:/(delete|skip|move|restore|radio|settle|keep))?)?", path)
+        m = re.fullmatch(r"/api/schedule(?:/([\w-]+)(?:/(delete|skip|move|restore|radio|settle|keep|unheard|back|forget))?)?", path)
         if not m:
             raise NoSuchNet(path)
         if not m.group(1):
@@ -626,6 +758,12 @@ class NetSchedule:
             return self.delete(m.group(1))
         if m.group(2) == "keep":                  # a net flagged "Not heard": keep it, count again
             return self.keep(m.group(1))
+        if m.group(2) == "unheard":               # move it to Nets -> Not heard (off the schedule)
+            return self.move_unheard(m.group(1))
+        if m.group(2) == "back":                  # Not heard -> back on the schedule
+            return self.restore_unheard(m.group(1))
+        if m.group(2) == "forget":                # Not heard -> gone (Find nets may offer it again)
+            return self.forget_unheard(m.group(1))
         if m.group(2) == "radio":                 # {"radio": id | null}: the chip on the net
             return self.assign(m.group(1), body.get("radio"))
         if m.group(2) == "settle":                # {"over": other net id}: this one is recorded when they meet
@@ -739,3 +877,4 @@ class NetSchedule:
                     # a restart outside a net keeps a Resume the operator chose (two restarts on 11-06 paused a radio
                     # the operator had just resumed to compare it with another station); the next net's end pauses it
                     self.st.set_paused(rid, True, by="schedule")
+        self._move_due()                          # nets not heard UNHEARD_RUN times: off the schedule, into Not heard

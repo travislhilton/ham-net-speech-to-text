@@ -487,6 +487,7 @@ button:disabled{cursor:not-allowed}
   #netsClose,.dclose{min-width:44px;min-height:44px}
   header button{min-height:36px}
 }
+details.unheard{margin:12px 0;padding:8px 10px;border:1px dashed var(--line,#999);border-radius:8px}details.unheard ul{margin:6px 0 0;padding-left:18px}details.unheard li{margin:4px 0}
 </style>
 <script>try{for(const k of Object.keys(localStorage))if(k.startsWith("hamnet.")){const n="hamsidekick."+k.slice(7);if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k))}}catch(e){}</script>
 <script>
@@ -965,6 +966,8 @@ function renderRadiosDlg(){
      <label>Name <input data-k="name" value="${esc(r.name||"")}" maxlength="60" placeholder="Net radio (handheld)"></label>
      <label>Sound input <select data-k="device">${opt(r.device||"")}</select></label>
      <label>Audio from <select data-k="gate"><option value="voice"${r.gate==="voice"?" selected":""}>Speaker / earphone jack, or SSB (squelch closed)</option><option value="carrier"${r.gate==="carrier"?" selected":""}>FM data jack (hiss always on)</option></select></label>
+     <p class="small muted" style="flex-basis:100%;margin:0">${r.gate==="carrier"?"A data jack (e.g. FTM-150R DATA) leaves the radio's own speaker on: you hear the radio as usual."
+       :"A cable in a handheld's speaker / earphone jack turns the radio's speaker off. To hear it on this PC: Windows Sound settings → Recording → this sound input → Properties → Listen → <b>Listen to this device</b>. (A USB radio such as the IC-705 keeps its speaker on.)"}</p>
      <label>Mode <select data-k="mode">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===(r.mode||"FM")?" selected":""}>${m}</option>`).join("")}</select></label>
      <label>Frequency, MHz <input data-k="freq_mhz" value="${r.freq_mhz??""}" inputmode="decimal" placeholder="146.940" style="width:8em"></label>
      <label title="Icom CI-V (CAT): the station reads the radio's frequency and tunes it for this radio's nets, any band. On Wi-Fi: Icom Remote Utility's virtual COM port; on USB: the radio's first COM port. It never transmits.">CAT port (Icom CI-V) <select data-cat="port">${catOpt(r.cat&&r.cat.port)}</select></label>
@@ -1717,7 +1720,7 @@ function connect(){
   es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
   es.addEventListener("pc",e=>{const d=JSON.parse(e.data);S.pc=Object.assign(S.pc||{},{slow:d.slow});renderPCNote();if($("settings").open&&d.checks)renderPC(d)});
-  es.addEventListener("schedule",e=>{const d=JSON.parse(e.data);S.schedule=d.schedule;S.net=d.net;renderRadios();renderNet();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(false)});
+  es.addEventListener("schedule",e=>{const d=JSON.parse(e.data);S.schedule=d.schedule;S.net=d.net;if(d.unheard)S.unheard=d.unheard;renderRadios();renderNet();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(false)});
   es.addEventListener("alerts",e=>{S.alerts=JSON.parse(e.data).alerts;renderAlerts()});
   es.addEventListener("urgent",e=>{S.urgent=JSON.parse(e.data).urgent;renderUrgent()});
   es.addEventListener("inst",e=>{const d=JSON.parse(e.data);   // a net's history changed: refresh what is open on it (never while typing)
@@ -1790,7 +1793,7 @@ function netFit(n){
   for(const c of st.settled||[])why+=c.wins?` · Recorded when it meets ${esc(c.name)} <button class="linkish small" data-settle="${esc(n.id)}" data-over="${esc(c.id)}" data-undo="1">change</button>`
     :` · <b>Skipped</b> when it meets ${esc(c.name)} <button class="linkish small" data-settle="${esc(c.id)}" data-over="${esc(n.id)}" data-undo="1">change</button>`;
   const h=n.heard||{};
-  const unheard=h.flag?`<div class="nwhy"><span class="np k-cant">Not heard ${h.run}× in a row</span> <span class="muted">Listened ${h.run} times and nothing came through (propagation, antenna, or the net may have moved or ended).</span> <button data-netdel="${esc(n.id)}">Remove</button> <button data-netkeep="${esc(n.id)}">Keep it</button></div>`:"";
+  const unheard=h.flag?`<div class="nwhy"><span class="np k-cant">Not heard ${h.run}× in a row</span> <span class="muted">Listened ${h.run} times and nothing came through (propagation, antenna, or the net may have moved or ended).${n.emergency?" An emergency net stays on the schedule until you choose.":""}</span> <button data-netunheard="${esc(n.id)}" title="Take it off the schedule into Not heard; Find nets will not offer it again unless you choose Add anyway">Move to Not heard</button> <button data-netkeep="${esc(n.id)}">Keep it</button></div>`:"";
   return unheard+`<div class="nwhy"><button class="rchip k-${k}" data-rpick="${esc(n.id)}" aria-haspopup="menu" title="Choose the radio for this net"><span class="dot"></span><span class="nm2">${esc(n.radio?rName(n.radio):"No radio")}</span> ▾</button><span class="np k-${k}">${KLABEL[k]}</span> <span class="muted">${why}</span>${bits.join(" ")}</div>`}
 function netCard(n){
   const k=kindOf(n),att=["none","cant","clash"].includes(k);
@@ -1825,6 +1828,11 @@ function netTable(list){
     return `<tr class="${live.has(n.id)?"live":""}${att?" att "+k:""}${NV.pick.has(n.id)?" picked":""}"><td class="ck"><input type="checkbox" data-npick="${esc(n.id)}"${NV.pick.has(n.id)?" checked":""} aria-label="Select ${esc(n.name)}"></td><td><button type="button" class="linkish" data-netedit="${esc(n.id)}" title="Edit this net">${esc(n.name)}</button>${n.emergency?' <span class="badge emergency">Emergency</span>':""}${live.has(n.id)?' <span class="badge ok">on the air</span>':""}${att?` <span class="small ${k==="clash"?"":"bad"}">${esc(KLABEL[k])}</span>`:""}</td>
      <td>${esc(n.when||n.summary||"")}</td><td class="f">${netFreq(n)}</td><td class="r"><button type="button" class="rcell" data-rpick="${esc(n.id)}" aria-haspopup="menu" title="Change the radio for ${esc(n.name)}">${here(n.radio)?esc(rName(n.radio)):'<span class="bad">no radio</span>'} ▾</button></td>
      <td class="small muted">${n.next?esc(fmtWhen(n.next.start)):"does not meet again"}</td></tr>`}).join("")}</tbody></table>`}
+function unheardBox(){       // Nets -> Schedule: nets taken off it after not being heard (schedule.py UNHEARD_RUN)
+  const u=S.unheard||[];if(!u.length)return"";
+  const one=x=>`<li><b>${esc(x.name)}</b> <span class="small muted">${esc(x.summary||"")} · ${x.by==="station"?"moved by the station":"moved by you"}${x.moved?" "+esc(fmtDay(x.moved.slice(0,10))):""}${x.run?`, not heard ${x.run}× in a row`:""}</span>
+    <button class="small" data-unback="${esc(x.id)}" title="Put it back on the schedule as it was; the count starts again">Put back on the schedule</button> <button class="small quiet" data-unforget="${esc(x.id)}" title="Drop it from this list: Find nets may offer it again">Forget</button></li>`;
+  return `<details class="unheard" id="netsUnheard"${NV.unOpen?" open":""}><summary><b>Not heard (${u.length})</b> <span class="small muted">off the schedule: not listened for, and Find nets does not offer them again unless you choose Add anyway</span></summary><ul>${u.map(one).join("")}</ul></details>`}
 function renderSchedule(full){
   const box=$("netsBody"),every=(S.schedule||[]).filter(n=>!NV.radio||n.radio===NV.radio),all=every.filter(n=>netMatch(n,NV.q)&&(!NV.band||netBand(n)===NV.band)&&(!NV.emerg||n.emergency));
   const rname=rName;
@@ -1845,7 +1853,8 @@ function renderSchedule(full){
   if(!full&&$("netsList")&&(NV.edit||NV.adding)){$("netsList").innerHTML=cards;$("netsListen").innerHTML=listen;return}
   const cnt=NV.q||NV.band||NV.emerg?`${all.length} of ${every.length}`:`${every.length} net${every.length===1?"":"s"}`,lcls=NV.view==="list"?"":"ncards";
   if(!full&&$("netsList")&&$("netsQ")){                  // a search keystroke or a live update: the list only, the search box keeps focus
-    $("netsList").innerHTML=cards;$("netsList").className=lcls;$("netsListen").innerHTML=listen;$("netsCount").textContent=cnt;renderAssign();return}
+    $("netsList").innerHTML=cards;$("netsList").className=lcls;$("netsListen").innerHTML=listen;$("netsCount").textContent=cnt;
+    const ub=$("netsUnheard"),uh=unheardBox();if(ub)ub.outerHTML=uh||"";else if(uh)$("netsList").insertAdjacentHTML("afterend",uh);renderAssign();return}
   const editing=NV.edit?(S.schedule||[]).find(n=>n.id===NV.edit):null;
   if(NV.edit||NV.adding){box.innerHTML=`<h4>${editing?"Edit "+esc(editing.name):"Add a net"}</h4>${netForm(editing||{radio:NV.radio})}`;wireNetForm(editing);return}
   box.innerHTML=`${head}<div id="netsAssign"></div><div class="row" style="margin-top:0"><button class="primary" id="netAdd">+ Add a net</button><button id="netFind" title="Search the web (xAI) for nets near this station that your radios can hear">Find nets near you</button></div>
@@ -1853,7 +1862,7 @@ function renderSchedule(full){
     <span class="nview" role="group" aria-label="Show nets as"><button type="button" data-nview="cards" aria-pressed="${NV.view!=="list"}">Cards</button><button type="button" data-nview="list" aria-pressed="${NV.view==="list"}">List</button></span>
     <span class="nview" role="group" aria-label="Band">${["","HF","VHF","UHF"].map(b=>`<button type="button" data-nband="${b}" aria-pressed="${NV.band===b}"${b?` title="Only ${b} nets"`:""}>${b||"All bands"}</button>`).join("")}</span>
     <button type="button" class="nemg" data-nemerg aria-pressed="${NV.emerg}" title="Only nets marked Emergency or priority (Edit a net to mark it)">Emergency</button>
-    <span id="netsCount" class="small muted">${cnt}</span></div>`:""}<div id="netsList" class="${lcls}">${cards}</div>
+    <span id="netsCount" class="small muted">${cnt}</span></div>`:""}<div id="netsList" class="${lcls}">${cards}</div>${unheardBox()}
    <h4>Listening</h4><div id="netsListen">${listen}</div>
    <p class="small muted">One list of nets for this PC; each net is assigned to a radio (click the radio on a net to move it). A radio set to listen only during nets is resumed 1 minute before each of its nets and paused 5 minutes after it ends; a net it can't hear, or one that loses a clash, is not listened to. A radio with a CAT port tunes itself; otherwise the alert asks you to tune it.</p>`;
   $("netAdd").onclick=()=>{NV.adding=true;renderSchedule(true)};
@@ -1936,9 +1945,10 @@ async function renderFind(){
     <div class="nlistwrap"><table class="nlist"><thead><tr><th class="ck"><input type="checkbox" data-nfall${allOn?" checked":""} aria-label="Select every net found" title="Select every net found"></th><th>Net</th><th>When</th><th>Frequency</th><th title="HF: from the band, the distance, the sun over the path when the net meets, your antenna's pattern and your power">HF reach</th><th>Radio</th><th>Found on</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="small muted">Found by an AI web search: check the source before relying on a net. Added nets keep a link to their source on the net's card; HF reach is a rough estimate for typical conditions (hover it for why).</p>`
     :d.at?`<p class="muted">${(d.scheduled||[]).length?"Every net found is already on your schedule.":esc(d.error||"No nets found.")}</p>`:"";
+  const unh=(d.unheard||[]).length?`<details class="small"${NF.unOpen?" open":""} data-nfunopen><summary>${d.unheard.length} found that ${d.unheard.length===1?"was":"were"} not heard here (Nets → Not heard): not added unless you choose</summary><ul>${d.unheard.map(n=>`<li><b>${esc(n.name)}</b> ${nfRule(n)} · ${Number(n.freq_mhz).toFixed(3)} MHz ${esc(n.mode)} <span class="muted">· matches “${esc(n.unheard.name)}”${n.unheard.run?`, not heard ${n.unheard.run}× in a row`:""}${n.unheard.moved?`, moved ${esc(fmtDay(n.unheard.moved.slice(0,10)))}`:""}</span> <a href="${esc(n.source_url)}" target="_blank" rel="noopener noreferrer">source</a> <button class="small" data-nfanyway="${n.id}" title="Add it to the schedule anyway (it leaves Not heard)">Add anyway</button></li>`).join("")}</ul></details>`:"";
   const sch=(d.scheduled||[]).length?`<details class="small"><summary>${d.scheduled.length} found already on your schedule (not shown)</summary><ul>${d.scheduled.map(x=>`<li>${esc(x.name)}${x.as!==x.name?` (as ${esc(x.as)})`:""}</li>`).join("")}</ul></details>`:"";
   const out=(d.left_out||[]).length?`<details class="small"><summary>${d.left_out.length} more found but left out</summary><ul>${d.left_out.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></details>`:"";
-  box.innerHTML=back+`<h4>Find nets near you</h4><p>${where}</p>${addr}<p>${radios}</p><div class="row nfrow">${pickBands} ${dist}</div>${hfset}${go}${msg}${farNote}${table}${sch}${out}`;
+  box.innerHTML=back+`<h4>Find nets near you</h4><p>${where}</p>${addr}<p>${radios}</p><div class="row nfrow">${pickBands} ${dist}</div>${hfset}${go}${msg}${farNote}${table}${unh}${sch}${out}`;
   const save=async(b,redraw)=>{try{const d2=await post("/api/netfind/settings",b);if(redraw){NF.d=d2;renderFind()}else{NF.d.nets=d2.nets;NF.d.hf=d2.hf;NF.d.km=d2.km;NF.d.hf_km=d2.hf_km;NF.d.interests=d2.interests}}
     catch(e){NF.msg={bad:true,text:e.message};renderFind()}};          // a field change saves quietly: no redraw swallows the next click
   const km=$("nfKm");if(km)km.onchange=()=>save({km:km.value});
@@ -1958,9 +1968,12 @@ document.addEventListener("click",async e=>{
   const pk=t.closest("[data-nfpick]");if(pk){pk.checked?NF.sel.add(pk.dataset.nfpick):NF.sel.delete(pk.dataset.nfpick);renderFind();return}
   const al=t.closest("[data-nfall]");if(al){(NF.d.nets||[]).filter(n=>$("nfBox").querySelector(`[data-nfpick="${n.id}"]`)).forEach(n=>al.checked?NF.sel.add(n.id):NF.sel.delete(n.id));renderFind();return}
   if(t.closest("[data-nfnone]")){NF.sel.clear();renderFind();return}
+  const aw=t.closest("[data-nfanyway]");if(aw){aw.disabled=true;NF.unOpen=true;const id=aw.dataset.nfanyway;
+    try{const d=await post("/api/netfind/add",{ids:[id],radios:NF.radio,anyway:[id]});NF.d=d;S.schedule=d.schedule||S.schedule;if(d.unheard_list)S.unheard=d.unheard_list;renderNetPick();renderRadios();
+      NF.msg=d.failed&&d.failed.length?{bad:true,text:d.failed.map(x=>`${x.name}: ${x.why}`).join("; ")}:{bad:false,text:`Added ${d.added.join(", ")} to the schedule.`}}catch(err){NF.msg={bad:true,text:err.message}}renderFind();return}
   if(t.closest("[data-nfhidefar]")){NF.hideFar=t.closest("[data-nfhidefar]").checked;renderFind();return}
   if(t.closest("[data-nfgo]")){const vals=nfVals();NF.busy=true;NF.msg=null;renderFind();
-    try{NF.d=await post("/api/netfind/search",{bands:NF.bands||null,...vals});NF.sel.clear();NF.radio={};const n=(NF.d.nets||[]).length,k=(NF.d.scheduled||[]).length;NF.msg={bad:!!NF.d.error&&!n,text:(n?`${n} new net${n===1?"":"s"} to choose from`:"No new nets found")+(k?` (${k} more already on your schedule)`:"")+(NF.d.error?`. ${NF.d.error}.`:".")}}
+    try{NF.d=await post("/api/netfind/search",{bands:NF.bands||null,...vals});NF.sel.clear();NF.radio={};const n=(NF.d.nets||[]).length,k=(NF.d.scheduled||[]).length;NF.msg={bad:!!NF.d.error&&!n,text:(n?`${n} new net${n===1?"":"s"} to choose from`:"No new nets found")+(k?` (${k} more already on your schedule)`:"")+((NF.d.unheard||[]).length?`; ${NF.d.unheard.length} not heard here before, not offered (see below)`:"")+(NF.d.error?`. ${NF.d.error}.`:".")}}
     catch(err){NF.msg={bad:true,text:err.message}}NF.busy=false;renderFind();return}
   if(t.closest("[data-nfadd]")){const b=t.closest("[data-nfadd]");b.disabled=true;
     try{const d=await post("/api/netfind/add",{ids:[...NF.sel],radios:NF.radio});NF.d=d;S.schedule=d.schedule||S.schedule;NF.sel.clear();renderNetPick();renderRadios();
@@ -2345,7 +2358,7 @@ function openPick(btn,id,occ){
   m.querySelector(".opt")?.focus()}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("rpick").hidden){e.preventDefault();e.stopPropagation();closePick()}},true);
 addEventListener("resize",closePick);
-async function netAct(fn){try{const d=await fn();if(d&&d.schedule){S.schedule=d.schedule;renderNetPick();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(true);renderRadios();renderToday()}return true}catch(err){alert(err.message);return false}}
+async function netAct(fn){try{const d=await fn();if(d&&d.schedule){S.schedule=d.schedule;if(d.unheard)S.unheard=d.unheard;renderNetPick();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(true);renderRadios();renderToday()}return true}catch(err){alert(err.message);return false}}
 document.addEventListener("click",async e=>{
   const p=e.target.closest("[data-rpick]");if(p){e.preventDefault();openPick(p,p.dataset.rpick);return}
   if(!e.target.closest("#rpick"))closePick();
@@ -2353,6 +2366,10 @@ document.addEventListener("click",async e=>{
   const o1=e.target.closest("[data-once]");if(o1){closePick();const n=(S.schedule||[]).find(x=>x.id===o1.dataset.once);if(n)moveNet(n,o1.dataset.date,o1.dataset.from,o1.dataset.to,false);return}
   const mv=e.target.closest("[data-netmove]");if(mv){netAct(()=>post(`/api/schedule/${enc(mv.dataset.netmove)}/radio`,{radio:mv.dataset.to}));return}
   const kp=e.target.closest("[data-netkeep]");if(kp){netAct(()=>post(`/api/schedule/${enc(kp.dataset.netkeep)}/keep`,{}));return}
+  const mu=e.target.closest("[data-netunheard]");if(mu){NV.unOpen=true;netAct(()=>post(`/api/schedule/${enc(mu.dataset.netunheard)}/unheard`,{}));return}
+  const ubk=e.target.closest("[data-unback]");if(ubk){NV.unOpen=true;netAct(()=>post(`/api/schedule/${enc(ubk.dataset.unback)}/back`,{}));return}
+  const ufg=e.target.closest("[data-unforget]");if(ufg){const x=(S.unheard||[]).find(y=>y.id===ufg.dataset.unforget)||{};
+    if(confirm(`Forget "${x.name}"?\n\nIt leaves Not heard, and Find nets may offer it again.`)){NV.unOpen=true;netAct(()=>post(`/api/schedule/${enc(ufg.dataset.unforget)}/forget`,{}))}return}
   const st=e.target.closest("[data-settle]");if(st){netAct(()=>post(`/api/schedule/${enc(st.dataset.settle)}/settle`,{over:st.dataset.over,undo:!!st.dataset.undo}));return}
   const sm=e.target.closest("[data-scanmode]");if(sm){(async()=>{try{await post(`/api/scan/${enc(sm.dataset.scanmode)}`,{mode:sm.dataset.v})}catch(err){alert(err.message)}})();return}
   const ss=e.target.closest("[data-scanset]");if(ss){openScan(ss.dataset.scanset);return}

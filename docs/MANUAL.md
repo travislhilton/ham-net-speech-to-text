@@ -272,6 +272,16 @@ you chose is remembered. Each column shows:
   transmissions (header and Nets today: **running over**) until net control closes it, it is quiet for 5 minutes
   (`overrun_quiet_min`), or 1 minute before the next net on that radio; at most 3 hours over (`overrun_max_min`).
   Then the usual end of a net: the final accurate pass, the minutes, and the radio paused if the station resumed it.
+- **Not heard** (owner 2026-11-13): a net listened to 3 times in a row with nothing heard (counted after 3 minutes of
+  listening) is taken off the schedule into **Not heard**, under the list in Nets → Schedule, with when it moved and
+  why. It is no longer listened for. **Put back on the schedule** restores it as it was (the count starts again);
+  **Forget** drops it. An **emergency net** is never moved by itself: it is flagged *Not heard 3× in a row* with
+  **Move to Not heard** / **Keep it**. **Find nets** lists a found net that matches a Not heard one (same frequency and
+  start, or same name) apart, under "not heard here", and adds it only with **Add anyway** (it then leaves Not heard).
+  Kept in `data/nets_unheard.json`.
+- **How you hear the radio** follows Radios → **Audio from**: a cable in a handheld's speaker / earphone jack turns
+  the radio's speaker off, so turn on Windows Sound → Recording → that input → Properties → Listen → **Listen to this
+  device**; a data jack (FTM-150R DATA) or a USB radio (IC-705) leaves the radio's speaker on.
 - **Nets on each radio**: each radio's column opens with its own nets: the one on the air and the next one
   (**N more today** / **Next 2 days** opens more, **This week…** opens Nets for that radio), each with its time,
   frequency and state (**on the air**, **You tune**, **Clash**, **Can't hear**, **not recorded** when it loses a clash).

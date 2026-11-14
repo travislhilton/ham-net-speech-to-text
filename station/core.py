@@ -2223,7 +2223,7 @@ class Station:
         with self.lock:
             return {"callsign": self.me, "radios": list(self.radios.values()), "tx": self._recent_tx(),
                     "heard": self.heard_list(), "hints": self.hints, "net": self.schedule_now(),
-                    "schedule": self.nets.decorated(), "engines": self.engines,
+                    "schedule": self.nets.decorated(), "unheard": self.nets.unheard(), "engines": self.engines,
                     "alerts": self.nets.alerts.last, "netclose": self.closer.state(), "urgent": self._urgent(), "history": self.history.status,
                     "accurate": self.accurate.status() if getattr(self, "accurate", None) else [],
                     "accurate_available": self.accurate.available() if getattr(self, "accurate", None) else False,

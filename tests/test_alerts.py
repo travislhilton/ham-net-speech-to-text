@@ -209,3 +209,20 @@ def test_the_winlink_summary_is_titled_by_the_net_on_the_radios_frequency(tmp_pa
     p = st.winlink_preview("ftm", st.tx[0]["start"], st.tx[-1]["start"])
     sub = next(d for d in p["drafts"] if d["form"] == "ics213")["values"]["Subjectline"]
     assert sub == "ERC Net summary"
+
+
+def test_not_heard_move_back_and_forget_over_http(tmp_path):
+    """Nets -> Not heard: the dashboard's three buttons reach the station (the route list once left them out)."""
+    st, clock = make(tmp_path, datetime(2026, 11, 3, 12))
+    srv = serve(st, "127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        res = _post(base, "/api/schedule/sun/unheard", {})
+        assert not any(n["id"] == "sun" for n in res["schedule"]) and [x["id"] for x in res["unheard"]] == ["sun"]
+        res = _post(base, "/api/schedule/sun/back", {})
+        assert any(n["id"] == "sun" for n in res["schedule"]) and not res["unheard"]
+        _post(base, "/api/schedule/sun/unheard", {})
+        assert not _post(base, "/api/schedule/sun/forget", {})["unheard"]
+    finally:
+        srv.shutdown()
