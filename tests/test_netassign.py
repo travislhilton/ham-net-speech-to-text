@@ -98,3 +98,21 @@ def test_each_net_carries_its_time_in_words_for_the_list_view(tmp_path):
     d = {n["name"]: n for n in a.nets.decorated()}
     assert d["Tuesday Net"]["when"] == "Every Tuesday at 19:00, 60 min"      # no frequency: that is its own column
     assert d["No Radio Net"]["when"] == "Every Saturday at 07:00, 30 min"
+
+
+def test_delete_many_removes_the_ticked_nets_backs_up_and_drops_beats_on_them(tmp_path):
+    a, _ = _two(tmp_path)
+    n = _names(a)
+    t, nr = n["Tuesday Net"]["id"], n["No Radio Net"]["id"]
+    a.nets.settle(t, nr, False)                                # Tuesday beats No Radio when they meet
+    assert nr in _names(a)["Tuesday Net"]["beats"]
+    before = len(a.cfg["schedule"])
+    r = a.nets.post("/api/schedule/delete-many", {"ids": [nr, "not-a-net"]})
+    assert r["deleted"] == ["No Radio Net"] and r["backup"]
+    assert len(a.cfg["schedule"]) == before - 1 and "No Radio Net" not in _names(a)
+    assert nr not in (_names(a)["Tuesday Net"].get("beats") or [])
+    with pytest.raises(ValueError):
+        a.nets.post("/api/schedule/delete-many", {"ids": []})
+    from station.schedule import NoSuchNet
+    with pytest.raises(NoSuchNet):
+        a.nets.post("/api/schedule/delete-many", {"ids": ["gone"]})

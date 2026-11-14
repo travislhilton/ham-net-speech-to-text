@@ -22,6 +22,7 @@ paused again after it (unless the operator pressed Pause or Resume during the ne
 import json
 import os
 import re
+import shutil
 import threading
 import uuid
 from datetime import datetime, timedelta
@@ -528,6 +529,35 @@ class NetSchedule:
             self._commit(nets)
         return self.list()
 
+    def delete_many(self, ids) -> dict:
+        """Nets -> List: delete the ticked nets in one go. The schedule is copied to data/settings_backups/<time>/ first;
+        history and minutes are kept, and other nets' "beats" pointing at a deleted net are dropped."""
+        want = {str(i) for i in (ids or []) if i}
+        if not want:
+            raise ValueError("tick the nets to delete")
+        with self.lock:
+            nets = list(self.st.cfg["schedule"])
+            gone = [n for n in nets if n["id"] in want]
+            if not gone:
+                raise NoSuchNet(sorted(want)[0])
+            src = self.st.data / "schedule.json"
+            bdir = None
+            if src.exists():
+                bdir = self.st.data / "settings_backups" / datetime.now().strftime("%Y%m%d-%H%M%S")
+                bdir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, bdir / "schedule.json")
+            keep = []
+            for n in nets:
+                if n["id"] in want:
+                    continue
+                if any(b in want for b in n.get("beats") or []):
+                    n = dict(n) | {"beats": [b for b in n["beats"] if b not in want]}
+                    if not n["beats"]:
+                        n.pop("beats")
+                keep.append(n)
+            self._commit(keep)
+        return self.list() | {"deleted": [n.get("name") for n in gone], "backup": str(bdir) if bdir else None}
+
     def except_one(self, nid: str, body: dict, what: str) -> dict:
         """Cancel ("skip"), move/change ("move") or put back ("restore") one occurrence, by its own date."""
         occ = recur._date(body.get("date"), "the occurrence")
@@ -586,6 +616,8 @@ class NetSchedule:
             return self.add(body)
         if m.group(1) == "preview" and not m.group(2):
             return self.preview(body)
+        if m.group(1) == "delete-many" and not m.group(2):   # {"ids": [...]}: Nets -> List, the ticked nets
+            return self.delete_many(body.get("ids"))
         if m.group(2) == "delete":
             return self.delete(m.group(1))
         if m.group(2) == "keep":                  # a net flagged "Not heard": keep it, count again

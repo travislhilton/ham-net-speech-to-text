@@ -329,7 +329,7 @@ table.nets td.b{white-space:nowrap}.netform{display:grid;grid-template-columns:r
 #conn{font-size:12px}.ok{color:var(--ok)}.bad{color:var(--bad)}
 /* ---------- nets: alerts, urgent board, the Nets area, search ---------- */
 @media (max-width:900px){.hsearch{flex:1 1 180px}#q{flex:1;width:auto;min-width:0}}
-button.quiet{border-color:transparent;background:none;color:var(--muted)}button.quiet:hover{color:var(--ink);border-color:var(--line)}
+button.danger{background:var(--bad);color:#fff;border-color:var(--bad)}button.quiet{border-color:transparent;background:none;color:var(--muted)}button.quiet:hover{color:var(--ink);border-color:var(--line)}
 .linkish{border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font:inherit}
 .badge.ok{background:var(--ok);color:var(--on);border-color:var(--ok)}
 .sbtn{display:inline-flex;gap:6px;flex-wrap:wrap}
@@ -369,12 +369,15 @@ button.x{font-size:16px;line-height:1;padding:5px 10px}
 .ncard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel)}.ncard.live{border-color:var(--ok);box-shadow:inset 3px 0 0 var(--ok)}
 .nfind{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 6px}.nfind input[type=search]{flex:1 1 16em;min-width:0;text-transform:none}
 .nview{display:inline-flex}.nview button{border-radius:0}.nview button:first-child{border-radius:6px 0 0 6px}.nview button:last-child{border-radius:0 6px 6px 0;margin-left:-1px}
+.nview button+button{margin-left:-1px}.nfind .nemg[aria-pressed=true]{background:var(--bad);color:#fff;border-color:var(--bad)}
 .nview button[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
 .nlistwrap{overflow-x:auto;margin:8px 0}.nlist{width:100%;border-collapse:collapse;font-size:14px}
 .nlist th,.nlist td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .nlist th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
 .nlist th button{background:none;border:0;padding:0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
 .nlist td.f,.nlist td.r{white-space:nowrap}.nlist td button.linkish{text-align:left}.nlist tr.live td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
+.nlist button.rcell{padding:1px 8px;white-space:nowrap}.nlist td.ck,.nlist th.ck{width:28px;padding-right:0}.nlist td.ck input,.nlist th.ck input{width:18px;height:18px;margin:2px 0;cursor:pointer}.nlist tr.picked td{background:var(--sel,rgba(127,127,127,.12))}
+.nsel{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px}.nsel.ask{border-color:var(--bad)}
 .nlist tr.att td:first-child{box-shadow:inset 3px 0 0 var(--warnc)}.nlist tr.att.none td:first-child,.nlist tr.att.cant td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .ncard .sum{margin:3px 0;font-size:14px}.ncard .btns{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px}.lrow{margin:6px 0}
 .netform .chk input{width:auto;margin:0}.netform .wide{grid-column:1/-1}.netform .hint{font-size:12px;color:var(--muted)}
@@ -1725,7 +1728,7 @@ function connect(){
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],DAYN=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const ORDS=[[1,"1st"],[2,"2nd"],[3,"3rd"],[4,"4th"],[5,"5th"],[-1,"last"]];
-const NV={tab:"schedule",net:"",radio:null,key:null,edit:null,adding:false,hl:null,conv:false,move:null,kind:null,q:"",sort:"name",view:"cards"};
+const NV={tab:"schedule",net:"",radio:null,key:null,edit:null,adding:false,hl:null,conv:false,move:null,kind:null,q:"",sort:"name",desc:false,band:"",emerg:false,view:"cards",pick:new Set(),delAsk:false};
 try{const v=localStorage.getItem("hamsidekick.netsView");if(v==="list"||v==="cards")NV.view=v}catch(e){}
 const enc=encodeURIComponent;
 const api=async url=>{const r=await fetch(url);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"not available");return d};
@@ -1794,7 +1797,8 @@ function netCard(n){
    <div class="btns"><button data-netedit="${esc(n.id)}">Edit</button> <button data-goto="history" data-net="${esc(n.id)}">History</button> <button data-goto="analysis" data-net="${esc(n.id)}">Who takes part</button> <button data-goto="open" data-net="${esc(n.id)}">Still open</button> <button data-netdel="${esc(n.id)}" class="quiet">Delete</button></div></article>`}
 // Nets: search (every word must match: name, frequency, mode, radio, net control, when) and the List view
 function netHay(n){const f=n.freq_mhz?Number(n.freq_mhz):null;
-  return [n.name,n.mode,n.ncs,n.when,n.summary,n.radio?rName(n.radio):"no radio",f?f.toFixed(3):"",f?String(f):""].join(" ").toLowerCase()}
+  return [n.name,n.mode,n.ncs,n.when,n.summary,n.radio?rName(n.radio):"no radio",f?f.toFixed(3):"",f?String(f):"",netBand(n),n.emergency?"emergency":""].join(" ").toLowerCase()}
+function netBand(n){const f=Number(n.freq_mhz);return !n.freq_mhz||!isFinite(f)?"":f<30?"HF":f<300?"VHF":"UHF"}
 function netMatch(n,q){const w=String(q||"").toLowerCase().split(/\s+/).filter(Boolean);if(!w.length)return true;const h=netHay(n);return w.every(x=>h.includes(x))}
 function netFreq(n){return n.freq_mhz?`${Number(n.freq_mhz).toFixed(3)} MHz${n.mode?" "+esc(n.mode):""}`:n.mode?esc(n.mode):'<span class="muted">—</span>'}
 function netTable(list){
@@ -1803,31 +1807,36 @@ function netTable(list){
     freq:(a,b)=>(a.freq_mhz||1e9)-(b.freq_mhz||1e9)||a.name.localeCompare(b.name),
     radio:(a,b)=>(here(a.radio)?rName(a.radio):"\uffff").localeCompare(here(b.radio)?rName(b.radio):"\uffff")||a.name.localeCompare(b.name),
     next:(a,b)=>(a.next?a.next.start:"9999").localeCompare(b.next?b.next.start:"9999")};
-  const rows=[...list].sort(by[NV.sort]||by.name);
-  const th=(k,l)=>`<th scope="col"${NV.sort===k?' aria-sort="ascending"':""}><button type="button" data-nsort="${k}" title="Sort by ${l.toLowerCase()}">${l}${NV.sort===k?" ▾":""}</button></th>`;
+  const rows=[...list].sort(by[NV.sort]||by.name);if(NV.desc)rows.reverse();
+  const th=(k,l)=>{const on=NV.sort===k;return `<th scope="col"${on?` aria-sort="${NV.desc?"descending":"ascending"}"`:""}><button type="button" data-nsort="${k}" title="${on?"Click again to reverse":"Sort by "+l.toLowerCase()}">${l}${on?(NV.desc?" ▼":" ▲"):""}</button></th>`};
   const live=new Set(((S.net||{}).running||[]).map(x=>x.id));
-  return `<table class="nlist"><thead><tr>${th("name","Name")}${th("time","Time")}${th("freq","Frequency")}${th("radio","Radio")}${th("next","Next")}</tr></thead><tbody>${rows.map(n=>{
+  const allOn=rows.length&&rows.every(n=>NV.pick.has(n.id));
+  const sel=NV.pick.size?(NV.delAsk?`<div class="nsel ask" role="alert"><b>Delete ${NV.pick.size===1?"this net":`these ${NV.pick.size} nets`}?</b> <span class="small muted">Their history and minutes are kept; the schedule is copied to a backup first.</span>
+      <button type="button" class="danger" data-ndelgo>Delete</button><button type="button" data-ndelno>Cancel</button></div>`
+    :`<div class="nsel"><b>${NV.pick.size} selected</b><button type="button" class="danger" data-ndelask>Delete ${NV.pick.size===1?"1 net":NV.pick.size+" nets"}</button><button type="button" class="linkish" data-npicknone>Clear selection</button></div>`):"";
+  return sel+`<table class="nlist"><thead><tr><th class="ck" scope="col"><input type="checkbox" data-npickall${allOn?" checked":""} aria-label="Select every net shown" title="Select every net shown"></th>${th("name","Name")}${th("time","Time")}${th("freq","Frequency")}${th("radio","Radio")}${th("next","Next")}</tr></thead><tbody>${rows.map(n=>{
     const k=kindOf(n),att=["none","cant","clash"].includes(k);
-    return `<tr class="${live.has(n.id)?"live":""}${att?" att "+k:""}"><td><button type="button" class="linkish" data-netedit="${esc(n.id)}" title="Edit this net">${esc(n.name)}</button>${live.has(n.id)?' <span class="badge ok">on the air</span>':""}${att?` <span class="small ${k==="clash"?"":"bad"}">${esc(KLABEL[k])}</span>`:""}</td>
-     <td>${esc(n.when||n.summary||"")}</td><td class="f">${netFreq(n)}</td><td class="r">${here(n.radio)?esc(rName(n.radio)):'<span class="bad">no radio</span>'}</td>
+    return `<tr class="${live.has(n.id)?"live":""}${att?" att "+k:""}${NV.pick.has(n.id)?" picked":""}"><td class="ck"><input type="checkbox" data-npick="${esc(n.id)}"${NV.pick.has(n.id)?" checked":""} aria-label="Select ${esc(n.name)}"></td><td><button type="button" class="linkish" data-netedit="${esc(n.id)}" title="Edit this net">${esc(n.name)}</button>${n.emergency?' <span class="badge emergency">Emergency</span>':""}${live.has(n.id)?' <span class="badge ok">on the air</span>':""}${att?` <span class="small ${k==="clash"?"":"bad"}">${esc(KLABEL[k])}</span>`:""}</td>
+     <td>${esc(n.when||n.summary||"")}</td><td class="f">${netFreq(n)}</td><td class="r"><button type="button" class="rcell" data-rpick="${esc(n.id)}" aria-haspopup="menu" title="Change the radio for ${esc(n.name)}">${here(n.radio)?esc(rName(n.radio)):'<span class="bad">no radio</span>'} ▾</button></td>
      <td class="small muted">${n.next?esc(fmtWhen(n.next.start)):"does not meet again"}</td></tr>`}).join("")}</tbody></table>`}
 function renderSchedule(full){
-  const box=$("netsBody"),every=(S.schedule||[]).filter(n=>!NV.radio||n.radio===NV.radio),all=every.filter(n=>netMatch(n,NV.q));
+  const box=$("netsBody"),every=(S.schedule||[]).filter(n=>!NV.radio||n.radio===NV.radio),all=every.filter(n=>netMatch(n,NV.q)&&(!NV.band||netBand(n)===NV.band)&&(!NV.emerg||n.emergency));
   const rname=rName;
   const head=NV.radio?`<p class="small">Nets on <b>${esc(rname(NV.radio))}</b> · <button id="netAll" class="linkish">show every radio</button></p>`:"";
   const count=k=>all.filter(n=>kindOf(n)===k).length;
   const pills=all.length?`<div class="npills">${["ready","tune","clash","cant","none"].filter(count).map(k=>`<button class="np k-${k}${NV.kind===k?" sel":""}" data-nkind="${k}">${count(k)} ${KLABEL[k].toLowerCase()}</button>`).join("")}${NV.kind?'<button class="linkish small" data-nkind="">show all</button>':""}</div>`:"";
   const list=all.filter(n=>!NV.kind||kindOf(n)===NV.kind);
+  {const shown=new Set(NV.view==="list"?list.map(n=>n.id):[]);for(const id of [...NV.pick])if(!shown.has(id))NV.pick.delete(id);if(!NV.pick.size)NV.delAsk=false}   // only nets on screen can be deleted
   const nxt=n=>n.next?n.next.start:"9999";
   const need=list.filter(n=>["none","cant","clash"].includes(kindOf(n))).sort((a,b)=>KORDER[kindOf(a)]-KORDER[kindOf(b)]||nxt(a).localeCompare(nxt(b)));
   const fine=list.filter(n=>!need.includes(n)).sort((a,b)=>nxt(a).localeCompare(nxt(b)));
   const cards=NV.view==="list"&&list.length?pills+`<div class="nlistwrap">${netTable(list)}</div>`:list.length?pills+(need.length?`<div class="ngroup">Needs you (${need.length})</div>`+need.map(netCard).join(""):"")+(fine.length?`<div class="ngroup">${need.length?"Will be recorded":"By next meeting"} (${fine.length})</div>`+fine.map(netCard).join(""):"")
-    :all.length?pills+'<p class="muted">Nothing here.</p>':every.length?`<p class="muted">No net matches “${esc(NV.q)}”. <button type="button" class="linkish" data-nclear>Clear the search</button></p>`:`<div class="empty"><b>No nets scheduled${NV.radio?" on this radio":""}.</b><br>Add the nets you follow: the station reminds you ${(S.schedule_alert||5)} minutes before each one to set the radio, names each net in the log, and keeps its history and minutes.</div>`;
+    :all.length?pills+'<p class="muted">Nothing here.</p>':every.length?`<p class="muted">No net matches ${[NV.q?`“${esc(NV.q)}”`:"",NV.band?NV.band:"",NV.emerg?"emergency":""].filter(Boolean).join(" + ")}. <button type="button" class="linkish" data-nclear>Clear the search and filters</button></p>`:`<div class="empty"><b>No nets scheduled${NV.radio?" on this radio":""}.</b><br>Add the nets you follow: the station reminds you ${(S.schedule_alert||5)} minutes before each one to set the radio, names each net in the log, and keeps its history and minutes.</div>`;
   const listen=S.radios.filter(r=>!NV.radio||r.id===NV.radio).map(r=>{const L=r.listen||{};return `<div class="lrow"><b>${esc(r.name)}</b>
     <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="scheduled"${L.scheduled?" checked":""}> Listen only during scheduled nets</label>
     <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="tune"${L.tune?" checked":""}> When a net starts, log the radio at the net's frequency and mode</label></div>`}).join("");
   if(!full&&$("netsList")&&(NV.edit||NV.adding)){$("netsList").innerHTML=cards;$("netsListen").innerHTML=listen;return}
-  const cnt=NV.q?`${all.length} of ${every.length}`:`${every.length} net${every.length===1?"":"s"}`,lcls=NV.view==="list"?"":"ncards";
+  const cnt=NV.q||NV.band||NV.emerg?`${all.length} of ${every.length}`:`${every.length} net${every.length===1?"":"s"}`,lcls=NV.view==="list"?"":"ncards";
   if(!full&&$("netsList")&&$("netsQ")){                  // a search keystroke or a live update: the list only, the search box keeps focus
     $("netsList").innerHTML=cards;$("netsList").className=lcls;$("netsListen").innerHTML=listen;$("netsCount").textContent=cnt;renderAssign();return}
   const editing=NV.edit?(S.schedule||[]).find(n=>n.id===NV.edit):null;
@@ -1835,6 +1844,8 @@ function renderSchedule(full){
   box.innerHTML=`${head}<div id="netsAssign"></div><div class="row" style="margin-top:0"><button class="primary" id="netAdd">+ Add a net</button></div>
    ${every.length?`<div class="nfind"><input type="search" id="netsQ" value="${esc(NV.q)}" placeholder="Search nets: name, frequency, radio, day, net control" aria-label="Search nets">
     <span class="nview" role="group" aria-label="Show nets as"><button type="button" data-nview="cards" aria-pressed="${NV.view!=="list"}">Cards</button><button type="button" data-nview="list" aria-pressed="${NV.view==="list"}">List</button></span>
+    <span class="nview" role="group" aria-label="Band">${["","HF","VHF","UHF"].map(b=>`<button type="button" data-nband="${b}" aria-pressed="${NV.band===b}"${b?` title="Only ${b} nets"`:""}>${b||"All bands"}</button>`).join("")}</span>
+    <button type="button" class="nemg" data-nemerg aria-pressed="${NV.emerg}" title="Only nets marked Emergency or priority (Edit a net to mark it)">Emergency</button>
     <span id="netsCount" class="small muted">${cnt}</span></div>`:""}<div id="netsList" class="${lcls}">${cards}</div>
    <h4>Listening</h4><div id="netsListen">${listen}</div>
    <p class="small muted">One list of nets for this PC; each net is assigned to a radio (click the radio on a net to move it). A radio set to listen only during nets is resumed 1 minute before each of its nets and paused 5 minutes after it ends; a net it can't hear, or one that loses a clash, is not listened to. A radio with a CAT port tunes itself; otherwise the alert asks you to tune it.</p>`;
@@ -2222,7 +2233,7 @@ function openPick(btn,id,occ){
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("rpick").hidden){e.preventDefault();e.stopPropagation();closePick()}},true);
 addEventListener("resize",closePick);
 async function netAct(fn){try{const d=await fn();if(d&&d.schedule){S.schedule=d.schedule;renderNetPick();if($("netsDlg").open&&NV.tab==="schedule")renderSchedule(true);renderRadios();renderToday()}return true}catch(err){alert(err.message);return false}}
-document.addEventListener("click",e=>{
+document.addEventListener("click",async e=>{
   const p=e.target.closest("[data-rpick]");if(p){e.preventDefault();openPick(p,p.dataset.rpick);return}
   if(!e.target.closest("#rpick"))closePick();
   const a=e.target.closest("[data-assign]");if(a){closePick();netAct(()=>post(`/api/schedule/${enc(a.dataset.assign)}/radio`,{radio:a.dataset.to||null}));return}
@@ -2239,8 +2250,19 @@ document.addEventListener("click",e=>{
     netAct(()=>post(`/api/radios/${enc(ro.dataset.setrole)}/setup`,{role:ro.dataset.v}));return}
   const nk=e.target.closest("[data-nkind]");if(nk){NV.kind=nk.dataset.nkind||null;renderSchedule(true);return}
   const nvw=e.target.closest("[data-nview]");if(nvw){NV.view=nvw.dataset.nview;try{localStorage.setItem("hamsidekick.netsView",NV.view)}catch(x){}renderSchedule(true);return}
-  const nso=e.target.closest("[data-nsort]");if(nso){NV.sort=nso.dataset.nsort;renderSchedule(false);return}
-  if(e.target.closest("[data-nclear]")){NV.q="";renderSchedule(true);return}
+  const nso=e.target.closest("[data-nsort]");if(nso){const k=nso.dataset.nsort;NV.desc=NV.sort===k?!NV.desc:false;NV.sort=k;renderSchedule(false);return}
+  if(e.target.closest("[data-nclear]")){NV.q="";NV.band="";NV.emerg=false;renderSchedule(true);return}
+  const nb=e.target.closest("[data-nband]");if(nb){NV.band=nb.dataset.nband;renderSchedule(true);return}
+  if(e.target.closest("[data-nemerg]")){NV.emerg=!NV.emerg;renderSchedule(true);return}
+  const np=e.target.closest("[data-npick]");if(np){np.checked?NV.pick.add(np.dataset.npick):NV.pick.delete(np.dataset.npick);NV.delAsk=false;renderSchedule(false);return}
+  const npa=e.target.closest("[data-npickall]");if(npa){$("netsList").querySelectorAll("[data-npick]").forEach(x=>npa.checked?NV.pick.add(x.dataset.npick):NV.pick.delete(x.dataset.npick));NV.delAsk=false;renderSchedule(false);return}
+  if(e.target.closest("[data-npicknone]")){NV.pick.clear();NV.delAsk=false;renderSchedule(false);return}
+  if(e.target.closest("[data-ndelask]")){NV.delAsk=true;renderSchedule(false);return}
+  if(e.target.closest("[data-ndelno]")){NV.delAsk=false;renderSchedule(false);return}
+  const ndg=e.target.closest("[data-ndelgo]");if(ndg){ndg.disabled=true;
+    try{const d=await post("/api/schedule/delete-many",{ids:[...NV.pick]});S.schedule=d.schedule;NV.pick.clear();NV.delAsk=false;renderNetPick();renderSchedule(false);renderRadios();
+      const c=$("netsCount");if(c)c.textContent=`Deleted ${d.deleted.length} net${d.deleted.length===1?"":"s"}`}
+    catch(err){ndg.disabled=false;alert(err.message)}return}
 });
 // ----- shared clicks in the Nets area, search results and the urgent boards -----
 document.addEventListener("click",async e=>{
