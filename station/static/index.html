@@ -1800,11 +1800,33 @@ function renderSchedule(full){
   if(!full&&$("netsList")&&(NV.edit||NV.adding)){$("netsList").innerHTML=cards;$("netsListen").innerHTML=listen;return}
   const editing=NV.edit?(S.schedule||[]).find(n=>n.id===NV.edit):null;
   if(NV.edit||NV.adding){box.innerHTML=`<h4>${editing?"Edit "+esc(editing.name):"Add a net"}</h4>${netForm(editing||{radio:NV.radio})}`;wireNetForm(editing);return}
-  box.innerHTML=`${head}<div class="row" style="margin-top:0"><button class="primary" id="netAdd">+ Add a net</button></div><div id="netsList" class="ncards">${cards}</div>
+  box.innerHTML=`${head}<div id="netsAssign"></div><div class="row" style="margin-top:0"><button class="primary" id="netAdd">+ Add a net</button></div><div id="netsList" class="ncards">${cards}</div>
    <h4>Listening</h4><div id="netsListen">${listen}</div>
    <p class="small muted">One list of nets for this PC; each net is assigned to a radio (click the radio on a net to move it). A radio set to listen only during nets is resumed 1 minute before each of its nets and paused 5 minutes after it ends; a net it can't hear, or one that loses a clash, is not listened to. A radio with a CAT port tunes itself; otherwise the alert asks you to tune it.</p>`;
   $("netAdd").onclick=()=>{NV.adding=true;renderSchedule(true)};
+  renderAssign();
   const na=$("netAll");if(na)na.onclick=()=>{NV.radio=null;renderNetsArea()};
+}
+// ----- Nets with no radio on this station, a group at a time (station/netassign.py): after an import, or a radio removed -----
+let NA={d:null,sig:"",sel:{},msg:null};
+async function renderAssign(){
+  const sig=JSON.stringify([(S.schedule||[]).map(n=>[n.id,n.radio||""]),S.radios.map(r=>r.id)]);
+  if(sig!==NA.sig){NA.sig=sig;try{NA.d=await api("/api/nets/unassigned")}catch(e){NA.d=null}}
+  const box=$("netsAssign");if(!box)return;const d=NA.d;
+  const note=NA.msg?`<p class="small ${NA.msg.bad?"bad":"ok"}">${esc(NA.msg.text)}</p>`:"";
+  if(!d||!d.waiting||!d.targets.length){box.innerHTML=note;return}
+  const pick=g=>NA.sel[g.key]!==undefined?NA.sel[g.key]:(g.suggest||"");
+  box.innerHTML=`<div class="rad"><b>${d.waiting} net${d.waiting>1?"s have":" has"} no radio on this station</b> <span class="muted">(imported from another station, or ${d.waiting>1?"their":"its"} radio was removed). ${d.waiting>1?"They are":"It is"} kept and not recorded until ${d.waiting>1?"they have":"it has"} one. Give each group a radio; a suggestion is chosen when one fits by name, or by band and mode.</span>
+   <table class="tier-table">${d.groups.map(g=>{const nm=g.nets.slice(0,4).map(n=>n.name).join(", ")+(g.nets.length>4?`, +${g.nets.length-4} more`:"");
+     return `<tr><td><b>${esc(g.label)}</b><br><span class="small muted">${g.nets.length} net${g.nets.length>1?"s":""}: ${esc(nm)}</span></td>
+     <td><select data-nag="${esc(g.key)}"><option value="">leave without a radio</option>${d.targets.map(t=>`<option value="${esc(t.id)}"${pick(g)===t.id?" selected":""}>${esc(t.name||t.id)}${t.freq_mhz?` (${esc(t.freq_mhz)} ${esc(t.mode||"")})`:""}</option>`).join("")}</select></td></tr>`}).join("")}</table>
+   <div class="row"><button type="button" class="primary" id="naGo">Give them these radios</button></div>${note}</div>`;
+  box.querySelectorAll("[data-nag]").forEach(x=>x.onchange=()=>{NA.sel[x.dataset.nag]=x.value});
+  $("naGo").onclick=async()=>{const choices={};for(const g of d.groups)choices[g.key]=pick(g);
+    try{const r=await post("/api/nets/assign",{choices});NA.d=r;NA.sel={};
+      NA.msg={text:`${r.assigned} net${r.assigned===1?"":"s"} now ${r.assigned===1?"has a radio":"have radios"}${r.failed.length?`; not changed: ${r.failed.map(f=>f.name+" ("+f.why+")").join("; ")}`:""}.${r.backup?" The schedule before this is saved in "+r.backup+".":""}`,bad:!!r.failed.length}}
+    catch(e){NA.msg={text:e.message,bad:true}}
+    NA.sig="";renderAssign()};
 }
 function netForm(n){
   const rs=S.radios,rid=n.id?n.radio:(n.radio||(rs[0]||{}).id),r=n.repeat||{freq:"weekly",weekdays:[DAYS[(new Date().getDay()+6)%7]]};

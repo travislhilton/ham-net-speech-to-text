@@ -674,6 +674,8 @@ class Agent:
         self.state_path = state_path or station.data / "agent_state.json"
         self.per_hour = per_hour
         self.lock = threading.Lock()
+        self.speculate = True                                  # start the model at on_final (see draft)
+        self._spec: dict[str, dict] = {}
         self.cfg = {"enabled": False,                    # owner 11-10: off by default; the operator turns it on
                     "name": DEFAULT_NAME, "checkin": "", "operator": "", "station": "", "region": "", "license_class": "",
                     "model": DEFAULT_MODEL, "deep_model": DEEP_MODEL, "compare": [], "radios": {},
@@ -911,6 +913,9 @@ class Agent:
                 self._checked_in(st, contact, self.st.clock(), "net control acknowledged " + call)   # inside 1.2 s
                 self.st.bus.publish("agent", {"turn": {rid: self.turn(rid)}})
         self._later(rid, DEBOUNCE_S, tx.get("id"))
+        if self.speculate:                                      # the model starts now; the draft after the quiet
+            threading.Thread(target=self._safe_draft, args=(rid, tx.get("id")), kwargs={"speculate": True},
+                             daemon=True, name=f"spec-{rid}").start()
 
     def _later(self, rid, delay, after, why=""):
         old = self.timers.pop(rid, None)
@@ -921,9 +926,9 @@ class Agent:
         self.timers[rid] = t
         t.start()
 
-    def _safe_draft(self, rid, after, why=""):
+    def _safe_draft(self, rid, after, why="", speculate=False):
         try:
-            self.draft(rid, after, why=why)
+            self.draft(rid, after, why=why, speculate=speculate)
         except Exception as e:  # noqa: BLE001 - the agent never stops the station
             print(f"agent {rid}: {type(e).__name__}: {e}", flush=True)
 
@@ -960,7 +965,11 @@ class Agent:
         self.calls.append(mono)
         return True
 
-    def draft(self, rid, after=None, asked=False, why="") -> dict | None:
+    def draft(self, rid, after=None, asked=False, why="", speculate=False) -> dict | None:
+        """speculate=True (on_final, before the DEBOUNCE_S of quiet): build the same prompt and, if the model would be
+        asked, start asking it now; nothing is drafted, logged or changed. The debounced draft uses that answer only
+        when its own prompt, schema, models and context are identical (else it asks afresh): the model's time overlaps
+        the courtesy wait instead of following it."""
         now = self.st.clock()
         rows = self._context(rid, now)
         if not rows and not asked:
@@ -983,7 +992,7 @@ class Agent:
         if invited and net.get("checkins") == "none":
             invited, inv_why = False, "this net is set to never check in (Nets → the net → Sidekick)"
         lastrow0 = rows[-1] if rows else {}
-        if (rows and call in (lastrow0.get("callsigns") or []) and acknowledged(lastrow0.get("text", ""))
+        if (not speculate and rows and call in (lastrow0.get("callsigns") or []) and acknowledged(lastrow0.get("text", ""))
                 and st.get("checked_in") != contact):            # net control logged this station: checked in
             self._checked_in(st, contact, now, "net control acknowledged " + call)
         lines = []
@@ -1041,6 +1050,7 @@ class Agent:
             gate_why = inv_why                                 # say whom net control called, not just "not called"
         if st.get("muted") == contact and not asked:
             allowed, gate_why = ["none"], "muted for this net"
+        spec = None
         tm = None if asked or st.get("muted") == contact else self._topic_move(rid, ctx, lastrow.get("text", ""))
         if tm:
             # the operator's approved words, said as written (no model): a prepared topic on the net
@@ -1063,10 +1073,25 @@ class Agent:
             main = self._finish(rules_draft(rows, ctx, st.get("checked_in") == contact, st.get("pending")), ctx,
                                 "station", 0.0, addressed)
         else:
-            rate_ok = asked or self._rate_ok()
             schema = dict(SCHEMA, properties=dict(SCHEMA["properties"], kind={"type": "string", "enum": allowed}))
             user += "\nYour possible moves now: " + ", ".join(allowed) + "."
-        if models and rate_ok:
+            key = json.dumps([system, user, schema, models, ctx], sort_keys=True, default=str)
+            if speculate:
+                if models and self._rate_ok():
+                    self._start_spec(rid, key, models, system, user, ctx, addressed, schema)
+                return None
+            spec = self._take_spec(rid, key)
+            rate_ok = asked or spec is not None or self._rate_ok()
+        if speculate:
+            return None                                    # no model would be asked: nothing to start early
+        if models and rate_ok and spec:
+            spec["done"].wait(MODEL_TIMEOUT_S + 2)
+            for m, r in list(spec["results"].items()):
+                if not r.get("error"):                     # the model ran from the end of the transmission
+                    r["silence_s"] = round(max(r["wait_s"], DEBOUNCE_S, r.get("latency_s") or 0), 1)
+                    r["speculative"] = True
+                results[m] = r
+        elif models and rate_ok:
             def run(m):
                 results[m] = self._ask(m, system, user, ctx, addressed, schema)
             threads = [threading.Thread(target=run, args=(m,), daemon=True) for m in models]
@@ -1475,6 +1500,28 @@ class Agent:
             t = self.timers.get(rid)
             if not (t and t.is_alive()):
                 self._later(rid, 0.2, None, why="answer ready" if p["state"] == "ready" else "answer failed")
+
+    def _start_spec(self, rid, key, models, system, user, ctx, addressed, schema):
+        spec = {"key": key, "results": {}, "done": threading.Event()}
+        with self.lock:
+            self._spec[rid] = spec                              # a newer transmission replaces an older guess
+
+        def run():
+            def one(m):
+                spec["results"][m] = self._ask(m, system, user, ctx, addressed, schema)
+            ths = [threading.Thread(target=one, args=(m,), daemon=True) for m in models]
+            for th in ths:
+                th.start()
+            for th in ths:
+                th.join(MODEL_TIMEOUT_S + 2)
+            spec["done"].set()
+        threading.Thread(target=run, daemon=True, name=f"spec-ask-{rid}").start()
+
+    def _take_spec(self, rid, key):
+        """The speculative answer for exactly this prompt, else None (a stale guess is dropped either way)."""
+        with self.lock:
+            spec = self._spec.pop(rid, None)
+        return spec if spec and spec["key"] == key else None
 
     def _ask(self, model, system, user, ctx, addressed, schema=SCHEMA) -> dict:
         prov = MODELS[model]["provider"]

@@ -143,6 +143,9 @@ def make_handler(station):
                 return self._json(station.learned())
             if u.path == "/api/local-names":                     # Settings → Local names (station/localnames.py)
                 return self._json(station.local_names())
+            if u.path == "/api/nets/unassigned":                 # Nets: nets with no radio here, in groups (netassign.py)
+                from . import netassign
+                return self._json(netassign.groups(station))
             if u.path == "/api/settings-pack":                   # Settings -> Share settings: the export, as a download
                 from . import portable
                 ident = (parse_qs(u.query).get("identity") or ["0"])[0] == "1"
@@ -216,7 +219,8 @@ def make_handler(station):
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes", "/api/learned", "/api/local-names", "/api/local-names/import",
-                      "/api/pc/measure", "/api/pc/seen", "/api/settings-pack/preview", "/api/settings-pack/apply"}
+                      "/api/pc/measure", "/api/pc/seen", "/api/settings-pack/preview", "/api/settings-pack/apply",
+                      "/api/nets/assign"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
@@ -288,6 +292,9 @@ def make_handler(station):
                                                                          noise=bool(body.get("noise")))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
+                if u.path == "/api/nets/assign":                # {"choices": {group key: radio id}}
+                    from . import netassign
+                    return self._json(netassign.assign(station, body.get("choices") or {}))
                 if u.path in ("/api/settings-pack/preview", "/api/settings-pack/apply"):    # {"doc", "radio_map"}
                     from . import portable
                     fn = portable.preview if u.path.endswith("preview") else portable.apply

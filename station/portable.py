@@ -49,6 +49,8 @@ def export(st, identity: bool = False) -> dict:
         o = {k: copy.deepcopy(n[k]) for k in NET_KEYS if n.get(k) is not None}
         if n.get("radio"):
             o["radio"] = n["radio"]
+        elif isinstance(n.get("from_radio"), dict):
+            o["from_radio"] = dict(n["from_radio"])          # still waiting for a radio: pass the hint along
         for e in (o.get("exceptions") or {}).values():
             if isinstance(e, dict):
                 e.pop("radio", None)
@@ -78,6 +80,13 @@ def _suggest(src: dict, targets: list[dict]) -> str | None:
     return fit[0]["id"] if len(fit) == 1 else None
 
 
+def _hint(r) -> dict | None:
+    """The radio a net used at the other station, kept on a net that has no radio here (station/netassign.py)."""
+    if not isinstance(r, dict) or not r.get("name"):        # its name only: where a radio was tuned says nothing
+        return None                                          # about the nets it carried
+    return {"name": str(r["name"])[:60]}
+
+
 def _net_body(n: dict, rid) -> dict:
     b = {k: copy.deepcopy(n[k]) for k in NET_KEYS if k in n}
     b["radio"] = rid
@@ -102,6 +111,7 @@ def _plan(st, doc: dict, radio_map: dict | None) -> dict:
         if key:
             used[key] = used.get(key, 0) + 1
         rid = radio_map[key] if key in radio_map else (_suggest(src_radios.get(key, {}), targets) if key else None)
+        hint = _hint(src_radios.get(key)) if key in src_radios else _hint(n.get("from_radio"))
         try:
             body = _net_body(n, rid)
             v = sched.validate(body, st.radios)
@@ -110,13 +120,13 @@ def _plan(st, doc: dict, radio_map: dict | None) -> dict:
             continue
         cur = have.get((str(v["name"]).casefold(), v["start"]))
         if not cur:
-            add.append((v, rid))
+            add.append((v, rid, hint))
         else:
             keep = {k: cur.get(k) for k in v if k not in ("radio",)}
             if all(keep.get(k) == v.get(k) for k in v if k != "radio") and (rid is None or cur.get("radio") == rid):
                 same.append(v)
             else:
-                upd.append((cur, v, rid))
+                upd.append((cur, v, rid, hint))
     side = doc.get("sidekick") if isinstance(doc.get("sidekick"), dict) else {}
     cfg = st.agent.cfg
     changes = [{"field": k, "from": cfg.get(k), "to": v} for k, v in side.items()
@@ -139,7 +149,7 @@ def preview(st, doc, radio_map=None) -> dict:
     p = _plan(st, doc, radio_map)
     return {"nets": {"add": len(p["add"]), "update": len(p["update"]), "unchanged": len(p["same"]),
                      "invalid": p["bad"], "total": len(p["add"]) + len(p["update"]) + len(p["same"]) + len(p["bad"]),
-                     "names_add": [v["name"] for v, _ in p["add"]][:60], "names_update": [c["name"] for c, _, _ in p["update"]][:60]},
+                     "names_add": [a[0]["name"] for a in p["add"]][:60], "names_update": [u[0]["name"] for u in p["update"]][:60]},
             "radios": p["radios"], "targets": p["targets"], "sidekick": p["sidekick"],
             "local_names": p["local_names"], "identity": p["identity"]}
 
@@ -156,20 +166,22 @@ def apply(st, doc, radio_map=None) -> dict:
     with st.nets.lock:
         nets = [dict(n) for n in st.cfg.get("schedule") or []]
         ids = {n["id"] for n in nets}
-        for cur, v, rid in p["update"]:
+        for cur, v, rid, hint in p["update"]:
             i = next(i for i, n in enumerate(nets) if n["id"] == cur["id"])
             new = {"id": cur["id"]} | v
             if rid is None and cur.get("radio"):
                 new["radio"] = cur["radio"]                       # the import names no radio here: keep this one
+            if not new.get("radio") and (hint or cur.get("from_radio")):
+                new["from_radio"] = hint or cur["from_radio"]     # Nets -> give it a radio later (netassign.py)
             if cur.get("beats"):
                 new["beats"] = cur["beats"]
             nets[i] = new
-        for v, _ in p["add"]:
+        for v, rid, hint in p["add"]:
             nid = "n" + uuid.uuid4().hex[:6]
             while nid in ids:
                 nid = "n" + uuid.uuid4().hex[:6]
             ids.add(nid)
-            nets.append({"id": nid} | v)
+            nets.append({"id": nid} | v | ({"from_radio": hint} if hint and not rid else {}))
         if p["add"] or p["update"]:
             st.nets._commit(nets)
     side = doc.get("sidekick") if isinstance(doc.get("sidekick"), dict) else {}
