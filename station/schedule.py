@@ -419,6 +419,8 @@ class NetSchedule:
                              "key": recur.key(n["id"], o["date"]), "skipped": recur.key(n["id"], o["date"]) in skipped,
                              "loses": bool(rid) and fit.loses_at(n | {"radio": rid}, nets, o["start"] + timedelta(minutes=1))})
             out.append(n | {"summary": recur.summary(n), "status": st.get(n["id"]), "week": week,
+                            "when": f"{recur.describe(recur.rule_of(n))} at {n.get('start', '00:00')}, "
+                                    f"{int(n.get('duration_min', 60))} min",       # Nets -> List: the time column
                             "heard": self.heard_of(n["id"]),
                             "next": item(n, nxt[0]) if nxt else None})
         return out

@@ -91,3 +91,10 @@ def test_with_no_name_match_the_suggestion_comes_from_the_nets_own_band(tmp_path
     b.radios["ic"].update(freq_mhz=146.52, mode="FM")
     hinted = next(x for x in NA.groups(b)["groups"] if x["key"].startswith("from:"))
     assert hinted["suggest"] == "ic"                          # the only radio tuned to VHF FM
+
+
+def test_each_net_carries_its_time_in_words_for_the_list_view(tmp_path):
+    a, _ = _two(tmp_path)
+    d = {n["name"]: n for n in a.nets.decorated()}
+    assert d["Tuesday Net"]["when"] == "Every Tuesday at 19:00, 60 min"      # no frequency: that is its own column
+    assert d["No Radio Net"]["when"] == "Every Saturday at 07:00, 30 min"
