@@ -4,6 +4,7 @@ firewall rule allows only those)."""
 import json
 import queue
 import re
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from datetime import datetime
@@ -147,6 +148,8 @@ def make_handler(station):
                 return self._json(station.grokstt.compare(day, radio=q.get("radio") or None))
             if u.path == "/api/agent":                           # the station agent: settings + drafts
                 return self._json(station.agent.view())
+            if u.path == "/api/aicost":                          # Settings -> AI costs (station/aicost.py)
+                return self._json(station.costs.view())
             if u.path == "/api/secrets":                         # Settings: which keys are set (never the keys)
                 from . import secrets
                 return self._json({"keys": [secrets.status(station.root, k) for k in secrets.KEYS]})
@@ -234,7 +237,8 @@ def make_handler(station):
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes", "/api/history/summary", "/api/learned", "/api/local-names", "/api/local-names/import",
                       "/api/pc/measure", "/api/pc/seen", "/api/settings-pack/preview", "/api/settings-pack/apply",
-                      "/api/nets/assign", "/api/netfind/settings", "/api/netfind/search", "/api/netfind/add"}
+                      "/api/nets/assign", "/api/netfind/settings", "/api/netfind/search", "/api/netfind/add",
+                      "/api/aicost", "/api/aicost/refresh"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep|unheard|back|forget))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
@@ -273,7 +277,10 @@ def make_handler(station):
                         return self._json({"error": "unknown key"}, 404)
                     if sec.group(2):
                         return self._json(secrets.test(station.root, sec.group(1)))
-                    return self._json(secrets.write(station.root, sec.group(1), body.get("value")))
+                    out = secrets.write(station.root, sec.group(1), body.get("value"))
+                    if sec.group(1) == "XAI_MANAGEMENT_KEY":     # read the account at once (station/aicost.py)
+                        threading.Thread(target=station.costs.refresh, daemon=True).start()
+                    return self._json(out)
                 if close:                                       # End net / Not closed / Save net control
                     rid, act, key = close.group(1), close.group(2), str(body.get("key") or "") or None
                     if act == "end":
@@ -293,6 +300,11 @@ def make_handler(station):
                     return self._json(station.history.update_item(int(item.group(1)), body))
                 if u.path == "/api/history/minutes":            # notes, net control, attendance corrections
                     return self._json(station.history.set_minutes(str(body.get("key") or ""), body))
+                if u.path == "/api/aicost":                     # {budget_usd, low_credit_usd}
+                    return self._json(station.costs.settings(body))
+                if u.path == "/api/aicost/refresh":             # read the xAI account now (management key)
+                    station.costs.refresh()
+                    return self._json(station.costs.view())
                 if u.path == "/api/history/summary":            # {key, action: rewrite | edit | clear, text}
                     return self._json(station.summary_post(body))
                 if who:                                         # the operator's "Who?" ({"call": ""} = automatic)

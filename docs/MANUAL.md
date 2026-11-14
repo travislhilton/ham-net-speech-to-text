@@ -425,8 +425,24 @@ you chose is remembered. Each column shows:
   requests are out, past the day's minutes (default 60) or longer than 2 minutes is skipped and counted. **Compare
   today** shows word errors and calls found for each engine against your corrections (human) and the accurate pass
   (large-v3), and each transmission side by side. A past net: `python -m tools.grok_compare 20261110 --radio net
-  --from 21:00 --to 22:00 --limit 60`. The recordings leave the PC; xAI had not published a per-minute price
-  (2026-11-10), so the minutes cap bounds the spend.
+  --from 21:00 --to 22:00 --limit 60`. The recordings leave the PC; xAI's price (2026-11-14) is $0.10 an hour of
+  audio, and the minutes cap bounds the spend.
+- **AI costs** (Settings → AI costs; `station/aicost.py`): what this station spends on xAI (and the optional Anthropic
+  comparison). Every paid call (Sidekick's drafts and chat, net summaries, Find nets, Grok speech-to-text, Sidekick's
+  voice) is kept in `data\ai_cost\<YYYY-MM>.jsonl`: today, the last 7 days and the month, by feature, and the last
+  calls with their tokens, searches or audio. The cost is xAI's own figure from each answer when it gives one, else
+  xAI's price list (marked *est*); a call with no known price is counted, not priced. Each station counts only its
+  own calls; the bill in the xAI console is the true total.
+  - **Monthly budget** (this station, optional): a header warning at 80%; at 100% the background features (net
+    summaries, Grok speech-to-text, the voice's pre-made clips) stop until the 1st. What you start (Sidekick replies,
+    chat, Find nets) still runs.
+  - **The account** (optional): with an xAI **management key** (xAI console → Settings → Management Keys, made for
+    your team; paste it under AI costs) the station reads the account's **credit left** and **this month's spend
+    from all stations** every 30 minutes, and warns in the header below your line (default $5). It only reads:
+    credit is bought on xAI's billing page (**Buy credits**), never by the station. A management key can do more
+    than read in the console, so keep it on one station.
+  - **Out of credit**: when xAI refuses a request for want of credit, the header says so (with **Buy credits**)
+    until a call goes through again.
 - **Quiet HF nets**: on a radio the station tunes (CAT), when an HF or 6 m net has been silent for 3 minutes (nothing
   heard in the last 3, also after a net ends early) and another net is scheduled at the same time — a net that lost
   a clash included — the station switches to that one (it goes back only if everything else

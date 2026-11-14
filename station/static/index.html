@@ -467,7 +467,9 @@ table.acc{border-collapse:collapse;font-size:13px;margin-top:4px}table.acc td,ta
 table.acc tr.grp td{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding-top:6px}
 #pcNote .pcn{margin:6px 12px;padding:8px 12px;border:1px solid var(--accent);border-radius:8px;font-size:13px}
 #pcNote .pcn.slow{border-color:#c0392b;background:rgba(192,57,43,.08)}
-#pcNote .pcn button{margin-left:8px}
+#pcNote .pcn button,#pcNote .pcn a.btn{margin-left:8px}
+table.costt{border-collapse:collapse;margin:6px 0;font-size:13px}table.costt td,table.costt th{padding:2px 10px 2px 0;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+a.btn{display:inline-block;padding:4px 10px;border:1px solid var(--line,#888);border-radius:6px;text-decoration:none;color:inherit;margin-right:6px}
 #pcSet ul{margin:4px 0 6px 18px;padding:0}#pcSet li.bad{color:#c0392b}#pcSet .fix{color:var(--muted)}
 .st{white-space:nowrap;color:var(--muted)}.st.ok{color:var(--ok)}.st.warn{color:var(--warn)}.st.bad{color:var(--bad)}
 #settings .savebar{position:sticky;bottom:-16px;background:var(--panel);border-top:1px solid var(--line);margin:12px -16px -16px;padding:10px 16px;z-index:2}
@@ -558,6 +560,7 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamsidekick.display
   <h4>Learned fixes</h4><div id="learnSet" class="small"></div>
   <h4>Local names</h4><div id="lnSet" class="small"></div>
   <h4>Share settings with another station</h4><div id="shareSet" class="small"></div>
+  <h4>AI costs <span class="muted small" style="text-transform:none">(xAI: what this station spends, and the account)</span></h4><div id="costSet" class="small"></div><div id="mgmtKeySet" class="small"></div>
   <h4>Station agent (optional) <a class="small" href="/help/sidekick" target="_blank" rel="noopener" style="font-weight:400">Sidekick card (set up and use, printable)</a></h4><div id="agentSet" class="small"></div><div id="keySet" class="small"></div>
   <h4>Sidekick's voice</h4><div id="voiceSet" class="small"></div>
   <h4>Grok speech-to-text (compared)</h4><div id="grokSet" class="small"></div>
@@ -1499,7 +1502,7 @@ $("openSettings").onclick=async()=>{
   f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";f.keep_weeks.value=op.keep_weeks||6;f.keep_weeks.dataset.was=op.keep_weeks||6;f.ai_summary.checked=op.ai_summary!==false;
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
-  fillAccounts(f);$("setErr").textContent="";loadPC();renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();renderShare();loadVoice();loadGrok();$("settings").showModal();
+  fillAccounts(f);$("setErr").textContent="";loadPC();renderAlertSettings();renderLearned();renderKeys();loadCost();loadAgent().then(renderAgentSet);loadLocalNames();renderShare();loadVoice();loadGrok();$("settings").showModal();
 };
 $("setForm").winlink_dir.onchange=()=>fillAccounts($("setForm"));
 $("setSave").onclick=async e=>{
@@ -1518,7 +1521,36 @@ function renderPCNote(){
     During nets and traffic it keeps the screen on and switches to its own “HAM Sidekick Station” power plan at Best performance,
     then puts your own plan back (laptops run several times slower with the screen off).
     <button onclick="$('openSettings').click()">See or change it</button><button onclick="pcSeen()">OK</button></div>`;
+  for(const w of S.aicost||[]){if(COSTHID.has(w.say))continue;
+    h+=`<div class="pcn${w.level==="bad"?" slow":""}">⚠ ${esc(w.say)} ${w.buy?`<a class="btn" href="${esc(w.buy)}" target="_blank" rel="noopener">Buy credits</a>`:""}<button onclick="openCosts()">AI costs…</button><button data-costhide="${esc(w.say)}">Hide</button></div>`}
   el.innerHTML=h;
+}
+const COSTHID=new Set();
+document.addEventListener("click",e=>{const t=e.target.closest("[data-costhide]");if(t){COSTHID.add(t.dataset.costhide);renderPCNote()}});
+function openCosts(){$("openSettings").click();setTimeout(()=>{const h=$("costSet");if(h)h.scrollIntoView({block:"start"})},300)}
+// ---------- AI costs (station/aicost.py): this station's ledger, the budget, the xAI account ----------
+const BUY="https://console.x.ai/team/default/billing";
+const usd=v=>v==null?"?":(v>0&&v<0.01?"$"+Number(v).toFixed(4):"$"+Number(v).toFixed(2));
+async function loadCost(){try{renderCost(await api("/api/aicost"))}catch(e){$("costSet").textContent="Not available."}}
+function renderCost(d){
+  const a=d.account||{},at=a.at?hm12(a.at):"";
+  const acct=d.mgmt_key?(a.error?`<div class="bad">xAI account: ${esc(a.error)}</div>`
+      :a.credit_usd!=null?`<div><b>xAI account (all stations):</b> credit left <b>${usd(a.credit_usd)}</b>${a.month_usd!=null?` · ${esc(d.month_name)} spend <b>${usd(a.month_usd)}</b>${a.partial?" (partial)":""}`:""} <span class="muted">as of ${esc(at)}</span>${a.usage_error?` <span class="muted">(${esc(a.usage_error)})</span>`:""}</div>`
+      :`<div class="muted">xAI account: reading…</div>`)
+    :`<div class="muted">The account's credit and its spend from all stations show here with the optional management key (below).</div>`;
+  const by=(d.by||[]).length?`<table class="costt"><tr><th>${esc(d.month_name)}</th><th>Calls</th><th>Cost</th></tr>${d.by.map(x=>`<tr><td>${esc(x.what)}</td><td>${x.calls}</td><td>${usd(x.usd)}${x.est?` <span class="muted" title="${x.est} of these priced from xAI's price list (the answer did not carry its own cost)">est</span>`:""}${x.unpriced?` <span class="muted">+${x.unpriced} not priced</span>`:""}</td></tr>`).join("")}</table>`:`<div class="muted">No paid AI calls from this station in ${esc(d.month_name)} yet.</div>`;
+  const recent=(d.recent||[]).length?`<details><summary>Last calls</summary><table class="costt">${d.recent.map(r=>`<tr><td>${esc(fmtWhen(r.at))}</td><td>${esc(r.what)}</td><td class="muted">${esc(r.model||"")}${r.in!=null?` · ${r.in}→${r.out} tokens`:""}${r.searches?` · ${r.searches} searches`:""}${r.audio_s!=null?` · ${Math.round(r.audio_s)} s audio`:""}${r.chars!=null?` · ${r.chars} chars`:""}</td><td>${r.usd==null?"—":usd(r.usd)}</td></tr>`).join("")}</table></details>`:"";
+  const over=d.over_budget?`<div class="bad">Over this month's budget: ${esc(d.background.join(", "))} are paused until the 1st. Raise the budget or set it to 0 to start them again.</div>`:"";
+  $("costSet").innerHTML=`<div><b>This station:</b> today ${usd(d.today)} · last 7 days ${usd(d.week)} · ${esc(d.month_name)} <b>${usd(d.month)}</b> (${d.calls} calls)</div>
+    ${acct}
+    <div class="row" style="margin:6px 0"><a class="btn" href="${esc(d.buy_url)}" target="_blank" rel="noopener">Buy credits</a><a class="btn quiet" href="${esc(d.usage_url)}" target="_blank" rel="noopener">Usage on xAI</a>${d.mgmt_key?'<button type="button" id="costRefresh">Read the account now</button>':""}</div>
+    ${over}${by}${recent}
+    <div class="row" style="margin-top:6px"><label class="inl">Monthly budget for this station $<input id="costBudget" type="number" min="0" step="1" style="width:6em" value="${d.budget_usd||""}" placeholder="none"></label>
+      <label class="inl">Warn when the account's credit is below $<input id="costLow" type="number" min="0" step="1" style="width:5em" value="${d.low_credit_usd||""}" placeholder="off"></label>
+      <button type="button" id="costSave">Save</button> <span class="small" id="costMsg"></span></div>
+    <div class="muted">A warning at 80% of the budget. At 100%, ${esc(d.background.join(", "))} stop until the 1st; what you start yourself (Sidekick replies, chat, Find nets) still runs. Costs come from xAI's own figure on each answer where it gives one, otherwise from xAI's price list (“est”). The bill on the xAI console is the true total.</div>`;
+  $("costSave").onclick=async()=>{try{renderCost(await post("/api/aicost",{budget_usd:+$("costBudget").value||0,low_credit_usd:+$("costLow").value||0}));$("costMsg").innerHTML='<span class="ok">Saved.</span>'}catch(e){$("costMsg").innerHTML=`<span class="bad">${esc(e.message)}</span>`}};
+  const r=$("costRefresh");if(r)r.onclick=async()=>{r.disabled=true;r.textContent="Asking xAI…";try{renderCost(await post("/api/aicost/refresh",{}))}catch(e){r.textContent=e.message}};
 }
 async function pcSeen(){await fetch("/api/pc/seen",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});S.pc=Object.assign(S.pc||{},{notice:false});renderPCNote()}
 async function loadPC(){try{renderPC(await (await fetch("/api/pc")).json())}catch(e){$("pcSet").textContent="Not available."}}
@@ -2875,15 +2907,21 @@ function renderAgentSet(){
   </div><button type="button" id="agSave">Save agent settings</button> <span class="muted">Spoken ID: ${esc(AG.call||"")} (${esc(AG.phonetic||"")})</span>`;
   $("agSave").onclick=()=>agPost("/api/agent/settings",{enabled:$("agOn").checked,name:$("agName").value,operator:$("agOp").value,checkin:$("agCheck").value,station:$("agSta").value,region:$("agReg").value,license_class:$("agClass").value,model:$("agModel").value,deep_model:$("agDeep").value,
     compare:[...box.querySelectorAll("[data-agcmp]:checked")].map(x=>x.dataset.agcmp)})}
+const MGMT="XAI_MANAGEMENT_KEY";
+const KEYINTRO={XAI_API_KEY:`Sidekick, the net summaries and Find nets use <b>your own xAI key</b>. Create one at <b>console.x.ai</b> → API Keys → Create API Key (add a little credit under Billing first: <a href="${BUY}" target="_blank" rel="noopener">Buy credits</a>), copy it, and paste it here. It is kept only on this PC, in config\\secrets.env.`,
+  [MGMT]:`<b>Optional: the account's credit and spend.</b> In the xAI console open Settings → Management Keys, create a key for your <b>team</b>, and paste it here. The station uses it only to read the credit balance and this month's spend (every 30 minutes), never to buy anything. It can do more than read in xAI's console, so keep it on one station only.`};
 async function renderKeys(msg){
   const box=$("keySet");let d;try{d=await api("/api/secrets")}catch(e){box.textContent=e.message;return}
-  box.innerHTML=d.keys.map(k=>`<div class="keyrow" data-key="${esc(k.name)}">
-    <p style="margin:0 0 4px">The station agent (coming next: it drafts check-ins and replies during nets, and with your OK speaks them) uses <b>your own xAI key</b>. Create one at <b>console.x.ai</b> → API Keys → Create API Key (add a little credit under Billing first), copy it, and paste it here. It is kept only on this PC, in config\secrets.env.</p>
+  const row=k=>`<div class="keyrow" data-key="${esc(k.name)}">
+    ${KEYINTRO[k.name]?`<p style="margin:0 0 4px">${KEYINTRO[k.name]}</p>`:""}
     <div>${esc(k.label)}: ${k.set?`<b class="ok">set</b> <span class="mono">${esc(k.hint||"")}</span>${k.from==="environment"?" (from an environment variable)":""}`:'<span class="muted">not set</span>'}</div>
-    <div class="row" style="margin-top:4px"><input type="password" id="key-${esc(k.name)}" autocomplete="off" spellcheck="false" placeholder="${k.set?"paste a new key to replace it":"xai-…"}" style="text-transform:none;min-width:16em" aria-label="${esc(k.label)}">
+    <div class="row" style="margin-top:4px"><input type="password" id="key-${esc(k.name)}" autocomplete="off" spellcheck="false" placeholder="${k.set?"paste a new key to replace it":k.name===MGMT?"management key":"xai-…"}" style="text-transform:none;min-width:16em" aria-label="${esc(k.label)}">
       <button type="button" data-keysave>Save key</button>${k.set?' <button type="button" data-keytest>Test</button> <button type="button" data-keydel class="quiet">Remove</button>':""}</div>
-    <div class="small" data-keymsg>${msg&&msg.name===k.name?`<span class="${msg.ok?"ok":"bad"}">${esc(msg.say)}</span>`:""}</div></div>`).join("");
-  for(const row of box.querySelectorAll(".keyrow")){const name=row.dataset.key,say=(ok,t)=>renderKeys({name,ok,say:t});
+    <div class="small" data-keymsg>${msg&&msg.name===k.name?`<span class="${msg.ok?"ok":"bad"}">${esc(msg.say)}</span>`:""}</div></div>`;
+  box.innerHTML=d.keys.filter(k=>k.name!==MGMT).map(row).join("");
+  $("mgmtKeySet").innerHTML=d.keys.filter(k=>k.name===MGMT).map(row).join("");
+  if(msg&&msg.name===MGMT)setTimeout(loadCost,2500);       // the account is read in the background after a save
+  for(const row of document.querySelectorAll("#keySet .keyrow,#mgmtKeySet .keyrow")){const name=row.dataset.key,say=(ok,t)=>renderKeys({name,ok,say:t});
     row.querySelector("[data-keysave]").onclick=async()=>{const v=row.querySelector("input").value.trim();if(!v)return;
       try{await post(`/api/secrets/${enc(name)}`,{value:v});const t=await post(`/api/secrets/${enc(name)}/test`,{});say(t.ok,"Saved. "+t.say)}catch(e){say(false,e.message)}};
     const t=row.querySelector("[data-keytest]");if(t)t.onclick=async()=>{row.querySelector("[data-keymsg]").textContent="Asking xAI…";try{const r=await post(`/api/secrets/${enc(name)}/test`,{});say(r.ok,r.say)}catch(e){say(false,e.message)}};

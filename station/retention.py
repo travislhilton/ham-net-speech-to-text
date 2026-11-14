@@ -20,7 +20,7 @@ Also, whatever their age:
                                    recently used files over 2 days old go (one in use is compiled again at the next start)
   data/station.log                 cut to its last 2 MB at start when over 10 MB (station/__main__.py)
 Kept: settings, radios, the schedule, local names, learned fixes, keys, the callbook, net_heard.json, nets_unheard.json and
-netclose.json (both bounded already).
+netclose.json (both bounded already), and the AI cost ledger (data/ai_cost/, one small file a month).
 """
 from __future__ import annotations
 

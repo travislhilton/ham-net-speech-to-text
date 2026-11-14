@@ -129,7 +129,7 @@ class Summarizer:
         return out
 
     def tick(self, now: datetime | None = None) -> int:
-        if not enabled(self.st):
+        if not enabled(self.st) or not self.st.costs.allow_background():   # off, no key, or over the AI budget
             return 0
         now = now or self.st.clock()
         self.calls = [t for t in self.calls if t > time.time() - 3600]

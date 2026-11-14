@@ -267,6 +267,17 @@ class Station:
             threading.Thread(target=self.scan.run, args=(self.stop,), daemon=True, name="scan").start()
         threading.Thread(target=self.accurate.run, args=(self.stop,), daemon=True, name="accurate").start()
         threading.Thread(target=self.summarizer.run, args=(self.stop,), daemon=True, name="summary").start()
+        threading.Thread(target=self.costs.run, args=(self.stop,), daemon=True, name="aicost").start()
+
+    @property
+    def costs(self):
+        """What the AI services cost: the ledger, the budget and the xAI account (station/aicost.py)."""
+        c = self.__dict__.get("_costs")
+        if c is None:
+            from . import aicost
+            c = self.__dict__["_costs"] = aicost.Costs(self, clock=self.clock)
+            aicost.use(c)
+        return c
 
     @property
     def summarizer(self):
@@ -2258,5 +2269,6 @@ class Station:
                     "accurate_where": self.accurate.where if getattr(self, "accurate", None) and self.accurate.enabled else None,
                     "accurate_rate": round(self.accurate.rate, 2) if getattr(self, "accurate", None) else None,
                     "accurate_server": self.accurate.server() if getattr(self, "accurate", None) else None,
+                    "aicost": self.costs.warnings(),
                     "pc": {"slow": self.slowwatch.state(),
                            "notice": not (self._saved().get("pc") or {}).get("notice_seen"), "mode": self.awake_mode}}

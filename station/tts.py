@@ -41,7 +41,10 @@ def synth(key: str, text: str, voice: str, speed: float = 1.0, replace: dict | N
     req = urllib.request.Request(URL, data=json.dumps(body).encode(), method="POST",
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+        audio = r.read()
+    from . import aicost
+    aicost.record("text_to_speech", "grok-tts", None, chars=len(text))              # in the cost ledger
+    return audio
 
 
 def fetch_voices(key: str, timeout=10) -> list[dict]:
@@ -163,6 +166,8 @@ class Voice:
         a = getattr(self.st, "agent", None)
         call = self.st.me or ""
         if not call or not secrets.read(self.st.root, KEY) or not self.online.should_try():
+            return
+        if not self.st.costs.allow_background():                     # this month's AI budget is spent
             return
         name, op = (a.name if a else "Sidekick"), s.get("operator") or "the operator"
         lines = list(fixed_lines(call, name, op).values()) + [

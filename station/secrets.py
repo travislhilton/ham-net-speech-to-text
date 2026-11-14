@@ -3,6 +3,7 @@
 Each station owner supplies their own keys:
   EMCOMM_STT_KEY  the home server's upload key (station/accurate.py)
   XAI_API_KEY     the station agent's xAI key (console.x.ai), set in Settings -> Station agent
+  XAI_MANAGEMENT_KEY optional: reads the xAI account's credit and spend (station/aicost.py), Settings -> AI costs
   ANTHROPIC_API_KEY  optional: Claude as a comparison model for the station agent (console.anthropic.com)
 
 An environment variable of the same name wins over the file. The dashboard never receives a key: only whether one
@@ -23,6 +24,13 @@ from pathlib import Path
 KEYS = {
     "XAI_API_KEY": {"label": "xAI API key", "shape": r"xai-[A-Za-z0-9_-]{20,200}",
                     "test": "https://api.x.ai/v1/models", "who": "xAI"},
+    "XAI_MANAGEMENT_KEY": {"label": "xAI management key (optional: shows the account's credit and spend)",
+                           "shape": r"[A-Za-z0-9_.:+/=-]{20,400}", "who": "xAI",
+                           "looks": "copy the whole key, no spaces",
+                           "test": "https://management-api.x.ai/auth/management-keys/validation",
+                           "say": lambda d: "The key works (" + ("team " + str(d.get("scopeId") or d.get("teamId") or "?")[:8]
+                                                                 + "…)." if d.get("scope") != "SCOPE_ORGANIZATION" else
+                                                                 "an organization key: make one for your team instead).")},
     "ANTHROPIC_API_KEY": {"label": "Anthropic API key (optional: Claude for comparison)",
                           "shape": r"sk-ant-[A-Za-z0-9_-]{20,300}", "test": "https://api.anthropic.com/v1/models",
                           "who": "Anthropic", "headers": lambda v: {"x-api-key": v, "anthropic-version": "2023-06-01"}},
@@ -66,8 +74,8 @@ def write(root, name: str, value: str | None) -> dict:
         if value.startswith(name + "="):              # pasted the whole line
             value = value[len(name) + 1:].strip()
         if not re.fullmatch(KEYS[name]["shape"], value):
-            raise ValueError(f"that doesn't look like an {KEYS[name]['label']} (it starts with "
-                             f"{KEYS[name]['shape'][:4]!r}, no spaces)")
+            raise ValueError(f"that doesn't look like an {KEYS[name]['label']} ("
+                             + KEYS[name].get("looks", f"it starts with {KEYS[name]['shape'][:4]!r}, no spaces") + ")")
     p = path(root)
     lines, out, done = _lines(root), [], False
     for line in lines:
@@ -130,8 +138,10 @@ def test(root, name: str, opener=urllib.request.urlopen) -> dict:
     req = urllib.request.Request(k["test"], headers=k["headers"](v) if k.get("headers") else {"Authorization": f"Bearer {v}"})
     try:
         with opener(req, timeout=10) as r:
-            n = len((json.loads(r.read() or b"{}").get("data") or []))
-        return {"ok": True, "say": f"The key works ({n} models available)."}
+            d = json.loads(r.read() or b"{}")
+        if k.get("say"):
+            return {"ok": True, "say": k["say"](d)}
+        return {"ok": True, "say": f"The key works ({len(d.get('data') or [])} models available)."}
     except urllib.error.HTTPError as e:
         return {"ok": False, "say": f"{k['who']} refused the key (check it was copied whole, and that the account has "
                 "credit)." if e.code in (401, 403) else f"{k['who']} answered {e.code}; try again later."}

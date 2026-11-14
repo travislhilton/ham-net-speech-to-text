@@ -221,8 +221,8 @@ def _prompt(loc: dict, want: dict, km: int, hf_km: int, modes: list[str], hf: di
 def _post(key: str, body: dict, timeout: float) -> dict:
     req = urllib.request.Request("https://api.x.ai/v1/responses", data=json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+    from . import aicost
+    return aicost.xai_json(req, timeout, "find_nets", body.get("model") or "")   # in the cost ledger
 
 
 def _text_and_sources(d: dict) -> tuple[str, set[str]]:

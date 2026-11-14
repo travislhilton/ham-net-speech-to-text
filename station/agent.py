@@ -59,7 +59,7 @@ import uuid
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from . import secrets
+from . import aicost, secrets
 from .online import Online, is_network_error
 
 DEFAULT_NAME = "Sidekick"
@@ -593,16 +593,14 @@ def call_xai(key, model, system, user, timeout=MODEL_TIMEOUT_S, schema=SCHEMA, m
                                                                        "strict": True}}}
     req = urllib.request.Request("https://api.x.ai/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        d = json.loads(r.read())
+    d = aicost.xai_json(req, timeout, name, model)              # the cost goes in the ledger (station/aicost.py)
     return json.loads(d["choices"][0]["message"]["content"]), d.get("usage") or {}
 
 
 def _xai_post(key, body, timeout):
     req = urllib.request.Request("https://api.x.ai/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+    return aicost.xai_json(req, timeout, None)                  # call_xai_tools records each round
 
 
 def call_xai_tools(key, model, system, user, toolbox, timeout=MODEL_TIMEOUT_S, schema=SCHEMA, max_tokens=300,
@@ -616,6 +614,7 @@ def call_xai_tools(key, model, system, user, toolbox, timeout=MODEL_TIMEOUT_S, s
     usage = {"tools": []}
 
     def add(d):
+        aicost.record(name, str(d.get("model") or model), d.get("usage") or {})
         for k, v in (d.get("usage") or {}).items():
             if isinstance(v, (int, float)):
                 usage[k] = usage.get(k, 0) + v
@@ -649,6 +648,7 @@ def call_anthropic(key, model, system, user, timeout=MODEL_TIMEOUT_S, schema=SCH
                                   output_config={"effort": "low" if schema is SCHEMA else "medium",
                                                  "format": {"type": "json_schema", "schema": schema}})
     text = next(b.text for b in resp.content if b.type == "text")
+    aicost.record(name, model, {"prompt_tokens": resp.usage.input_tokens, "completion_tokens": resp.usage.output_tokens})
     return json.loads(text), {"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens}
 
 

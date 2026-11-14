@@ -60,7 +60,10 @@ def call_stt(key: str, wav: bytes, language="en", keyterms=(), timeout=TIMEOUT_S
     req = urllib.request.Request(URL, data=body, method="POST",
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": ctype})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+        out = json.loads(r.read())
+    from . import aicost
+    aicost.record("speech_to_text", MODEL, None, audio_s=out.get("duration"))      # in the cost ledger
+    return out
 
 
 def keyterms_for(call: str, local_entries, net_name=None) -> list[str]:
@@ -245,6 +248,8 @@ class GrokSTT:
             return self._skip("no xAI key")
         if not self.online.should_try():
             return self._skip("offline")
+        if not self.st.costs.allow_background():                     # this month's AI budget is spent
+            return self._skip("over the AI budget")
         now = self.st.clock()
         with self.lock:
             self._roll(now)
