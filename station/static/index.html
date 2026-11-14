@@ -514,7 +514,7 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamsidekick.display
   <button id="openPhone" title="Show a QR code: point a phone's camera at it to open this dashboard on the phone">Open on phone</button>
   <button id="openReadout" title="The EOC's situation report: approve it, then read it on the net from a large-type card" onclick="window.open('/readout','_blank')">Read-out</button>
   <button id="nightBtn" aria-pressed="false" title="Night colours: all red on black, to keep your night vision (again for normal colours)" onclick="setDisplay('theme',DISP.theme==='night'?(DISP.prevTheme||'auto'):(DISP.prevTheme=DISP.theme,'night'))">☾ Night</button>
-  <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the two-sided reference card (printable)">Help</a>
+  <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the reference cards (the station, Sidekick, recording a conversation; printable)">Help</a>
 </header>
 <nav id="today" class="today" aria-label="Nets today"></nav>
 <div id="alerts" aria-live="polite"></div>
@@ -832,10 +832,10 @@ let ENDASK=null;   // "radio|key" whose End net is asking "End the net now?" (in
 const NC=()=>S.netclose||{closes:[],soon:{},learned:{}};
 const closeOf=(rid,key)=>(NC().closes||[]).find(c=>c.radio===rid&&c.key===key&&c.state!=="open");
 const radioName=rid=>(S.radios.find(r=>r.id===rid)||{}).name||rid;
-function closedWords(c){return c.manual?`Net ended by you at ${hhmm(c.at)}`:`Net closed by ${esc(c.by||"net control")} at ${hhmm(c.at)}`}
-function endAsk(rid,key){return ENDASK===rid+"|"+key
-  ?`<div class="nclose ask"><span>End the net now? It stops recording on ${esc(radioName(rid))} and runs the accurate pass.</span> <button class="primary" data-endnet="${esc(rid)}" data-key="${esc(key)}">End net</button> <button data-endcancel>Cancel</button></div>`
-  :`<button data-endask="${esc(rid)}" data-key="${esc(key)}" title="The net is over: stop recording this radio, run the final accurate pass now and build the Winlink messages from it">End net</button>`}
+function closedWords(c){return c.manual?`${c.scheduled?"Net ended":"Ended"} by you at ${hhmm(c.at)}`:`Net closed by ${esc(c.by||"net control")} at ${hhmm(c.at)}`}
+function endAsk(rid,key,isNet=true){const w=isNet?"net":"conversation";return ENDASK===rid+"|"+key
+  ?`<div class="nclose ask"><span>End the ${w} now? It stops recording on ${esc(radioName(rid))} and runs the accurate pass.</span> <button class="primary" data-endnet="${esc(rid)}" data-key="${esc(key)}">End ${w}</button> <button data-endcancel>Cancel</button></div>`
+  :`<button data-endask="${esc(rid)}" data-key="${esc(key)}" title="The ${w} is over: stop recording this radio, run the final accurate pass now and build the Winlink messages from it">End ${w}</button>`}
 // -> {badge (in the title), html (in the header body)} for one net/conversation
 function closeHtml(rid,key,fin,latest,sn){
   if(!fin.length)return {badge:"",html:""};
@@ -857,7 +857,7 @@ function closeHtml(rid,key,fin,latest,sn){
   if(latest&&soon&&soon.key===key)parts.push(`<span class="muted">Net control: closing soon (“${esc(soon.phrase)}”, ${hhmm(soon.at)})</span>`);
   const lc=(n.learned||{})[key],sched=sn&&(S.schedule||[]).find(x=>x.id===sn.id);
   if(lc&&sched&&!sched.ncs)parts.push(`<span class="muted">Net control ${esc(lc)} (heard opening the net)</span> <button data-savencs="${esc(rid)}" data-key="${esc(key)}" title="Net control then names the speaker of its acknowledgements and closes the net">Save ${esc(lc)} as net control for ${esc(sched.name)}</button>`);
-  if(latest)parts.push(endAsk(rid,key));
+  if(latest)parts.push(endAsk(rid,key,!!sn));
   if(parts.length)out.html=`<div class="nclose">${parts.join(" ")}</div>`;
   return out}
 // the radio column: End net while this radio's net is on, or what happened to the last one
@@ -867,7 +867,7 @@ function renderEndNet(el,r){
   if(s){const fin=s.tx.filter(t=>t.status==="final"),sn=(s.tx.find(t=>t.net)||{}).net;
     if(fin.length){const key=sn?sn.key:`${r.id}@${fin[0].start}`,c=closeOf(r.id,key),live=Date.now()-Date.parse(s.end)<GAP_MS;
       if(c&&(c.state==="tail"||Date.now()-Date.parse(c.at)<30*60000))h=closeHtml(r.id,key,fin,live,sn).html;
-      else if(live&&!r.paused)h=`<div class="nclose"><span class="muted">${esc(sn?sn.name:"This conversation")}:</span> ${endAsk(r.id,key)}</div>`}}
+      else if(live&&!r.paused)h=`<div class="nclose"><span class="muted">${esc(sn?sn.name:"This conversation")}:</span> ${endAsk(r.id,key,!!sn)}</div>`}}
   if(box.dataset.h!==h){box.dataset.h=h;box.innerHTML=h}}
 async function closeAct(rid,act,key){
   try{S.netclose=await post(`/api/netclose/${enc(rid)}/${act}`,{key});ENDASK=null;renderFeed(rid);renderRadios()}catch(err){alert(err.message)}}

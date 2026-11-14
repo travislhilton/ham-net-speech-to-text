@@ -200,7 +200,7 @@ class Walk:
 
     def h_station_log_4_s(self):
         self._log_ready()
-        b = self.p.get_by_role("button", name="▶")
+        b = self.p.locator(".tx").get_by_role("button", name="▶")            # on the transmissions (not ▶ Resume)
         assert b.count() >= 1, "no ▶ play button on any transmission"
         assert "s" in b.first.inner_text()
         return f"{b.count()} transmissions have a ▶ play button ({b.first.inner_text().strip()})"
@@ -236,13 +236,15 @@ class Walk:
             raise Skip("no End net button on screen: it is offered while a net or conversation is being recorded (none is right now)")
         self.p.wait_for_selector("[data-endask]", timeout=20000)
         self.p.locator("[data-endask]").first.click()
-        self.p.wait_for_selector("text=End the net now?", timeout=8000)
+        self.p.wait_for_selector(".nclose.ask", timeout=8000)                    # "End the net now?" / "End the conversation now?"
+        ask = self.p.inner_text(".nclose.ask").split("?")[0] + "?"
+        assert ask in ("End the net now?", "End the conversation now?"), ask
         if self.mode != "sandbox":
             self.p.locator("[data-endcancel]").first.click()                     # the inline confirmation's own cancel: nothing ends
-            return "End net asks 'End the net now?' before doing anything (cancelled; nothing ended)"
+            return f"End asks '{ask}' before doing anything (cancelled; nothing ended)"
         self.p.locator(".nclose.ask button.primary").first.click()
         self.p.wait_for_timeout(1500)
-        return "End net asked 'End the net now?' and, confirmed, closed the net"
+        return f"End asked '{ask}' and, confirmed, ended it"
 
     def h_station_net_4(self):
         self.goto()
@@ -272,7 +274,7 @@ class Walk:
         self.p.wait_for_selector("#settings[open]")
         self.p.wait_for_selector("#agName", timeout=15000)
 
-    def h_sidekick_setup_2(self):
+    def _key_box(self):
         self._settings()
         keyrow = self.p.locator("[data-key='XAI_API_KEY']")
         assert keyrow.count() == 1, "no xAI key row in Settings"
@@ -295,7 +297,7 @@ class Walk:
                        ("agCheck", "Your check-in line"), ("agClass", "License class"), ("agReg", "Your region")):
             assert self.p.locator(f"#{i}").count() == 1, f"Settings has no {lab}"
 
-    def h_sidekick_setup_3(self):
+    def _enable_agent(self):
         self._agent_fields()
         if self.mode != "sandbox":
             return "Settings → Station agent: Enable box and On-air name, first name, check-in line, license class, region are there (nothing changed)"
@@ -311,14 +313,7 @@ class Walk:
         assert s["enabled"] and s["name"] == "Buddy" and s["operator"] == "Sam" and s["license_class"] == "general", s
         return "Enable ticked and the five fields saved; the station reports them back"
 
-    h_sidekick_setup_on_air_name = h_sidekick_setup_your_first_name = h_sidekick_setup_your_check_in_line = \
-        h_sidekick_setup_license_class = h_sidekick_setup_your_region = lambda self: self._field_row()
-
-    def _field_row(self):
-        self._agent_fields()
-        return "the field is on the form" + (" and saved (see Enable the station agent)" if self.mode == "sandbox" else "")
-
-    def h_sidekick_setup_4(self):
+    def _draft_switch(self):
         self.goto()
         seg = self.p.locator("[data-agmode]")
         if seg.count() == 0:
@@ -333,7 +328,7 @@ class Walk:
         assert "draft" in modes.values(), modes
         return "Sidekick switched Off → Draft on the radio's card"
 
-    def h_sidekick_setup_5(self):
+    def _never_checks_in(self):
         self.goto()
         self.p.click("#openNets")
         self.p.wait_for_selector("#netsDlg[open]")
@@ -351,7 +346,7 @@ class Walk:
             self.p.click("#netCancel")
         return "Nets → the net → Sidekick on this net offers 'Never checks in'" + (" (set and saved)" if self.mode == "sandbox" else " (not changed)")
 
-    def h_sidekick_setup_6(self):
+    def _voice(self):
         self._settings()
         t = self.p.inner_text("#settings")
         assert "sidekick's voice" in t.lower(), "no Sidekick's voice section"
@@ -455,6 +450,155 @@ class Walk:
 
     def h_sidekick_buttons_hear(self):
         return self.h_sidekick_buttons_hear_it()
+
+    # ---- sidekick card (2026-11-13 layout: switch / by itself / ask it / chip / set up once / wrong) ----
+    def h_sidekick_switch_off(self):
+        self.goto()
+        if self.p.locator("[data-agmode]").count() == 0:
+            return "no Sidekick switch: the station agent is off on this station, so every radio is Off (the default)"
+        assert self.p.locator("[data-agmode][data-v=off]").count() >= 1, "the switch has no Off"
+        return "the radio's Sidekick switch has Off"
+
+    def h_sidekick_switch_draft(self):
+        return self._draft_switch()
+
+    def h_sidekick_switch_send(self):
+        return self.h_sidekick_buttons_send()
+
+    def h_sidekick_ask_5(self):
+        a = self.h_sidekick_buttons_what_would_you_say_now()
+        return a + "; " + self.h_sidekick_buttons_hear_it()
+
+    def h_sidekick_ask_6(self):
+        r = self.h_sidekick_buttons_chat_prepared()
+        if self.p.locator("#skDlg[open]").count():
+            assert self.p.locator("#skQ").count() == 1 and self.p.locator("#skDeep").count() == 1, "Chat has no question box / Think"
+            r += "; Chat has the question box and Think"
+        return r
+
+    def _sk_tab(self, tab):
+        if not self._sk_card():
+            return False
+        self.p.get_by_role("button", name="Chat & prepared").first.click()
+        self.p.wait_for_selector("#skDlg[open]", timeout=10000)
+        self.p.locator(f"#skTabs [data-sktab={tab}]").first.click()
+        self.p.wait_for_timeout(600)
+        return True
+
+    def h_sidekick_ask_7(self):
+        if not self._sk_tab("prep"):
+            return "Sidekick is off on this station: no Chat & prepared… (as the card says)"
+        t = self.p.inner_text("#skBody")
+        assert "New talk" in t, "the Prepared tab has no New talk…"
+        return "Prepared tab: New talk… is there (talks are approved, then Send now / Arm on this radio)"
+
+    def h_sidekick_ask_8(self):
+        if not self._sk_tab("lib"):
+            return "Sidekick is off on this station: no Library or Sites (as the card says)"
+        lib = self.p.locator("#skSearch").count()
+        self.p.locator("#skTabs [data-sktab=sites]").first.click()
+        self.p.wait_for_timeout(600)
+        assert lib and self.p.locator("#skSites").count() == 1, f"Library search {lib}, Sites box {self.p.locator('#skSites').count()}"
+        return "Library (with Search) and Sites (Name | lat, lon | antenna height) are there"
+
+    def h_sidekick_setup_1(self):
+        return "creating the key is on xAI's site (a person); " + self._key_box()
+
+    def h_sidekick_setup_2(self):
+        return self._enable_agent()
+
+    def h_sidekick_setup_3(self):
+        return self._voice() + "; " + self._never_checks_in()
+
+    def h_sidekick_wrong_no_send_position(self):
+        return self.h_sidekick_buttons_send()
+
+    # ---- conversation card ----
+    def _radio_card(self):
+        self.goto()
+        self.p.wait_for_timeout(1500)
+        if self.p.locator(".pz").count() == 0:
+            if self.mode == "sandbox":
+                raise AssertionError("no radio card (Pause / Resume) although the sandbox added a radio")
+            raise Skip("no radio is set up on this station yet")
+
+    def h_conversation_before_1(self):
+        self._radio_card()
+        pz = self.p.locator(".pz").first
+        before = pz.inner_text().strip()
+        assert before in ("⏸ Pause", "▶ Resume"), before
+        if self.mode != "sandbox":
+            return f"the radio's card shows {before} (not pressed)"
+        pz.click()
+        self.p.wait_for_function("t=>document.querySelector('.pz').textContent.trim()!==t", arg=before, timeout=8000)
+        after = pz.inner_text().strip()
+        pz.click()                                                              # put it back as it was
+        self.p.wait_for_function("t=>document.querySelector('.pz').textContent.trim()===t", arg=before, timeout=8000)
+        return f"{before} → {after} → {before}: the radio's card switches listening off and on"
+
+    def h_conversation_before_2(self):
+        self._radio_card()
+        assert self.p.locator("[data-tune]").count() >= 1, "no Change button on the radio's card"
+        return "the radio's card has Change (enter the frequency and mode; not pressed)"
+
+    def h_conversation_during_4(self):
+        return self.h_station_log_grey_words()
+
+    def h_conversation_during_5(self):
+        return self.h_station_log_who_fix()
+
+    def h_conversation_find_today_and_yesterday(self):
+        self.goto()
+        self.p.wait_for_timeout(2500)
+        body = self.p.inner_text("body").lower()                              # the heading is upper case by CSS
+        if "completed" not in body:
+            if self.mode == "sandbox":
+                raise AssertionError("no Completed list in the log after the sandbox ended its net")
+            raise Skip("nothing completed in this log yet (today and yesterday)")
+        return "the radio's log has its Completed list (one line each, open to read)"
+
+    def h_conversation_find_any_day(self):
+        self.goto()
+        self.p.click("#openNets")
+        self.p.wait_for_selector("#netsDlg[open]")
+        self.p.locator("[data-ntab=history]").first.click()
+        self.p.wait_for_selector("#hConv", timeout=15000)
+        return "Nets → History has 'Include conversations'"
+
+    def h_conversation_find_by_word_or_call(self):
+        self.goto()
+        self.p.locator("body").click(position={"x": 5, "y": 300})
+        self.p.keyboard.press("/")
+        self.p.wait_for_selector("#searchDlg[open]", timeout=8000)
+        self.p.wait_for_selector("#srKind", timeout=8000)
+        opts = self.p.locator("#srKind option").all_inner_texts()
+        assert "conversations only" in opts, opts
+        return "/ opens Search; Look in offers 'conversations only'"
+
+    def h_conversation_use_2(self):
+        self._log_ready()
+        m = self.p.locator("[data-mins]")
+        if m.count() == 0:
+            raise Skip("no Minutes button on screen (it is on a net or conversation once it has transmissions)")
+        m.first.click()
+        self.p.wait_for_selector("#netsDlg[open]", timeout=10000)
+        self.p.wait_for_function("/Copy as text/.test(document.querySelector('#netsDlg').innerText)", timeout=20000)
+        return "Minutes opens with Download .md and Copy as text"
+
+    def h_conversation_use_3(self):
+        return self.h_station_log_4_s() + "; ✎ Fix: " + self.h_station_log_who_fix()
+
+    def h_conversation_use_4(self):
+        return self.h_station_net_4()
+
+    def h_conversation_wrong_wrong_call_or_speaker(self):
+        return self.h_station_log_who_fix()
+
+
+def walk_order(it):
+    """Set up once before switching a radio to Draft, then the rest in card order (a sort is stable)."""
+    grp = it["id"].split(":")[1].split(".")[0]
+    return 0 if grp == "setup" else 1 if grp == "switch" else 2
 
 
 def handler_name(pid):
@@ -566,7 +710,7 @@ def main(argv=None):
             w = Walk(pg, a.url, a.mode, out, sb)
             state = w.api("api/state")
             for c in C.CARDS:
-                for it in C.items(c):
+                for it in sorted(C.items(c), key=walk_order):
                     w.run_item(it)
                     r = w.res[it["id"]]
                     print(f"{r['status']:7} {it['id']:46} {r['detail'][:90]}", flush=True)

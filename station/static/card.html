@@ -85,10 +85,15 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
   .card-part{font-size:13px}
   .card-disclaimer{font-size:11.5px}
 }
+.card-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.card-nav a{display:inline-block;padding:6px 14px;border:1px solid var(--border);border-radius:999px;background:#fff;color:var(--navy);font-size:15px;font-weight:600;text-decoration:none}
+.card-nav a:hover{border-color:var(--navy)}
+.card-nav a[aria-current]{background:var(--navy);border-color:var(--navy);color:#fff}
 </style>
 </head>
 <body>
 <div class="page-header">
+  <nav class="card-nav" aria-label="Reference cards"><a href="/help" aria-current="page">The station</a><a href="/help/sidekick">Sidekick, the AI assistant</a><a href="/help/conversation">Record a conversation</a></nav>
   <h1>HAM Sidekick Station: Quick Reference Card</h1>
   <p class="page-intro">Two sides, US Letter. Print double-sided ("flip on long edge"), then laminate it and keep it by the radio. Works in black and white.</p>
   <button class="print-btn" onclick="window.print()">PRINT</button>
@@ -122,7 +127,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
 
   <div class="note-box warning"><b>Each radio needs its own sound input,</b> never the one VARA or Winlink uses. Two identical adapters? Rename one in Windows: Settings → System → Sound → the input → Rename.</div>
   <div class="note-box tip"><b>On a laptop:</b> keep it plugged in and set the maker's fan profile to <b>Performance</b>. The station keeps the screen on and runs at full speed only while it transcribes, then puts your power plan back.</div>
-  <div class="note-box"><b>Optional, in Settings:</b> your name, grid and Winlink account (for the messages) · a QRZ.com login · local names · an xAI key for <b>Sidekick</b>, a station assistant that drafts what to say and never transmits (its own card: <b>Sidekick card</b> in Settings).<br><b>To update:</b> download again and run <span class="mono">install.cmd</span> again. Your settings stay.</div>
+  <div class="note-box"><b>Optional, in Settings:</b> your name, grid and Winlink account (for the messages) · a QRZ.com login · local names · an xAI key for <b>Sidekick</b>, the AI assistant. <b>Help</b> has its card, and one to record a conversation.<br><b>To update:</b> download again and run <span class="mono">install.cmd</span> again. Your settings stay.</div>
   <p class="turn-over">Turn over → side 2: Running a Net</p>
 </div>
 
@@ -170,7 +175,7 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
   </table>
 
   <div class="note-box" style="font-size:14px">This station: <span class="fill"></span><br>Radios / nets: <span class="fill" style="min-width:2.6in"></span></div>
-  <p class="card-disclaimer">HAM Sidekick Station is an independent volunteer project (MIT License), a companion to the Church of Jesus Christ EMCOMM forms. Machine transcription: the operator reviews every message before it is sent. The station never transmits: Sidekick only drafts. <b>☾ Night</b> (top) turns the screen red to keep your night vision. Manual: README.md.</p>
+  <p class="card-disclaimer">HAM Sidekick Station is an independent volunteer project (MIT License), a companion to the Church of Jesus Christ EMCOMM forms. Machine transcription: the operator reviews every message before it is sent. It transmits only with Sidekick on Send. <b>☾ Night</b> (top) turns the screen red to keep your night vision. Manual: README.md.</p>
 </div>
 
 </div>

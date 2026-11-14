@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sidekick Card</title>
-<!-- Sidekick's two-sided reference card (set up / on a net), styled like the station's card.html.
+<!-- Sidekick's two-sided reference card (use it / its card, sending, set up), styled like the station's card.html.
      Served at /help/sidekick; PDF by tools/build_ref_card.py. Keep every side within one page.
      The station's card:  Same look as the Church of Jesus Christ EMCOMM quick reference cards (one family):
      system fonts (works with no internet), red front, navy back, numbered steps, one card side per Letter page.
@@ -87,95 +87,93 @@ h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
   .card-part{font-size:13px}
   .card-disclaimer{font-size:11.5px}
 }
+.card-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.card-nav a{display:inline-block;padding:6px 14px;border:1px solid var(--border);border-radius:999px;background:#fff;color:var(--navy);font-size:15px;font-weight:600;text-decoration:none}
+.card-nav a:hover{border-color:var(--navy)}
+.card-nav a[aria-current]{background:var(--navy);border-color:var(--navy);color:#fff}
 </style>
 </head>
 <body>
 <div class="page-header">
+  <nav class="card-nav" aria-label="Reference cards"><a href="/help">The station</a><a href="/help/sidekick" aria-current="page">Sidekick, the AI assistant</a><a href="/help/conversation">Record a conversation</a></nav>
   <h1>Sidekick: Quick Reference Card</h1>
-  <p class="page-intro">Two sides, US Letter. Print double-sided ("flip on long edge") and keep it with the station's card. Works in black and white.</p>
+  <p class="page-intro">How to use Sidekick, the station's AI assistant. Two sides, US Letter. Print double-sided ("flip on long edge") and keep it with the station's card. Works in black and white.</p>
   <button class="print-btn" onclick="window.print()">PRINT</button>
 </div>
 <div class="card-row">
 
 <!-- ===================== FRONT ===================== -->
 <div class="card card-front">
-  <p class="card-role">HAM Sidekick Station · Sidekick, the station agent</p>
+  <p class="card-role">HAM Sidekick Station · Sidekick, the AI assistant</p>
   <span class="card-side">Front · side 1 of 2</span>
-  <h2 class="card-title">Set Up Sidekick</h2>
-  <p class="lead">Sidekick listens with you. After each transmission it decides whether <b>your station</b> should speak and <b>drafts</b> exactly what it would say: a check-in, an acknowledgement, a short answer. <b>It drafts only</b> until you switch Send on (see the checklist below): you read the draft and decide.</p>
+  <h2 class="card-title">Use Sidekick</h2>
+  <p class="lead">Sidekick listens to the radio with you. After each transmission it decides whether <b>your station</b> should speak, and writes exactly what it would say: a check-in, a reply, an answer. <b>You are always the control operator.</b> It only writes drafts until you switch a radio to <b>Send</b>. Not set up yet? See <b>Set up once</b> on side 2.</p>
 
-  <p class="card-part">A · The xAI key <span>(optional: without it Sidekick uses its offline rules)</span></p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Create a key</b> at <span class="mono">console.x.ai</span> → API Keys → Create API Key<small>Add a little credit. Sidekick asks the model only on its turns, about 1–4 times a net (well under a cent each). ▶ Hear it costs a little per clip.</small></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-text"><span class="k">Settings</span> → <b>Station agent</b> → paste the key → <span class="k">Save</span><small>It is kept on this PC only, never shown again and never sent anywhere but xAI.</small></div></div>
-  </div>
-
-  <p class="card-part">B · Turn it on</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">3</div><div class="step-text"><span class="k">Settings</span> → <b>Station agent</b> → tick <b>Enable the station agent</b>, then fill in:</div></div>
-  </div>
+  <p class="card-part">A · Switch it on for a radio <span>(the Sidekick switch on each radio's card)</span></p>
   <table class="tier-table">
-    <tr><td>On-air name</td><td>Said after your call (default <b>Sidekick</b>). Not a phonetic word, number or procedure word (Echo, Portable, Break)</td></tr>
-    <tr><td>Your first name</td><td>Sidekick names you as its control operator</td></tr>
-    <tr><td>Your check-in line</td><td>What it says to check in, e.g. <i>"This is W9XYZ, Sam, Springfield, no traffic"</i></td></tr>
-    <tr><td>License class</td><td>It never drafts outside your phone privileges</td></tr>
-    <tr><td>Your region</td><td>Your state (and county). It answers a roll call by place (<i>"Stations Colorado, check in now"</i>) <b>only</b> for your region; left empty, never</td></tr>
+    <tr><td><span class="k">Off</span></td><td>Sidekick ignores this radio (the default)</td></tr>
+    <tr><td><span class="k">Draft</span></td><td>Writes what it would say, at the top of the radio's column. <b>Nothing goes on the air.</b> You read it and say it yourself if you like it</td></tr>
+    <tr><td><span class="k">Send</span></td><td>Says its drafts on the air in its voice. Offered only on a radio set up to transmit (side 2). You must be at the PC</td></tr>
   </table>
+
+  <p class="card-part">B · What it does by itself</p>
   <div class="steps">
-    <div class="step"><div class="step-num">4</div><div class="step-text">On each radio's card: <b>Sidekick</b> <span class="k">Off</span> → <span class="k">Draft</span><small>Off by default on every radio. Its card appears at the top of that radio's column.</small></div></div>
-    <div class="step"><div class="step-num">5</div><div class="step-text"><b>Nets where it must not check in</b> (members-, mobiles- or traffic-only): <span class="k">Nets</span> → the net → <b>Sidekick on this net</b> → <b>Never checks in</b></div></div>
-    <div class="step"><div class="step-num">6</div><div class="step-text"><b>Its voice</b> (optional): <span class="k">Settings</span> → <b>Sidekick's voice</b> → pick one, press ▶<small>Plays in this browser only, never on a radio. Without a key or internet, the PC's own voice is used.</small></div></div>
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Checks in</b> when net control opens check-ins to a station like yours<small>Says your check-in line, then stops offering once net control logs you.</small></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><b>Answers when called</b>: by your call or by its name (<i>"Sidekick, what's the forecast?"</i>)<small>A quick question gets a short answer at once.</small></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><b>Thinks about a hard question</b>: says <i>"copy your question, working on it"</i>, then the card shows <b>Answer ready</b><small>In a net it waits for net control's <i>"comments or questions?"</i>, says it has a response, and reads it when told to go ahead. In a conversation it answers at the next pause. Up to 3 questions, in the order asked.</small></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><b>Stays quiet</b> when it is not its turn, and always on <i>"break break"</i>, emergency or priority traffic<small>Gives your call at the end and every 10 minutes, and says it is an automated assistant with you as control operator.</small></div></div>
   </div>
 
-  <div class="note-box warning"><b>Draft only is the default.</b> A radio's PTT stays off until <b>you</b> allow it. <b>Before the first Send, once, into a dummy load:</b> <b>1</b> <span class="k">Radios…</span> → <b>Transmit</b>: how it keys, <b>Audio out</b>, tick <b>Allow transmitting</b>, Save. <b>2</b> Tick <b>a dummy load is connected</b>, press <b>Tone + ID</b>: set <b>Drive level</b> until deviation is right (about 3 kHz on FM; SSB: ALC just touching), Save. <b>3</b> <b>Phrase + ID</b>: check your call and the audio. <b>4</b> Radio card: Sidekick <span class="k">Send</span>. You stay at the PC; <b>Esc</b> stops any transmission.</div>
-  <div class="note-box tip"><b>Every draft is checked in code against FCC Part 97</b> before you see it: your call at the end and every 10 minutes (§97.119), says it is an automated assistant and names you (§97.113), no music, codes or business, no relayed messages (§97.115), silent during emergency or priority traffic (§97.101), inside your privileges (§97.301/305). A draft that fails shows <b>Would not send</b> with the rule.</div>
-  <p class="turn-over">Turn over → side 2: On a Net</p>
+  <p class="card-part">C · Ask it yourself</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">5</div><div class="step-text"><span class="k">What would you say now?</span> on its card: a draft for this moment, any time<small>Never sent by itself. <b>▶ Hear it</b> plays it in Sidekick's voice on this PC only; 👍 👎 rate it.</small></div></div>
+    <div class="step"><div class="step-num">6</div><div class="step-text"><span class="k">Chat &amp; prepared…</span> → <b>Chat</b>: ask it anything, privately. <b>Nothing in the chat is transmitted</b><small>It knows the radio's frequency, your privileges, the net on now and who checked in. Tick <b>Think</b> for a harder question (up to a minute). Ask it for words to say: <b>▶ Hear</b>, then <b>Save to Prepared</b>.</small></div></div>
+    <div class="step"><div class="step-num">7</div><div class="step-text"><b>Prepared</b> tab: words ready to say. <b>New talk…</b> writes a short training talk in parts<small>Read and edit them, <b>▶ Hear</b>, then <b>Approve these words</b>. Read them yourself, or on <b>Send</b>: <b>Send now</b>, or <b>Arm on this radio</b> and on the air say <i>"Sidekick, present the topic"</i>, then <i>"continue"</i> for each part.</small></div></div>
+    <div class="step"><div class="step-num">8</div><div class="step-text"><b>Library</b> (what it reads: the manual, these cards, your notes and web pages) · <b>Sites</b> (your EOC, shelters, repeaters: <span class="mono">Name | lat, lon | antenna height</span>)<small>Name two sites in Chat for the radio path between them. Both stay on this PC.</small></div></div>
+  </div>
+  <p class="turn-over">Turn over → side 2: Its Card, Sending, Set Up</p>
 </div>
 
 <!-- ===================== BACK ===================== -->
 <div class="card card-back">
-  <p class="card-role">HAM Sidekick Station · Sidekick, the station agent</p>
+  <p class="card-role">HAM Sidekick Station · Sidekick, the AI assistant</p>
   <span class="card-side back">Back · side 2 of 2</span>
-  <h2 class="card-title">Sidekick on a Net</h2>
+  <h2 class="card-title">Its Card, Sending, Set Up</h2>
 
   <p class="card-part">The YOUR TURN chip <span>(top of Sidekick's card on each radio)</span></p>
   <table class="tier-table">
-    <tr><td>Listening</td><td>Not its turn; the reason is shown (<i>"check-ins called for mobile stations"</i>)</td></tr>
-    <tr><td>Check-ins open to you</td><td>Net control opened check-ins to a station like yours: a check-in is drafted</td></tr>
-    <tr><td>CALLED</td><td>Someone called your call or Sidekick's name: what they said, and a reply</td></tr>
-    <tr><td>Answer ready</td><td>A question that needed thinking is answered; it waits for net control's <i>"comments or questions?"</i></td></tr>
-    <tr><td>Checked in ✓</td><td>Net control acknowledged you, or your own check-in was heard: it will not check in again</td></tr>
+    <tr><td>Listening</td><td>Not its turn; the reason is shown</td></tr>
+    <tr><td>Check-ins open to you</td><td>A check-in is drafted</td></tr>
+    <tr><td>CALLED</td><td>Someone called you or Sidekick: what they said, and a reply</td></tr>
+    <tr><td>Answer ready</td><td>A thought-out answer waits for its place</td></tr>
+    <tr><td>Checked in ✓</td><td>It will not check in to this net again</td></tr>
   </table>
-
-  <p class="card-part">Buttons</p>
   <table class="tier-table">
-    <tr><td><span class="k">What would you say now?</span></td><td>A draft for this moment, any time</td></tr>
-    <tr><td><span class="k">▶ Hear it</span> <span class="k">👍</span> <span class="k">👎</span></td><td>The draft in Sidekick's voice (browser only); rate it</td></tr>
-    <tr><td><span class="k">I checked in myself</span></td><td>You checked in on the air: it stops offering a check-in. <b>Not checked in</b> undoes it</td></tr>
+    <tr><td><span class="k">I checked in myself</span></td><td>You checked in on the air: it stops offering. <b>Not checked in</b> undoes it</td></tr>
     <tr><td><span class="k">Mute for this net</span></td><td>Silent until the net ends. <b>Unmute</b> undoes it</td></tr>
-    <tr><td><span class="k">Chat &amp; prepared…</span></td><td>Private chat; prepared words and talks: <b>▶ Hear</b>, approve, <b>Send now</b> or <b>Arm</b> (<i>"present the topic"</i>)</td></tr>
-    <tr><td><span class="k">Send</span></td><td>On the air after a 3 s countdown, you at the PC; <b>Esc</b> stops</td></tr>
   </table>
 
-  <p class="card-part">When it speaks, and when it stays quiet</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Checks in</b> when check-ins are open to all, to your region, or to <i>"anyone with or without traffic"</i></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-text"><b>Stays quiet</b> for traffic-only, maritime, mobile, member or EOC calls; <i>"before I start taking check-ins"</i>; a bare <i>"please call now"</i> whose start was not heard; anyone else's roll call by place</div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-text"><b>Silent on</b> <i>"break break"</i>, emergency or priority traffic, on every net, unless net control calls you</div></div>
-  </div>
+  <p class="card-part">Sending <span>(a radio on Send)</span></p>
+  <div class="note-box warning">A draft to be said shows <b>Sending in 3… Stop (Esc)</b>. It goes out only while <b>you are at the PC</b> (keyboard or mouse in the last 3 minutes) and the frequency is clear. <b>Esc, Stop or any click drops the transmitter at once.</b> Every draft is checked in code against FCC Part 97 first; one that fails shows <b>Would not send</b> with the rule.</div>
 
+  <p class="card-part">Set up once</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>An xAI key</b> (optional): <span class="mono">console.x.ai</span> → API Keys → Create; add a little credit. <span class="k">Settings</span> → <b>Station agent</b> → paste → Save<small>Without one: offline rules (no answers). Well under a cent a turn. Kept on this PC only.</small></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><span class="k">Settings</span> → <b>Station agent</b> → tick <b>Enable the station agent</b>; fill in <b>On-air name</b>, <b>your first name</b>, <b>check-in line</b>, <b>license class</b>, <b>your region</b><small>Region = your state (and county): it answers a roll call by place only there.</small></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><b>Its voice</b>: <span class="k">Settings</span> → <b>Sidekick's voice</b> → ▶ to try, pick one · Nets it must not join: <span class="k">Nets</span> → the net → <b>Never checks in</b></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><b>Before the first Send, into a dummy load:</b> <span class="k">Radios…</span> → <b>Transmit</b> (how it keys, Audio out, tick <b>Allow transmitting</b>) → <b>Transmit test</b>: tick <i>a dummy load is connected</i>, <b>Tone + ID</b>, set <b>Drive level</b> (about 3 kHz FM deviation; SSB ALC just touching), then <b>Phrase + ID</b></div></div>
+  </div>
 
   <p class="card-part">When something looks wrong</p>
   <table class="tier-table">
     <tr><td>No Sidekick on a radio</td><td>Settings → Enable the station agent; then <b>Draft</b> on that radio's card</td></tr>
-    <tr><td>Never answers a roll call</td><td>Set <b>Your region</b> (Settings → Station agent)</td></tr>
-    <tr><td>Wants to check in again</td><td>Press <b>I checked in myself</b></td></tr>
+    <tr><td>No <span class="k">Send</span> position</td><td>That radio is not allowed to transmit: Radios… → Transmit</td></tr>
+    <tr><td>"You are not at the station"</td><td>Move the mouse on the dashboard: Send waits for you</td></tr>
     <tr><td>Amber <b>Offline rules</b></td><td>No key or no internet: it checks in and acknowledges, no answers</td></tr>
-    <tr><td>Would not send</td><td>A Part 97 check stopped it: the rule is shown. Nothing to do</td></tr>
-    <tr><td>Wrong turn</td><td>👎 it: the ratings show what to fix (a net can be replayed: <span class="mono">tools.sidekick_replay</span>)</td></tr>
+    <tr><td>Wrong turn</td><td>👎 it, so the ratings show what to fix. Never answers a roll call? Set <b>Your region</b></td></tr>
   </table>
 
-  <p class="card-disclaimer">Part of HAM Sidekick Station (MIT License). Sidekick transmits only in Send mode, on a radio you allowed, with you at the PC. Drafts stay on this PC (<span class="mono">data\agent_drafts.jsonl</span>).</p>
+  <p class="card-disclaimer">Part of HAM Sidekick Station (MIT License). It transmits only on Send, on a radio you allowed, with you at the PC. Everything stays on this PC; questions go to xAI only with a key.</p>
 </div>
 
 </div>

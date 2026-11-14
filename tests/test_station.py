@@ -541,7 +541,30 @@ def test_sidekick_card_is_served_and_linked():
     from station.server import STATIC
     html = (STATIC / "sidekick_card.html").read_text(encoding="utf-8")
     assert "side 1 of 2" in html and "side 2 of 2" in html and "<title>Sidekick Card</title>" in html
-    assert "Draft only is the default" in html and "Transmit" in html and "Your region" in html
+    assert "Use Sidekick" in html and "Set up once" in html and "Transmit test" in html and "Your region" in html
     idx = (STATIC / "index.html").read_text(encoding="utf-8")
     assert idx.count('href="/help/sidekick"') == 2                 # Settings -> Station agent, and Sidekick's card
-    assert '"/help/sidekick"' in (STATIC.parent / "server.py").read_text(encoding="utf-8")
+    from station.server import HELP_CARDS
+    assert HELP_CARDS["/help/sidekick"] == "sidekick_card.html"
+
+
+def test_help_has_three_cards_each_linking_the_others():
+    from station.server import HELP_CARDS, STATIC
+    pages = {"/help": "card.html", "/help/sidekick": "sidekick_card.html", "/help/conversation": "conversation_card.html"}
+    for path, src in pages.items():
+        assert HELP_CARDS[path] == src
+        html = (STATIC / src).read_text(encoding="utf-8")
+        nav = html[html.index('<nav class="card-nav"'):html.index("</nav>")]
+        assert all(f'href="{p}"' in nav for p in pages)             # Help: every card reaches the other two
+        assert f'href="{path}" aria-current="page"' in nav
+        assert "side 1 of 2" in html and "side 2 of 2" in html
+    conv = (STATIC / "conversation_card.html").read_text(encoding="utf-8")
+    assert "Record a Conversation" in conv and "Include conversations" in conv and "conversations only" in conv
+
+
+def test_end_button_names_a_conversation_outside_a_net():
+    from station.server import STATIC
+    idx = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert 'const w=isNet?"net":"conversation"' in idx and "End ${w}</button>" in idx and "End the ${w} now?" in idx
+    assert idx.count("endAsk(rid,key,!!sn)") == 1 and idx.count("endAsk(r.id,key,!!sn)") == 1     # both End buttons
+    assert '${c.scheduled?"Net ended":"Ended"} by you' in idx

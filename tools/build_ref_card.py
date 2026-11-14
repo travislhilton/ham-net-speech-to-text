@@ -1,5 +1,6 @@
 """Build the printable reference cards: docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf and
-docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf (and their .html).
+docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf and docs/HAM_Sidekick_Conversation_Quick_Reference_Card.pdf
+(and their .html).
 
     python -m tools.build_ref_card
 
@@ -42,7 +43,8 @@ PUBLIC_PDF = "https://cdn.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/
 #  copy up to 12 h: after pushing a new card, open https://purge.jsdelivr.net/gh/travislhilton/hamsidekick@master/docs/HAM_Sidekick_Station_Quick_Reference_Card.pdf
 
 
-CARDS = [(SRC, NAME), (ROOT / "station" / "static" / "sidekick_card.html", "HAM_Sidekick_Assistant_Quick_Reference_Card")]
+CARDS = [(SRC, NAME), (ROOT / "station" / "static" / "sidekick_card.html", "HAM_Sidekick_Assistant_Quick_Reference_Card"),
+         (ROOT / "station" / "static" / "conversation_card.html", "HAM_Sidekick_Conversation_Quick_Reference_Card")]
 
 
 def main() -> int:

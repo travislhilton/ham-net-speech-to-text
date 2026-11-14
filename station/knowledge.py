@@ -41,7 +41,8 @@ from xml.etree import ElementTree
 
 # The station's own documents, relative to the install folder.
 BUILTIN_DOCS = ("README.md", "docs/MANUAL.md", "docs/TECHNICAL.md", "docs/ARCHITECTURE.md",
-                "station/static/card.html", "station/static/sidekick_card.html")
+                "station/static/card.html", "station/static/sidekick_card.html",
+                "station/static/conversation_card.html")
 FILE_TYPES = (".md", ".txt", ".html", ".htm", ".pdf", ".docx", ".csv")
 MAX_FILE = 20 * 1024 ** 2         # one file
 MAX_TOTAL = 200 * 1024 ** 2       # the operator's files, notes and pages together (built-in docs not counted)

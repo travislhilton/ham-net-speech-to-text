@@ -13,6 +13,8 @@ from .schedule import NoSuchNet
 from . import speaker
 
 STATIC = Path(__file__).parent / "static"
+HELP_CARDS = {"/help": "card.html", "/card": "card.html", "/help/sidekick": "sidekick_card.html",   # Help: the three
+              "/help/conversation": "conversation_card.html"}                                    # reference cards
 
 
 def with_who(kind: str, data):
@@ -50,9 +52,9 @@ def make_handler(station):
 
         def do_GET(self):
             u = urlparse(self.path)
-            if u.path in ("/help", "/card", "/help/sidekick"):   # the printable two-sided reference cards
+            if u.path in HELP_CARDS:                           # the printable two-sided reference cards
                 from . import phone
-                src = "sidekick_card.html" if u.path == "/help/sidekick" else "card.html"
+                src = HELP_CARDS[u.path]
                 page = '<!doctype html><html lang="en"><head><meta charset="utf-8">' \
                        '<meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + \
                        phone.card_with_download((STATIC / src).read_text(encoding="utf-8"),

@@ -1,4 +1,5 @@
-"""The two reference cards (station/static/card.html, sidekick_card.html) as a list of steps and table rows.
+"""The three reference cards (station/static/card.html, sidekick_card.html, conversation_card.html) as a list of steps
+and table rows.
 
 The operator walkthrough (tools/operator_walkthrough.py) follows these in card order, and tests/test_card_in_sync.py
 fails when a card changes without the walkthrough being looked at again: each item carries a short hash of its text.
@@ -11,7 +12,8 @@ import re
 from pathlib import Path
 
 STATIC = Path(__file__).resolve().parent.parent.parent / "station" / "static"
-CARDS = {"station": STATIC / "card.html", "sidekick": STATIC / "sidekick_card.html"}
+CARDS = {"station": STATIC / "card.html", "sidekick": STATIC / "sidekick_card.html",
+         "conversation": STATIC / "conversation_card.html"}
 
 
 def clean(t: str) -> str:
@@ -24,7 +26,7 @@ def sha(text: str) -> str:
 
 def items(card: str) -> list[dict]:
     """[{id, card, section, part, kind: step|row, n, text, sha}] in card order. Ids: station:install.1, station:first.5,
-    station:net.2, station:log.<cell>, station:wrong.<cell>, sidekick:setup.3, ..."""
+    station:net.2, station:log.<cell>, station:wrong.<cell>, sidekick:setup.3, conversation:done.7, ..."""
     s = CARDS[card].read_text(encoding="utf-8")
     body = s[s.index("<body"):]
     out, section, part = [], "", ""
@@ -51,22 +53,30 @@ def items(card: str) -> list[dict]:
     return out
 
 
+# Sidekick's card: each card part (its letter or title) -> the id group
+SIDEKICK_PARTS = (("a ·", "switch"), ("b ·", "itself"), ("c ·", "ask"), ("the your turn", "chip"), ("set up", "setup"),
+                  ("when something", "wrong"))
+SIDEKICK_BUTTON_ROWS = ("i checked in myself", "mute for this net")
+CONVERSATION_PARTS = (("a ·", "before"), ("b ·", "during"), ("c ·", "done"), ("find", "find"), ("use", "use"),
+                      ("when something", "wrong"))
+
+
+def _group(part: str, table) -> str:
+    return next((g for p, g in table if part.startswith(p)), "other")
+
+
 def _slug(card: str, it: dict) -> str:
     part = it["part"].lower()
+    first = it["text"].split("||")[0].strip().lower()
     if card == "station":
         grp = ("install" if part.startswith("a ·") else "first" if part.startswith("b ·") else
                "net" if it["section"].lower().startswith("running") and it["kind"] == "step" else
                "log" if "reading" in part else "wrong" if "wrong" in part else "other")
+    elif card == "sidekick":
+        grp = _group(part, SIDEKICK_PARTS)
+        if grp == "chip" and first in SIDEKICK_BUTTON_ROWS:
+            grp = "buttons"
     else:
-        grp = ("setup" if it["section"].lower().startswith("set up") else
-               "turn" if False else
-               "chip" if "turn" in part and it["kind"] == "row" else "buttons" if part == "buttons" else
-               "when" if part.startswith("when it speaks") else "wrong" if "wrong" in part else "net")
-        if it["kind"] == "step" and it["section"].lower().startswith("set up"):
-            grp = "setup"
-        if part.startswith("the your turn"):
-            grp = "chip"
-        if it["section"].lower().startswith("sidekick on a net") and it["kind"] == "step":
-            grp = "when"
-    key = str(it["n"]) if it["kind"] == "step" else re.sub(r"[^a-z0-9]+", "-", it["text"].split("||")[0].lower()).strip("-")[:28]
+        grp = _group(part, CONVERSATION_PARTS)
+    key = str(it["n"]) if it["kind"] == "step" else re.sub(r"[^a-z0-9]+", "-", first).strip("-")[:28]
     return f"{grp}.{key}"

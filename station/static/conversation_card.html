@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conversation Card</title>
+<!-- Recording a conversation (anything heard outside a scheduled net): two-sided reference card, styled like the
+     station's card.html. Served at /help/conversation; PDF by tools/build_ref_card.py. Keep every side within one page:
+     python -m tools.build_ref_card checks it. -->
+<style>
+:root{--red:#C8102E;--navy:#1A2744;--blue:#4A7FC1;--green:#5BAD8A;--amber:#D4850A;--muted:#4A5568;--border:#CBD5E0;color-scheme:light}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#F0F4F8;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#2D3748;padding:32px 16px 64px}
+.page-header{max-width:1120px;margin:0 auto}
+h1{font-size:32px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.page-intro{font-size:17px;color:var(--muted);margin-bottom:12px}
+.print-btn{background:var(--red);color:#fff;border:none;border-radius:8px;padding:10px 24px;font:600 18px system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;cursor:pointer;letter-spacing:.05em;margin-bottom:24px}
+.print-btn:hover{background:#9a0020}
+.card-row{display:flex;gap:20px;flex-wrap:wrap;max-width:1120px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:24px 28px;box-shadow:0 2px 8px rgba(0,0,0,.10);display:flex;flex-direction:column;gap:12px;min-width:340px;flex:1;max-width:550px}
+.card-front{border-top:5px solid var(--red)}
+.card-back{border-top:5px solid var(--navy)}
+.card-role{font-size:13.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card-title{font-size:24px;font-weight:700;color:var(--navy);line-height:1.1}
+.card-side{display:inline-block;align-self:flex-start;font-size:13.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--red);color:#fff;padding:2px 10px;border-radius:4px;margin:2px 0}
+.card-side.back{background:var(--navy)}
+.card-head{display:flex;gap:12px;align-items:flex-start}
+.card-head>div:first-child{flex:1;min-width:0}
+.card-qr{flex:none;width:108px;text-align:center;font-size:12.5px;line-height:1.15;color:var(--muted)}
+.card-qr svg{display:block;width:100px;height:100px;margin:0 auto 2px}
+.card-qr .url{display:block;font-size:10px;word-break:break-all;margin-top:2px}
+.lead{font-size:15.5px;line-height:1.45}
+.card-part{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red);border-bottom:1px solid #D5DCE5;padding-bottom:2px}
+.card-back .card-part{color:var(--navy)}
+.card-part span{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:13.5px}
+.steps{display:flex;flex-direction:column;gap:7px}
+.step{display:flex;gap:12px;align-items:flex-start}
+.step-num{background:var(--red);color:#fff;border-radius:50%;width:26px;height:26px;min-width:26px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
+.card-back .step-num{background:var(--navy)}
+.step-text{font-size:15.5px;line-height:1.42;padding-top:2px}
+.step-text b{color:var(--navy)}
+.step-text small{color:var(--muted);font-size:13.5px;display:block}
+.note-box{background:#F0F4F8;border-left:4px solid var(--blue);border-radius:0 8px 8px 0;padding:9px 14px;font-size:14.5px;line-height:1.42}
+.note-box.warning{border-color:var(--amber);background:#FFF8E1}
+.note-box.tip{border-color:var(--green);background:#E8F8F0}
+.phrase-box{background:var(--navy);color:#BFD8D5;border-radius:8px;padding:11px 16px;font-size:14.5px;line-height:1.45}
+.phrase-box b{color:#fff}
+.tier-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.35}
+@media screen and (max-width:600px){.tier-table{display:block;overflow-x:auto}}
+.tier-table th{background:var(--navy);color:#fff;padding:6px 10px;text-align:left;font-size:13px;font-weight:600;letter-spacing:.06em}
+.tier-table td{padding:5px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.tier-table tr:nth-child(even) td{background:#F7F9FC}
+.tier-table td:first-child{font-weight:600;color:var(--navy);white-space:nowrap}
+.k{display:inline-block;font-weight:600;font-size:.92em;border:1px solid #8a96a3;border-radius:4px;padding:0 5px;line-height:1.35;background:#fff;white-space:nowrap;color:var(--navy)}
+.mono{font-family:Consolas,'Courier New',monospace;font-size:.92em}
+.grey{color:#6b7785}.edge{border-left:3px solid var(--blue);padding-left:4px}
+.call{text-decoration:underline;font-family:Consolas,'Courier New',monospace}
+.fill{display:inline-block;min-width:2.1in;border-bottom:1px solid #2D3748;height:1em;vertical-align:baseline}
+.turn-over{margin-top:auto;text-align:right;font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--muted)}
+.card-disclaimer{margin-top:auto;padding-top:6px;border-top:1px solid #e2e8f0;font-size:12.5px;line-height:1.35;color:var(--muted)}
+@media (max-width:600px){.card-row{flex-direction:column}.card{min-width:0;max-width:none;padding:18px 16px;overflow-wrap:anywhere}.card-head{flex-direction:column}}
+/* Printing: every card side is one US Letter page, front then back, so a sheet printed double-sided
+   ("flip on long edge") is the card. Nothing flows from one side onto the next. */
+@page{size:letter;margin:.5in}
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  html,body{background:#fff;padding:0;margin:0}
+  .page-header{display:none}
+  .card-row{display:block;margin:0;max-width:none}
+  .card{max-width:none;width:100%;min-width:0;flex:none;box-shadow:none;border:1px solid #b8c2cc;border-top-width:6px;border-radius:10px;
+        min-height:9.8in;padding:16px 22px;gap:9px;break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid}
+  .card:last-child{break-after:auto;page-break-after:auto}
+  /* a touch smaller than on screen so every side fits one Letter page (measured with Chrome on macOS, whose
+     system font runs wider than Windows' Segoe UI) */
+  .card{gap:7px;padding:14px 20px}
+  .card-title{font-size:22px}
+  .lead,.step-text{font-size:14px;line-height:1.36}
+  .step-text small{font-size:12.5px}
+  .steps{gap:5px}
+  .step-num{width:24px;height:24px;min-width:24px;font-size:14px}
+  .note-box,.phrase-box{font-size:13px;line-height:1.36;padding:7px 12px}
+  .tier-table{font-size:13px;line-height:1.3}
+  .tier-table td{padding:4px 8px}
+  .card-part{font-size:13px}
+  .card-disclaimer{font-size:11.5px}
+}
+.card-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.card-nav a{display:inline-block;padding:6px 14px;border:1px solid var(--border);border-radius:999px;background:#fff;color:var(--navy);font-size:15px;font-weight:600;text-decoration:none}
+.card-nav a:hover{border-color:var(--navy)}
+.card-nav a[aria-current]{background:var(--navy);border-color:var(--navy);color:#fff}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <nav class="card-nav" aria-label="Reference cards"><a href="/help">The station</a><a href="/help/sidekick">Sidekick, the AI assistant</a><a href="/help/conversation" aria-current="page">Record a conversation</a></nav>
+  <h1>Record a Conversation: Quick Reference Card</h1>
+  <p class="page-intro">How to record and keep a contact outside any scheduled net. Two sides, US Letter. Print double-sided ("flip on long edge") and keep it with the station's card. Works in black and white.</p>
+  <button class="print-btn" onclick="window.print()">PRINT</button>
+</div>
+<div class="card-row">
+
+<!-- ===================== FRONT ===================== -->
+<div class="card card-front">
+  <p class="card-role">HAM Sidekick Station · Conversations</p>
+  <span class="card-side">Front · side 1 of 2</span>
+  <h2 class="card-title">Record a Conversation</h2>
+  <p class="lead">A <b>conversation</b> is anything a radio hears outside a scheduled net: a contact, a ragchew, a call on a simplex frequency. There is no Record button: <b>a radio that is listening records everything it hears</b>, writes it down a few seconds after each station unkeys, and keeps it as one conversation with its own log, minutes and Winlink messages.</p>
+
+  <p class="card-part">A · Before you talk</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>The radio must be listening.</b> Its card shows <span class="k">⏸ Pause</span>. If it shows <span class="k">▶ Resume</span>, press it<small><i>"Paused until … net"</i> means the radio listens only during nets (Nets → Schedule → Listening). Resume records now; the next net's start or end takes over again.</small></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><b>Tell the station the frequency.</b> A radio with CAT (computer control) reads it itself. Otherwise press <span class="k">Change</span> on the card and enter the frequency and mode<small>On a scheduled net's frequency during the net, it is filed as that net; anywhere else, as a conversation.</small></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><b>Check the level.</b> The Signal meter moves when someone talks. Not moving, or red? <span class="k">Set level…</span> on the card</div></div>
+  </div>
+
+  <p class="card-part">B · While you talk</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">4</div><div class="step-text">It appears at the top of the radio's log under <b>On the air</b><small>Grey words while a station talks; the final text 2–3 seconds after it unkeys. Who is talking is shown first; tap a call for the station's name, license and grid.</small></div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-text"><b>Fix as you go</b> (optional): <span class="k">Who?</span> for the wrong speaker, <span class="k">✎ Fix</span> for wrong words or a wrong call<small>The station learns from your fixes. ▶ plays any transmission.</small></div></div>
+    <div class="step"><div class="step-num">6</div><div class="step-text"><b>Sidekick</b> (optional): on <span class="k">Draft</span> it writes what it would say; asked a question, it answers at a pause in the conversation<small>Its own card: Sidekick, the AI assistant.</small></div></div>
+  </div>
+
+  <p class="card-part">C · When you are done</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">7</div><div class="step-text"><span class="k">End conversation</span> on its header → <span class="k">End conversation</span> again to confirm<small>Recording stops (the radio is paused; its scheduled nets still resume it), and the accurate pass re-reads the whole conversation at once.</small></div></div>
+    <div class="step"><div class="step-num">8</div><div class="step-text"><b>Or just stop talking.</b> After <b>15 quiet minutes</b> it moves to <b>Completed</b> by itself and the radio keeps listening</div></div>
+  </div>
+
+  <div class="note-box">A new conversation starts after 15 quiet minutes, when the radio's frequency changes, when a scheduled net starts on it, or after a net closes. <b>Your own side:</b> a radio does not hear itself transmit, so your words are written down only when another radio at the station is on the same frequency.</div>
+  <p class="turn-over">Turn over → side 2: After the Conversation</p>
+</div>
+
+<!-- ===================== BACK ===================== -->
+<div class="card card-back">
+  <p class="card-role">HAM Sidekick Station · Conversations</p>
+  <span class="card-side back">Back · side 2 of 2</span>
+  <h2 class="card-title">After the Conversation</h2>
+
+  <p class="card-part">Find it</p>
+  <table class="tier-table">
+    <tr><td>Today and yesterday</td><td>The radio's log → <b>Completed</b>: one line each (time, <b>Conversation</b>, frequency, transmissions, stations). Tap it to open</td></tr>
+    <tr><td>Any day</td><td><span class="k">Nets</span> → <b>History</b> → tick <b>Include conversations</b> → tap one</td></tr>
+    <tr><td>By word or call</td><td><b>Search</b> (top, or press <span class="k">/</span>) → <b>Look in</b>: <i>conversations only</i>. <b>Show in context ›</b> opens it</td></tr>
+  </table>
+
+  <p class="card-part">Use it</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><b>Wait for ✓ accurate</b> on its line: the accurate pass has re-read it with the better model<small>The text on screen updates by itself.</small></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><span class="k">Minutes</span>: who took part, what was said, plans and action items<small><span class="k">Download .md</span> keeps a file; <span class="k">Copy as text</span> pastes it into an email or log.</small></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><span class="k">▶</span> on a transmission plays the recording · <span class="k">✎ Fix</span> corrects it</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><span class="k">Winlink messages…</span>: an ICS-309 communications log and an ICS-213 summary, addressed to every station heard<small>Check the To: list (unconfirmed calls start unticked) and the text. Close Winlink Express → <b>Put in Winlink Express Outbox</b> → open Express and connect.</small></div></div>
+  </div>
+
+  <div class="note-box tip"><b>Kept on this PC only.</b> The text, the recordings and the minutes stay in the station's <span class="mono">data</span> folder (<span class="mono">logs</span>, <span class="mono">recordings</span>, <span class="mono">history.db</span>). <b>Clear log…</b> on a radio's card only clears the screen: nothing is deleted.</div>
+
+  <p class="card-part">When something looks wrong</p>
+  <table class="tier-table">
+    <tr><td>Nothing written down</td><td>Radio <b>Paused</b>? Does the meter move? Does the squelch open on voice? Run <b>Set level…</b></td></tr>
+    <tr><td>Filed under a net</td><td>The card's frequency was a net's during its time: press <b>Change</b> when you move off it</td></tr>
+    <tr><td>Split in two</td><td>15 quiet minutes, or the frequency changed. Both parts are in History</td></tr>
+    <tr><td>Wrong call or speaker</td><td><b>✎ Fix</b> or <b>Who?</b> on that transmission</td></tr>
+    <tr><td>Stopped listening</td><td><b>End conversation</b> paused the radio: press <b>▶ Resume</b></td></tr>
+  </table>
+
+  <p class="card-disclaimer">Part of HAM Sidekick Station (MIT License). Machine transcription: read the text and minutes before you send them anywhere. The station records only what the radio receives; it never transmits unless Sidekick is on Send.</p>
+</div>
+
+</div>
+</body>
+</html>

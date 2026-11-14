@@ -293,7 +293,7 @@ you chose is remembered. Each column shows:
   quiet). Frequencies with conversations are **remembered** (hours, days, count, calls heard; Pin or Hide them) in
   `data\scan_spots.json`. Turning the dial yourself pauses the scan for 30 minutes; when it stops, the radio goes
   back to where it was. Receive only: the only CAT commands are frequency, mode and the S-meter read.
-- **Sidekick, the station agent (Draft mode)**: an optional AI operator's assistant. Its own two-sided card (set up; on a net) opens from **Settings → Station agent → Sidekick card**, from **Card** on Sidekick's card, or at `/help/sidekick`; the PDF is `docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf`. Its on-air name is yours to
+- **Sidekick, the station agent (Draft mode)**: an optional AI operator's assistant. Its own two-sided card (using it; its card, sending, set up) opens from **Help → Sidekick, the AI assistant**, **Settings → Station agent → Sidekick card**, from **Card** on Sidekick's card, or at `/help/sidekick`; the PDF is `docs/HAM_Sidekick_Assistant_Quick_Reference_Card.pdf`. Its on-air name is yours to
   choose (**Settings → Station agent → On-air name**, default **Sidekick**); a name that is a phonetic-alphabet word
   (Echo, Victor…), a number or a procedure word (Portable, Mobile, Break, Over) is refused, because it is said right
   after the call and listeners would hear it as part of the call. **Off by default**: the operator turns it on in
@@ -301,9 +301,8 @@ you chose is remembered. Each column shows:
   until chosen. Switch it to **Draft** on a radio's card: after each transmission (once the frequency has been quiet
   1.2 s) it decides whether your station should speak and drafts exactly what it would say and how long it would
   wait, shown at the top of that radio's column; **What would you say now?** asks on demand, 👍/👎 rates a draft,
-  **▶ Hear it** plays the draft in Sidekick's voice in your browser. **It never transmits**: there is no transmit
-  mode yet, and the CAT code still refuses PTT. (Each radio's Transmit (PTT) setup in Radios… is ready for it and
-  switched off.)
+  **▶ Hear it** plays the draft in Sidekick's voice in your browser. Draft never transmits; only **Send** (below), on a
+  radio whose Transmit switch you turned on, says anything on the air.
   - **Its turn, read by the station.** Like an operator on a net, Sidekick has a turn only when net control opens
     check-ins to a station like yours, when someone calls it by call or name, or when it holds an answer and the floor
     opens. Outside those the station drafts "silent" itself, at once, without asking a model; when it asks, the model
@@ -437,7 +436,7 @@ you chose is remembered. Each column shows:
   paused ("Paused until Example County ARES Net at 20:00" or "Paused by you"). Pause and Resume still work; the next
   net start or end takes over again. Optionally, **when a net starts, log the radio at the net's frequency and
   mode** (you still tune the radio yourself; the retune warning stays). Kept across restarts in `data\operator.json`.
-- **Nets and conversations**: each radio's log is split into nets/conversations (a new one starts after 15
+- **Nets and conversations** (the card for this: **Help → Record a conversation**, `docs/HAM_Sidekick_Conversation_Quick_Reference_Card.pdf`): each radio's log is split into nets/conversations (a new one starts after 15
   quiet minutes, when the radio's frequency changes, when a scheduled net starts, or after a net is closed), each with a header: the net's
   name from the schedule (or the kind of net heard), time span, frequency, how many transmissions and stations, and
   its own **Minutes** and **Winlink messages…** buttons. That builds an **ICS-309**
@@ -471,7 +470,7 @@ you chose is remembered. Each column shows:
   text, for you to review (nothing goes into the Outbox until you press Put in Outbox). **Keep listening** (during
   the 2 minutes) or **Not closed** (after) undoes it: the radio listens again if this paused it, the net runs to its
   scheduled end and the final pass runs later as usual. Without a close nothing changes: a net ends at its
-  scheduled end + 5 minutes. **End net** (on the header of the net or conversation going on, and on its radio's
+  scheduled end + 5 minutes. **End net** (**End conversation** outside a net; on the header of the net or conversation going on, and on its radio's
   card) ends it yourself: an inline "End the net now? It stops recording on FTM-150R…" **End net** / **Cancel**,
   then no tail: recording stops (the radio is paused, as if you pressed Pause; its later nets still resume it),
   the final pass starts, and **Winlink messages ready** appears when it is done. `close_detect: false` turns the
