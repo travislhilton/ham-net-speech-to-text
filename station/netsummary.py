@@ -48,8 +48,9 @@ def enabled(st) -> bool:
 def prompt(h, key: str, d: dict) -> str:
     rules = "\n".join(h.summary_lines(key, d))
     roll = [p for p in d["participants"] if p["role"] in ("ncs", "checkin")]
-    people = ", ".join(p["call"] + (f" ({p['name']})" if p.get("name") else "") + (" net control" if p["role"] == "ncs" else "")
-                       for p in roll) or "(none identified)"
+    fmt = lambda p: p["call"] + (f" ({p['name']})" if p.get("name") else "") + (" net control" if p["role"] == "ncs" else "")
+    people = ", ".join(fmt(p) for p in roll if p.get("confirmed")) or "(none confirmed)"
+    once = ", ".join(p["call"] for p in roll if not p.get("confirmed"))
     items = "\n".join(f"- {i['kind']}: {i['text']}" + (f" (who: {i['who']})" if i.get("who") else "")
                       for i in d["items"] if i["status"] != "dismissed") or "(none drafted)"
     tx = [f"{(t.get('start') or '')[11:16]} {t.get('speaker') or '?'}: {t.get('text') or ''}"
@@ -61,7 +62,9 @@ def prompt(h, key: str, d: dict) -> str:
     when = f"{(d.get('start') or '')[:16].replace('T', ' ')} to {(d.get('end') or '')[11:16]}"
     return (f"Net: {d.get('name') or 'Conversation'}" + (" (emergency / priority)" if d.get("emergency") else "")
             + f"\nWhen: {when}" + (f", {d['freq_mhz']:.3f} MHz" if d.get("freq_mhz") else "")
-            + f"\nNet control: {d.get('ncs') or 'not identified'}\nTook part: {people}\n\nThe station's summary lines:\n"
+            + f"\nNet control: {d.get('ncs') or 'not identified'}\nTook part (confirmed): {people}"
+            + (f"\nHeard once, not confirmed (often mis-heard calls: do not count or name them): {once}" if once else "")
+            + "\n\nThe station's summary lines:\n"
             + rules + f"\n\nDrafted minute items:\n{items}\n\nTranscript (time, speaker, words):\n{body}")
 
 

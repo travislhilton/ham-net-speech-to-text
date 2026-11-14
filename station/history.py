@@ -1170,16 +1170,17 @@ class History:
             mins = int((datetime.fromisoformat(d["end"]) - datetime.fromisoformat(d["start"])).total_seconds() // 60)
         except (TypeError, ValueError, KeyError):
             mins = None
-        who = f"{len(roll)} station{'' if len(roll) == 1 else 's'} took part" if d.get("kind") == "net" or roll else ""
+        sure = [p for p in roll if p.get("confirmed")]          # heard once and unconfirmed: often mis-heard calls
+        who = f"{len(sure)} station{'' if len(sure) == 1 else 's'} took part" if d.get("kind") == "net" or roll else ""
         if who:
             bits = [who]
             if d.get("ncs"):
                 bits.append(f"net control {d['ncs']}")
-            new = self._newcomers(d, roll)
+            new = self._newcomers(d, sure)
             if new:
                 bits.append(f"new to this net: {', '.join(new[:6])}" + (f" and {len(new) - 6} more" if len(new) > 6 else ""))
             if once:
-                bits.append(f"{once} heard once, not confirmed")
+                bits.append(f"{once} more heard once, not confirmed (may be mis-heard)")
             out.append("; ".join(bits) + ".")
         if mins is not None and d.get("tx_count"):
             out.append(f"{d['tx_count']} transmissions over {mins} min.")
@@ -1230,7 +1231,7 @@ class History:
         """Changes when what the summary is written from changes: the transmissions' text, the roll, the items."""
         import hashlib
         d = d or self.instance(key)
-        h = hashlib.sha1()
+        h = hashlib.sha1(b"summary v2\n")     # v2: only confirmed stations are counted (a new version = rewritten once)
         for t in d["tx"]:
             h.update(f"{t.get('speaker')}|{t.get('text')}\n".encode("utf-8", "replace"))
         for p in d["participants"]:

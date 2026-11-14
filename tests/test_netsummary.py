@@ -104,3 +104,19 @@ def test_summary_api(tmp_path, monkeypatch):
         assert e.value.code == 400
     finally:
         srv.shutdown()
+
+
+def test_calls_heard_once_are_not_counted_or_named_as_newcomers(tmp_path):
+    h = hist(tmp_path)
+    for e in lines(ARES, TUESDAYS[-1], first_id=100):
+        h.ingest(e)
+    d = h.instance(KEY)
+    roll = [p for p in d["participants"] if p["role"] in ("ncs", "checkin")]
+    sure = [p for p in roll if p["confirmed"]]
+    assert len(sure) < len(roll)                                        # the fixture has calls heard once
+    line = next(x for x in d["summary"]["lines"] if "took part" in x)
+    assert line.startswith(f"{len(sure)} station") and "more heard once" in line
+    p = netsummary.prompt(h, KEY, d)
+    once = [x["call"] for x in roll if not x["confirmed"]]
+    took = next(x for x in p.split("\n") if x.startswith("Took part"))
+    assert not any(c in took for c in once) and "do not count or name them" in p
