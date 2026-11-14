@@ -199,7 +199,7 @@ dialog h3{margin:0 0 8px}dialog h4{margin:12px 0 4px;font-size:14px;color:var(--
 details{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0}summary{cursor:pointer}
 table.log{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}table.log td,table.log th{border-top:1px solid var(--line);padding:3px 4px;text-align:left;vertical-align:top}
 button.primary{background:var(--accent);color:var(--on);border-color:var(--accent)}input[type=datetime-local]{width:auto;text-transform:none}
-.err{color:var(--bad);font-size:13px}.morse{margin:4px 0;padding:4px 8px;border-left:3px solid var(--accent,#3a7bd5);background:color-mix(in srgb,var(--accent,#3a7bd5) 8%,transparent);border-radius:4px}.morse .mtag{font-weight:600;font-size:12px;letter-spacing:.02em}.morse .msym{font-family:ui-monospace,Consolas,monospace;font-size:15px;letter-spacing:.06em;word-break:break-word;margin:2px 0}.morse .mtext{font-family:ui-monospace,Consolas,monospace}.err .silent{display:block;font-weight:600}.err .silent.quiet{color:var(--warnc);font-weight:400}.tune{font-size:12px;padding:0 6px;margin-left:4px}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.err{color:var(--bad);font-size:13px}.morse{margin:4px 0;padding:4px 8px;border-left:3px solid var(--accent,#3a7bd5);background:color-mix(in srgb,var(--accent,#3a7bd5) 8%,transparent);border-radius:4px}.morse .mtag{font-weight:600;font-size:12px;letter-spacing:.02em}.morse .msym{font-family:ui-monospace,Consolas,monospace;font-size:15px;letter-spacing:.06em;word-break:break-word;margin:2px 0}.morse .mtext{font-family:ui-monospace,Consolas,monospace}.err .silent{display:block;font-weight:600}.err .silent.quiet{color:var(--warnc);font-weight:400}.tune{font-size:12px;padding:0 6px;margin-left:4px}.fqpicks{display:flex;flex-wrap:wrap;gap:4px;width:100%}.fqpicks .np{font-size:12.5px;padding:2px 8px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.tuneform{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tuneform input{width:110px;text-transform:none}.tuneform select{font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding:10px 16px 24px}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}header{padding:8px 12px}main{padding-left:12px;padding-right:12px}}
 section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
@@ -1316,10 +1316,14 @@ function renderRadios(){
     if(!(document.activeElement&&document.activeElement.closest("#r-"+CSS.escape(r.id)+" .tuneform"))){
       el.querySelector(".fq").innerHTML=`<b>${r.freq_mhz?Number(r.freq_mhz).toFixed(3)+" MHz":"frequency not set"}</b> <span class="muted">${r.band&&r.band.band?esc(r.band.band):""} · ${esc(r.mode||"")} · ${r.gate==="carrier"?"carrier gate":"voice gate"}</span>${catBadge(r)}
         <button class="tune" data-tune="${esc(r.id)}" title="${r.cat?"Tune the radio (CAT)":"Set what this radio is tuned to"}">Change</button>`;
-      el.querySelector(".tunebox").innerHTML=editing===r.id?`<form class="tuneform" data-rid="${esc(r.id)}"><input name="f" inputmode="decimal" value="${r.freq_mhz??""}" aria-label="Frequency in MHz"> MHz
+      const rec=(r.recent_freqs||[]).filter(x=>!(r.freq_mhz&&Math.abs(x.f-r.freq_mhz)<0.0005&&x.m===r.mode));
+      const dl=`fq-${esc(r.id)}`;
+      el.querySelector(".tunebox").innerHTML=editing===r.id?`<form class="tuneform" data-rid="${esc(r.id)}"><input name="f" inputmode="decimal" list="${dl}" autocomplete="off" value="${r.freq_mhz??""}" aria-label="Frequency in MHz"> MHz
+        <datalist id="${dl}">${(r.recent_freqs||[]).map(x=>`<option value="${Number(x.f).toFixed(3)}">${esc(x.m)}</option>`).join("")}</datalist>
         <select name="m">${["FM","USB","LSB","AM","CW","DIG"].map(m=>`<option${m===r.mode?" selected":""}>${m}</option>`).join("")}</select>
         <button type="submit">Save</button> <button type="button" data-cancel>Cancel</button> <span class="err tuneerr"></span>
-        <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.</div></form>`:"";
+        ${rec.length?`<div class="fqpicks" role="group" aria-label="Frequencies used before">${rec.map(x=>`<button type="button" class="np" data-fqpick="${Number(x.f).toFixed(4)}" data-m="${esc(x.m)}" title="Fill in ${Number(x.f).toFixed(3)} MHz ${esc(x.m)}, then Save">${Number(x.f).toFixed(3)} <span class="muted">${esc(x.m)}</span></button>`).join("")}</div>`:""}
+        <div class="muted small">Set this to what you tuned the radio to. Every transmission is logged with it.${rec.length?" Tap a frequency used before to fill it in.":""}</div></form>`:"";
     }
     el.querySelector(".cap").textContent=wfCaption(r);
     renderRadioNets(r);
@@ -1676,6 +1680,7 @@ document.addEventListener("click",e=>{
     col.querySelectorAll(".stack>.pane").forEach(x=>x.classList.toggle("show",x.id===want));applySplit(tb.dataset.rid,tb.dataset.tab)}
   const p=e.target.closest("[data-play]");if(p){new Audio("/audio/"+p.dataset.play).play()}
   const wb=e.target.closest("[data-who]");if(wb)openWho(wb.dataset.who);
+  const fp=e.target.closest("[data-fqpick]");if(fp){const f=fp.closest(".tuneform");f.f.value=String(parseFloat(fp.dataset.fqpick));f.m.value=fp.dataset.m;f.f.focus();return}
   const tu=e.target.closest("[data-tune]");if(tu){editing=tu.dataset.tune;renderRadios();const i=document.querySelector(".tuneform input");if(i){i.focus();i.select()}}
   if(e.target.closest("[data-cancel]")){editing=null;document.activeElement.blur();renderRadios()}
 });

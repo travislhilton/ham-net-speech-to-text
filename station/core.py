@@ -85,6 +85,8 @@ def speaker_of(text: str, calls: list[str]) -> str | None:
 
 
 
+RECENT_FREQS = 12          # frequencies remembered per radio for the Change box's quick picks
+
 class InputMissing(RuntimeError):
     """A radio's sound input is not there (unplugged, renamed, Remote Utility not running): said to the operator as is."""
 
@@ -768,6 +770,7 @@ class Station:
                     self.radios[rid]["role"] = s["role"]
                 self.radios[rid]["resumed_by"] = s.get("resumed_by")
                 self.radios[rid]["cleared_at"] = s.get("cleared_at")
+                self.radios[rid]["recent_freqs"] = list(s.get("recent") or [])
 
     def _set_tuning(self, rid, freq, mode, at):
         r = self.radios[rid]
@@ -816,7 +819,11 @@ class Station:
         with self.lock:
             self._set_tuning(rid, f, m, at)
             saved = self._saved()
-            saved.setdefault("radios", {}).setdefault(rid, {}).update(freq_mhz=f, mode=m, set_at=at)
+            mine = saved.setdefault("radios", {}).setdefault(rid, {})
+            recent = [x for x in mine.get("recent") or [] if abs(float(x.get("f") or 0) - f) >= 0.0005]
+            recent = ([{"f": f, "m": m}] + recent)[:RECENT_FREQS]        # typed frequencies, newest first: quick picks
+            mine.update(freq_mhz=f, mode=m, set_at=at, recent=recent)
+            self.radios[rid]["recent_freqs"] = recent
             self._save(saved)
             radio = dict(self.radios[rid])
         self.bus.publish("radios", {"radios": list(self.radios.values()), "net": self.schedule_now()})
