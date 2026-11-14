@@ -115,6 +115,21 @@ def test_chat_has_the_net_context_and_its_words_are_checked_saved_and_heard(tmp_
     assert item["title"] == "Antenna advice" and item["approved"] and item["segments"][-1].endswith("W9XYZ.")
 
 
+def test_a_chat_answer_records_which_tools_it_used(tmp_path, xai_key, monkeypatch):
+    from station import agent as A
+
+    def tools(key, model, system, user, toolbox, **kw):
+        assert "search_library" in system                              # the tools note is in the system prompt
+        return {"reply": "The net meets at 7:30.", "say": "", "title": ""}, {
+            "tools": ["search_library", "path_analysis", "search_library"]}
+    monkeypatch.setattr(A, "call_xai_tools", tools)
+    st = _station(tmp_path)
+    _on(st, {"xai": ("XAI_API_KEY", A.call_xai), "anthropic": ("ANTHROPIC_API_KEY", A.call_anthropic)})
+    st.agent.chat.ask("ic", "When does the net meet?", wait=True)
+    a = st.agent.chat.thread("ic")[-1]
+    assert a["text"] == "The net meets at 7:30." and a["tools"] == ["search_library", "path_analysis"]
+
+
 def test_a_prepared_part_is_sent_by_the_operator_only_in_send_mode(tmp_path, xai_key, monkeypatch):
     from station import sender as S
     monkeypatch.setattr(S, "COUNTDOWN_S", 0.2)

@@ -228,6 +228,9 @@ class Chat:
                        "say": str(out.get("say") or "").strip(), "title": str(out.get("title") or "")[:80],
                        "model": model, "took_s": round((datetime.now() - t0).total_seconds(), 1),
                        "at": datetime.now().isoformat(timespec="seconds")}
+                used = list(dict.fromkeys(t for t in (usage or {}).get("tools") or [] if t))
+                if used:                                        # which tools the answer used, in first-call order
+                    msg["tools"] = used
                 if msg["say"]:
                     msg["check"] = self.check(rid, msg["say"])
             except Exception as e:  # noqa: BLE001

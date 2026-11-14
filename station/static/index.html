@@ -2344,6 +2344,7 @@ function draftHtml(d,alt){
   return `${who}<div class="meta">${esc(KINDL[d.kind]||d.kind)}${d.speak?` · after ${d.silence_s}s of quiet`:""} · ${src}${d.why?" · "+esc(d.why):""}${d.speak&&d.say&&d.id&&!alt?` <button class="quiet" data-tts="${esc(d.id)}" title="Plays here only, in this browser. Never on the radio.">▶ Hear it</button>`:""}</div>`
     +(d.speak?`<div class="fcc">${fails.length?`<span class="x">Would not send</span>: `+fails.map(c=>`<span title="${esc(c.note)}">${esc(c.rule)}: ${esc(c.note)}</span>`).join("; "):`<span class="ok" title="${esc((d.fcc||[]).map(c=>c.rule+": "+c.note).join("\n"))}">✓ Words pass the Part 97 content checks (${(d.fcc||[]).length}); whose turn it is: see above</span>`}</div>`:"")}
 let MODELN={};
+const TOOLN={search_library:"the library",list_sites:"the sites",path_analysis:"a path analysis"};
 function renderEcho(rid){
   const box=document.getElementById("echo-"+rid);if(!box)return;
   if(!AG||!["draft","send"].includes(agMode(rid))){box.hidden=true;return}
@@ -2351,7 +2352,7 @@ function renderEcho(rid){
   const L=(AG.drafts||[]).filter(d=>d.radio===rid),d=L[L.length-1];
   box.hidden=false;
   const pd=((AG||{}).pending||{})[rid],PS={working:"working on",ready:"answer ready for",announced:"announced the answer for",failed:"could not answer"};
-  const pend=pd?`<div class="meta">📝 ${esc(PS[pd.state]||pd.state)}: “${esc(pd.question||"")}” (${esc(pd.asker||"")}, ${esc((pd.at||"").slice(11,16))}${pd.took_s?`, ${pd.took_s}s ${esc(MODELN[pd.model]||pd.model||"")}`:""})${pd.answer?`<div class="say">“${esc(pd.answer)}”</div>`:""}${pd.error?` <span class="bad">${esc(pd.error)}</span>`:""}${(pd.queue||[]).length?`<div class="small muted">Next: ${pd.queue.map(q=>`“${esc(q.question||"")}” (${esc(q.asker||"")}, ${esc(PS[q.state]||q.state)})`).join(" · ")}</div>`:""}</div>`:"";
+  const pend=pd?`<div class="meta">📝 ${esc(PS[pd.state]||pd.state)}: “${esc(pd.question||"")}” (${esc(pd.asker||"")}, ${esc((pd.at||"").slice(11,16))}${pd.took_s?`, ${pd.took_s}s ${esc(MODELN[pd.model]||pd.model||"")}`:""}${((pd.usage||{}).tools||[]).length?`, looked up: ${esc([...new Set(pd.usage.tools)].map(t=>TOOLN[t]||t).join(", "))}`:""})${pd.answer?`<div class="say">“${esc(pd.answer)}”</div>`:""}${pd.error?` <span class="bad">${esc(pd.error)}</span>`:""}${(pd.queue||[]).length?`<div class="small muted">Next: ${pd.queue.map(q=>`“${esc(q.question||"")}” (${esc(q.asker||"")}, ${esc(PS[q.state]||q.state)})`).join(" · ")}</div>`:""}</div>`:"";
   const T=((AG||{}).turn||{})[rid]||{state:"listening",say:"Listening"},mn=(AG||{}).mode_now||{};
   const TC={called:"bad",open:"ok",answer:"ok",in:"in",muted:"mute",listening:""}[T.state]||"";
   const show=T.last_speak||null,sp=(L.filter(x=>x.speak)).length;
@@ -2400,7 +2401,7 @@ function skRender(){
       <div class="skchat">${SK.chat.map(m=>m.role==="operator"?`<div class="skmsg op">${esc(m.text)}</div>`
         :`<div class="skmsg ai">${m.error?`<span class="bad">${esc(m.error)}</span>`:esc(m.text)}${m.say?`<div class="air"><b>Words for the air${m.title?": "+esc(m.title):""}</b><div>“${esc(m.say)}”</div>
           ${(m.check||[]).filter(c=>!c.ok).length?`<div class="small bad">Would not send: ${(m.check||[]).filter(c=>!c.ok).map(c=>esc(c.rule+": "+c.note)).join("; ")}</div>`:`<div class="small ok">✓ Passes the Part 97 content checks</div>`}
-          <div class="row small">${hear(m.say)} <button data-sksave="${esc(m.id)}">Save to Prepared</button></div></div>`:""}<div class="small muted">${esc((MODELN[m.model]||m.model||""))}${m.took_s?` · ${m.took_s}s`:""}</div></div>`).join("")||`<p class="muted">Try: “Who has checked in so far?”, “What is the best simplex frequency plan for a Winlink gateway at the EOC?”, “Write me a short check-in that says I have a training topic.”</p>`}
+          <div class="row small">${hear(m.say)} <button data-sksave="${esc(m.id)}">Save to Prepared</button></div></div>`:""}<div class="small muted">${esc((MODELN[m.model]||m.model||""))}${m.took_s?` · ${m.took_s}s`:""}${(m.tools||[]).length?` · looked up: ${esc(m.tools.map(t=>TOOLN[t]||t).join(", "))}`:""}</div></div>`).join("")||`<p class="muted">Try: “Who has checked in so far?”, “What is the best simplex frequency plan for a Winlink gateway at the EOC?”, “Write me a short check-in that says I have a training topic.”</p>`}
         ${SK.busy?`<div class="skmsg ai muted">Thinking…</div>`:""}</div>
       <div class="skask"><textarea id="skQ" placeholder="Ask ${esc(agName())}… (Enter sends, Shift+Enter for a new line)">${esc(keep)}</textarea>
         <span><label class="small" title="The thinking model: slower (up to a minute), for analysis and longer answers"><input type="checkbox" id="skDeep" style="width:auto"${SK.deep?" checked":""}> Think</label><br><button class="primary" id="skSend"${SK.busy?" disabled":""}>Ask</button> <button class="quiet small" id="skClear" title="Start a new chat (the old one is kept on this PC)">New chat</button></span></div>`;
