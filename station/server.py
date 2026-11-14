@@ -17,6 +17,15 @@ HELP_CARDS = {"/help": "card.html", "/card": "card.html", "/help/sidekick": "sid
               "/help/conversation": "conversation_card.html"}                                    # reference cards
 
 
+def _finder(station):
+    """The one Find nets helper per station (station/netfind.py)."""
+    f = getattr(station, "_netfind", None)
+    if f is None:
+        from .netfind import Finder
+        f = station._netfind = Finder(station)
+    return f
+
+
 def with_who(kind: str, data):
     """Each transmission leaves with `who` = {call, how}: the best speaker (station/speaker.py best), so the page
     shows exactly what the ICS-309 will say."""
@@ -145,6 +154,8 @@ def make_handler(station):
                 return self._json(station.learned())
             if u.path == "/api/local-names":                     # Settings → Local names (station/localnames.py)
                 return self._json(station.local_names())
+            if u.path == "/api/netfind":                         # Nets -> Find nets (netfind.py)
+                return self._json(_finder(station).state())
             if u.path == "/api/nets/unassigned":                 # Nets: nets with no radio here, in groups (netassign.py)
                 from . import netassign
                 return self._json(netassign.groups(station))
@@ -222,7 +233,7 @@ def make_handler(station):
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
                       "/api/history/minutes", "/api/learned", "/api/local-names", "/api/local-names/import",
                       "/api/pc/measure", "/api/pc/seen", "/api/settings-pack/preview", "/api/settings-pack/apply",
-                      "/api/nets/assign"}
+                      "/api/nets/assign", "/api/netfind/settings", "/api/netfind/search", "/api/netfind/add"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep))?)?", u.path)   # schedule
             alert = re.fullmatch(r"/api/alerts/([\w@.%-]+)/(ready|snooze|skip|dismiss)", u.path)        # pre-net alert
             item = re.fullmatch(r"/api/items(?:/(\d+)(/delete)?)?", u.path)                             # minutes items
@@ -294,6 +305,12 @@ def make_handler(station):
                                                                          noise=bool(body.get("noise")))))
                     except LookupError:
                         return self._json({"error": "no such transmission"}, 404)
+                if u.path == "/api/netfind/settings":            # {km, hf_km, address, gps: {lat, lon, acc_m} | null, hf}
+                    return self._json(_finder(station).settings(body))
+                if u.path == "/api/netfind/search":              # {"bands": "HF" | "VU" | null}: one xAI web search
+                    return self._json(_finder(station).search(body.get("bands")))
+                if u.path == "/api/netfind/add":                 # {"ids": [...], "radios": {found id: radio id}}
+                    return self._json(_finder(station).add(body.get("ids"), body.get("radios")))
                 if u.path == "/api/nets/assign":                # {"choices": {group key: radio id}}
                     from . import netassign
                     return self._json(netassign.assign(station, body.get("choices") or {}))

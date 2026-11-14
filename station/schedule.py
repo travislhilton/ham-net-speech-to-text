@@ -107,6 +107,9 @@ def validate(body: dict, radios: dict) -> dict:
     # how far this net reaches (VHF/UHF): a linked system or an intertie carries stations far past one repeater's
     # range (the 2026-11-10 intertie net: check-ins from 440-590 km away), so its far calls are judged against this
     reach = num("reach_km", 50, 5000, "the net's reach (km, like 600 for a linked system)")
+    src = str(body.get("source") or "").strip() or None            # where Find nets found it (station/netfind.py)
+    if src and (not re.match(r"https?://", src, re.I) or len(src) > 400 or any(c in src for c in " <>\"'")):
+        raise ValueError("the source must be a web address (http:// or https://)")
     beats = body.get("beats") or []
     if not isinstance(beats, list) or not all(isinstance(b, str) and re.fullmatch(r"[\w-]{1,24}", b) for b in beats):
         raise ValueError("beats must be a list of net ids")
@@ -115,7 +118,8 @@ def validate(body: dict, radios: dict) -> dict:
            "alert_min": alert, "emergency": True if body.get("emergency") else None,
            "offset_mhz": offset, "tone_hz": tone, "reach_km": int(reach) if reach else None,             # CAT: set on the radio with the frequency (station/cat.py)
            "beats": sorted(set(beats)) or None,              # clashes settled: these nets lose to this one
-           "checkins": "none" if body.get("checkins") == "none" else None}   # Sidekick: never check in (members/mobiles/traffic only)
+           "checkins": "none" if body.get("checkins") == "none" else None,
+           "source": src}   # Sidekick: never check in (members/mobiles/traffic only)
     return {k: v for k, v in out.items() if v is not None}
 
 
@@ -486,7 +490,7 @@ class NetSchedule:
             nets, i = self._find(nid)
             if "exceptions" not in body and nets[i].get("exceptions"):
                 body = body | {"exceptions": nets[i]["exceptions"]}       # the editor does not resend them
-            for k in ("beats", "offset_mhz", "tone_hz", "reach_km"):     # the editor does not send these: kept
+            for k in ("beats", "offset_mhz", "tone_hz", "reach_km", "source"):   # the editor does not send these: kept
                 if k not in body and nets[i].get(k) is not None:           # (it dropped offset + tone before 11-10)
                     body = body | {k: nets[i][k]}
             nets[i] = {"id": nid} | validate(body, self.st.radios)

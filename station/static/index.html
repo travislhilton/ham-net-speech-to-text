@@ -185,7 +185,7 @@ body.dragging{user-select:none;cursor:row-resize}
 #radiosDlg .rad .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 12px}#radiosDlg label{margin:4px 0 0}
 #levelDlg .say.ok{color:var(--ok)}#levelDlg .say.low,#levelDlg .say.high{color:var(--warnc)}#levelDlg .say.clip,#levelDlg .say.dead{color:var(--bad)}#levelDlg ol{padding-left:20px}
 #levelDlg .sq{border-radius:8px;padding:8px 12px;margin:8px 0;font-weight:600}#levelDlg .sq.open{background:rgba(220,160,0,.18);border:1px solid var(--warnc)}#levelDlg .sq.closed{background:rgba(40,160,80,.15);border:1px solid var(--ok)}#levelDlg .sq .small{font-weight:400}
-.mv.ok{color:var(--ok)}.mv.warn{color:var(--warn)}.mv.bad{color:var(--bad)}.mv.idle{color:var(--muted)}
+.warnc{color:var(--warn)}.nfrow{align-items:center;gap:8px 14px}.nfrow label{display:inline-flex;align-items:center;gap:6px;margin:0}.nfrow select{width:auto}.mv.ok{color:var(--ok)}.mv.warn{color:var(--warn)}.mv.bad{color:var(--bad)}.mv.idle{color:var(--muted)}
 .wf{display:block;width:100%;height:120px;margin-top:9px;border-radius:6px;background:#080c28;image-rendering:auto}
 .axis{position:relative;height:16px;font-size:11px;color:var(--muted)}.axis span{position:absolute;transform:translateX(-50%)}.axis span:first-child{transform:none}
 dialog{max-width:min(860px,96vw);width:100%;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:16px}
@@ -515,6 +515,7 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamsidekick.display
   <button id="openRadios" title="Add, replace or remove a radio and choose its sound input">Radios…</button>
   <button id="openSettings" title="Your callsign and Winlink Express">Settings</button>
   <button id="openPhone" title="Show a QR code: point a phone's camera at it to open this dashboard on the phone">Open on phone</button>
+  <button id="fullScr" type="button" aria-pressed="false" title="Fill the whole screen with the dashboard (Esc or this button again to leave)" hidden>Full screen</button>
   <button id="openReadout" title="The EOC's situation report: approve it, then read it on the net from a large-type card" onclick="window.open('/readout','_blank')">Read-out</button>
   <button id="nightBtn" aria-pressed="false" title="Night colours: all red on black, to keep your night vision (again for normal colours)" onclick="setDisplay('theme',DISP.theme==='night'?(DISP.prevTheme||'auto'):(DISP.prevTheme=DISP.theme,'night'))">☾ Night</button>
   <a class="helpbtn" href="/help" target="_blank" rel="noopener" title="How to use the station: the reference cards (the station, Sidekick, recording a conversation; printable)">Help</a>
@@ -1728,7 +1729,7 @@ function connect(){
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],DAYN=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const ORDS=[[1,"1st"],[2,"2nd"],[3,"3rd"],[4,"4th"],[5,"5th"],[-1,"last"]];
-const NV={tab:"schedule",net:"",radio:null,key:null,edit:null,adding:false,hl:null,conv:false,move:null,kind:null,q:"",sort:"name",desc:false,band:"",emerg:false,view:"cards",pick:new Set(),delAsk:false};
+const NV={tab:"schedule",net:"",radio:null,key:null,edit:null,adding:false,hl:null,conv:false,move:null,kind:null,q:"",sort:"name",desc:false,band:"",emerg:false,finding:false,view:"cards",pick:new Set(),delAsk:false};
 try{const v=localStorage.getItem("hamsidekick.netsView");if(v==="list"||v==="cards")NV.view=v}catch(e){}
 const enc=encodeURIComponent;
 const api=async url=>{const r=await fetch(url);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"not available");return d};
@@ -1790,7 +1791,7 @@ function netCard(n){
   const k=kindOf(n),att=["none","cant","clash"].includes(k);
   const now=((S.net||{}).running||[]).some(x=>x.id===n.id);
   const nx=n.next?`Next: <b>${esc(fmtWhen(n.next.start))}</b>${n.next.moved?" (moved)":""}${n.next.note?" · "+esc(n.next.note):""}`:'<span class="bad">Does not meet again</span>';
-  return `<article class="ncard${now?" live":""}${att?" att "+k:""}"><div class="nt"><b>${esc(n.name)}</b>${now?' <span class="badge ok">on the air</span>':""}${n.emergency?' <span class="badge emergency">Emergency net</span>':""}</div>
+  return `<article class="ncard${now?" live":""}${att?" att "+k:""}"><div class="nt"><b>${esc(n.name)}</b>${now?' <span class="badge ok">on the air</span>':""}${n.emergency?' <span class="badge emergency">Emergency net</span>':""}${n.source?` <a class="small" href="${esc(n.source)}" target="_blank" rel="noopener noreferrer" title="Where Find nets found this net">source</a>`:""}</div>
    <div class="sum">${esc(n.summary||"")}</div>
    ${netFit(n)}
    <div class="muted small">${n.ncs?`net control ${esc(n.ncs)} · `:""}${n.alert_min?`alert ${n.alert_min} min before`:"no alert"} · ${nx}</div>
@@ -1835,13 +1836,14 @@ function renderSchedule(full){
   const listen=S.radios.filter(r=>!NV.radio||r.id===NV.radio).map(r=>{const L=r.listen||{};return `<div class="lrow"><b>${esc(r.name)}</b>
     <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="scheduled"${L.scheduled?" checked":""}> Listen only during scheduled nets</label>
     <label class="chk"><input type="checkbox" data-listen="${esc(r.id)}" data-k="tune"${L.tune?" checked":""}> When a net starts, log the radio at the net's frequency and mode</label></div>`}).join("");
+  if(NV.finding){if(full||!$("nfBox")){box.innerHTML='<div id="nfBox"></div>';renderFind()}return}   // Find nets: its own panel
   if(!full&&$("netsList")&&(NV.edit||NV.adding)){$("netsList").innerHTML=cards;$("netsListen").innerHTML=listen;return}
   const cnt=NV.q||NV.band||NV.emerg?`${all.length} of ${every.length}`:`${every.length} net${every.length===1?"":"s"}`,lcls=NV.view==="list"?"":"ncards";
   if(!full&&$("netsList")&&$("netsQ")){                  // a search keystroke or a live update: the list only, the search box keeps focus
     $("netsList").innerHTML=cards;$("netsList").className=lcls;$("netsListen").innerHTML=listen;$("netsCount").textContent=cnt;renderAssign();return}
   const editing=NV.edit?(S.schedule||[]).find(n=>n.id===NV.edit):null;
   if(NV.edit||NV.adding){box.innerHTML=`<h4>${editing?"Edit "+esc(editing.name):"Add a net"}</h4>${netForm(editing||{radio:NV.radio})}`;wireNetForm(editing);return}
-  box.innerHTML=`${head}<div id="netsAssign"></div><div class="row" style="margin-top:0"><button class="primary" id="netAdd">+ Add a net</button></div>
+  box.innerHTML=`${head}<div id="netsAssign"></div><div class="row" style="margin-top:0"><button class="primary" id="netAdd">+ Add a net</button><button id="netFind" title="Search the web (xAI) for nets near this station that your radios can hear">Find nets near you</button></div>
    ${every.length?`<div class="nfind"><input type="search" id="netsQ" value="${esc(NV.q)}" placeholder="Search nets: name, frequency, radio, day, net control" aria-label="Search nets">
     <span class="nview" role="group" aria-label="Show nets as"><button type="button" data-nview="cards" aria-pressed="${NV.view!=="list"}">Cards</button><button type="button" data-nview="list" aria-pressed="${NV.view==="list"}">List</button></span>
     <span class="nview" role="group" aria-label="Band">${["","HF","VHF","UHF"].map(b=>`<button type="button" data-nband="${b}" aria-pressed="${NV.band===b}"${b?` title="Only ${b} nets"`:""}>${b||"All bands"}</button>`).join("")}</span>
@@ -1850,12 +1852,96 @@ function renderSchedule(full){
    <h4>Listening</h4><div id="netsListen">${listen}</div>
    <p class="small muted">One list of nets for this PC; each net is assigned to a radio (click the radio on a net to move it). A radio set to listen only during nets is resumed 1 minute before each of its nets and paused 5 minutes after it ends; a net it can't hear, or one that loses a clash, is not listened to. A radio with a CAT port tunes itself; otherwise the alert asks you to tune it.</p>`;
   $("netAdd").onclick=()=>{NV.adding=true;renderSchedule(true)};
+  $("netFind").onclick=()=>{NV.finding=true;NF.msg=null;renderSchedule(true)};
   const nq=$("netsQ");if(nq)nq.oninput=()=>{NV.q=nq.value;renderSchedule(false)};
   renderAssign();
   const na=$("netAll");if(na)na.onclick=()=>{NV.radio=null;renderNetsArea()};
 }
 // ----- Nets with no radio on this station, a group at a time (station/netassign.py): after an import, or a radio removed -----
 let NA={d:null,sig:"",sel:{},msg:null};
+// ----- Full screen: the header button toggles it; Esc (or F11's own exit) leaves it and the button follows -----
+(()=>{const el=document.documentElement,b=$("fullScr");
+  const req=el.requestFullscreen||el.webkitRequestFullscreen,cur=()=>document.fullscreenElement||document.webkitFullscreenElement;
+  if(!b||!req)return;b.hidden=false;                                   // iPhone Safari has none: the button stays hidden
+  const sync=()=>{const on=!!cur();b.textContent=on?"Exit full screen":"Full screen";b.setAttribute("aria-pressed",String(on))};
+  b.onclick=async()=>{try{if(cur())await (document.exitFullscreen||document.webkitExitFullscreen).call(document);else await req.call(el,{navigationUI:"hide"})}catch(e){alert("Full screen is not allowed here: "+e.message)}sync()};
+  document.addEventListener("fullscreenchange",sync);document.addEventListener("webkitfullscreenchange",sync);sync()})();
+// ----- Find nets (station/netfind.py): nets near the station from an xAI web search, ticked and added -----
+const NF={d:null,sel:new Set(),radio:{},msg:null,busy:false,geoTried:false,addr:false};
+function nfRule(n){const r=n.repeat||{},d=(r.weekdays||[]).join(", ");const th=x=>x===-1?"last":x+(["th","st","nd","rd"][x%10>3||[11,12,13].includes(x%100)?0:x%10]);
+  const days=(r.weekdays||[]).length===7?"Every day":r.freq==="monthly"?`${(r.nth||[]).map(th).join(" & ")} ${d} of the month`:`Every ${d}`;
+  return `${days} at ${n.start}, ${n.duration_min} min${n.utc?' <span class="small muted">(given in UTC; your time shown)</span>':n.zone_moved?' <span class="small muted">(another time zone; your time shown)</span>':""}`}
+async function nfGeo(){if(NF.geoTried||!navigator.geolocation)return false;NF.geoTried=true;
+  return new Promise(res=>navigator.geolocation.getCurrentPosition(async p=>{try{NF.d=await post("/api/netfind/settings",{gps:{lat:p.coords.latitude,lon:p.coords.longitude,acc_m:p.coords.accuracy}});res(true)}catch(e){res(false)}},
+    ()=>res(false),{timeout:15000,maximumAge:3600000}))}
+async function renderFind(){
+  const box=$("nfBox");if(!box)return;
+  if(!NF.d){box.innerHTML='<p class="muted">Loading…</p>';try{NF.d=await api("/api/netfind")}catch(e){box.innerHTML=`<p class="bad">${esc(e.message)}</p>`;return}}
+  let d=NF.d;
+  if(!d.location&&!NF.geoTried){box.innerHTML='<p class="muted">Finding this PC\'s location… (your browser may ask)</p>';await nfGeo();d=NF.d}
+  const back='<p><button type="button" class="linkish" data-nfback>← Back to the schedule</button></p>';
+  if(!d.key){box.innerHTML=back+`<h4>Find nets near you</h4><p>This needs the xAI key: Settings → Station agent → xAI API key. One search costs about $0.10–0.30 and takes up to a minute.</p>`;return}
+  const R=d.reach,both=R.HF&&R.VU,bands=NF.bands||(both?"":R.HF?"HF":"VU");
+  const loc=d.location;
+  const where=loc?`Near <b>${esc(loc.label)}</b>${loc.source==="grid"?"":""}. <span class="small muted">Only a rounded position (about 10 km) is sent, never a street address.</span>
+      <button type="button" class="linkish small" data-nfaddr>${loc.source==="address"?"Change the address":"Use an address instead"}</button>${loc.source!=="grid"&&loc.source!=="gps"&&navigator.geolocation?' <button type="button" class="linkish small" data-nfgeo>Use this PC\'s location</button>':""}`
+    :`<span class="bad">Where is the station?</span> Set a grid square in Settings, allow this PC's location${navigator.geolocation?' (<button type="button" class="linkish" data-nfgeo>try again</button>)':""}, or type an address below.`;
+  const addr=(!loc||NF.addr)?`<div class="row"><input id="nfAddr" value="${esc(d.address)}" placeholder="Address, or just ZIP / town, state" style="flex:1;min-width:220px" aria-label="Station address"><button type="button" data-nfaddrsave>Save</button></div>`:"";
+  const radios=R.radios.length?`Your radios (${esc(R.radios.join(", "))}) record <b>${[R.VU?"VHF/UHF":"",R.HF?"HF":""].filter(Boolean).join(" and ")||"neither HF nor VHF/UHF"}</b>, so ${both?"both are":"only that is"} searched.`:'<span class="bad">No radio on this PC yet: add one in Radios first.</span>';
+  const pickBands=both?`<label>Search <select id="nfBands"><option value=""${bands===""?" selected":""}>VHF/UHF and HF</option><option value="VU"${bands==="VU"?" selected":""}>VHF/UHF only</option><option value="HF"${bands==="HF"?" selected":""}>HF only</option></select></label>`:"";
+  const vu=R.VU&&bands!=="HF",hf=R.HF&&bands!=="VU";
+  const dist=`${vu?`<label>VHF/UHF within <input id="nfKm" type="number" min="1" max="500" value="${d.km}" style="width:5em"> km</label>`:""}${hf?` <label>HF within <input id="nfHfKm" type="number" min="50" max="5000" value="${d.hf_km}" style="width:6em"> km</label>`:""}`;
+  const hfset=hf?`<div class="row nfrow"><b>Your HF setup</b> <label>Antenna <select id="nfAnt">${d.antennas.map(a=>`<option value="${a.id}"${d.hf.antenna===a.id?" selected":""}>${esc(a.label)}</option>`).join("")}</select></label>
+      <label>Power <input id="nfPw" type="number" min="1" max="1500" value="${d.hf.power_w}" style="width:5em"> W</label>${d.hf.set?"":' <span class="small warnc">check these: they decide which HF nets you can hear and reach</span>'}</div>`:"";
+  const busy=NF.busy||d.busy;
+  const go=`<div class="row"><button class="primary" data-nfgo${busy||!loc||!(vu||hf)?" disabled":""}>${busy?"Searching… clubs, ARES/RACES groups, repeater pages (up to a minute)":d.at?"Search again":"Search"}</button>
+      <span class="small muted">${d.at?`Last searched ${esc(new Date(d.at*1000).toLocaleString([],{weekday:"short",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}))}${d.searched?` near ${esc(d.searched.where)}, ${esc(d.searched.bands.join(" + "))}`:""}${d.cost_usd!=null?` · cost $${d.cost_usd}`:""}. Results are kept a week.`:"One search costs about $0.10–0.30 of xAI and takes up to a minute."}</span></div>`;
+  const msg=NF.msg?`<p class="${NF.msg.bad?"bad":"ok"}">${esc(NF.msg.text)}</p>`:"";
+  const nets=(d.nets||[]).filter(n=>bands===""||(bands==="HF")===(n.band==="HF"));
+  const tgt=S.radios.filter(r=>r.role!=="winlink");
+  for(const id of [...NF.sel])if(!nets.some(n=>n.id===id))NF.sel.delete(id);
+  const allOn=nets.length&&nets.filter(n=>!n.have).every(n=>NF.sel.has(n.id));
+  const chip=c=>`<span class="np k-${c==="likely"?"ready":c==="maybe"?"tune":"cant"}" style="padding:0 6px">${c}</span>`;
+  const rows=nets.map(n=>{const rid=NF.radio[n.id]!==undefined?NF.radio[n.id]:(n.radio||"");
+    return `<tr class="${NF.sel.has(n.id)?"picked":""}"><td class="ck"><input type="checkbox" data-nfpick="${n.id}"${NF.sel.has(n.id)?" checked":""} aria-label="Select ${esc(n.name)}"></td>
+    <td><b>${esc(n.name)}</b>${n.emergency?' <span class="badge emergency">Emergency</span>':""}${n.have?` <span class="small warnc">already on your schedule${n.have!==n.name?` as ${esc(n.have)}`:""}</span>`:""}
+      <div class="small muted">${esc([n.org,n.area,n.distance_km!=null?`~${n.distance_km} km`:""].filter(Boolean).join(" · "))}${n.note?` · ${esc(n.note)}`:""}</div></td>
+    <td>${nfRule(n)}</td>
+    <td class="f">${Number(n.freq_mhz).toFixed(3)} MHz ${esc(n.mode)}${n.offset_mhz!=null?`<div class="small muted">${n.offset_mhz>0?"+":""}${n.offset_mhz} MHz${n.tone_hz?` · tone ${n.tone_hz}`:""}</div>`:n.tone_hz?`<div class="small muted">tone ${n.tone_hz}</div>`:""}</td>
+    <td>${n.prop?`<div title="${esc(n.prop.why)}">Hear ${chip(n.prop.chance)}</div><div title="${esc(n.prop.why)}" class="small">Check in ${chip(n.prop.checkin)}</div>`:'<span class="small muted">—</span>'}</td>
+    <td><select data-nfradio="${n.id}" aria-label="Radio for ${esc(n.name)}"><option value="">no radio</option>${tgt.map(r=>`<option value="${esc(r.id)}"${rid===r.id?" selected":""}>${esc(r.name)}</option>`).join("")}</select>${n.radio_why&&rid===n.radio?`<div class="small muted">${esc(n.radio_why)}</div>`:""}</td>
+    <td class="small"><a href="${esc(n.source_url)}" target="_blank" rel="noopener noreferrer">source</a><div class="${n.source_opened?"muted":"warnc"}">${n.source_opened?"opened by the search":"not opened: check it"}</div></td></tr>`}).join("");
+  const table=nets.length?`<div class="nsel">${NF.sel.size?`<b>${NF.sel.size} selected</b><button class="primary" data-nfadd>Add ${NF.sel.size===1?"1 net":NF.sel.size+" nets"} to the schedule</button><button type="button" class="linkish" data-nfnone>Clear selection</button>`:'<span class="muted">Tick the nets to add (or the box in the heading for all of them).</span>'}</div>
+    <div class="nlistwrap"><table class="nlist"><thead><tr><th class="ck"><input type="checkbox" data-nfall${allOn?" checked":""} aria-label="Select every net found" title="Select every net found (not ones already on your schedule)"></th><th>Net</th><th>When</th><th>Frequency</th><th title="HF: a rough estimate from the band, distance, time of day, your antenna and power">HF reach</th><th>Radio</th><th>Found on</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small muted">Found by an AI web search: check the source before relying on a net. Added nets keep a link to their source on the net's card; HF reach is a rough estimate for typical conditions (hover it for why).</p>`
+    :d.at?`<p class="muted">${esc(d.error||"No nets found.")}</p>`:"";
+  const out=(d.left_out||[]).length?`<details class="small"><summary>${d.left_out.length} more found but left out</summary><ul>${d.left_out.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></details>`:"";
+  box.innerHTML=back+`<h4>Find nets near you</h4><p>${where}</p>${addr}<p>${radios}</p><div class="row nfrow">${pickBands} ${dist}</div>${hfset}${go}${msg}${table}${out}`;
+  const save=async b=>{try{NF.d=await post("/api/netfind/settings",b);NF.msg=null}catch(e){NF.msg={bad:true,text:e.message}}renderFind()};
+  const km=$("nfKm");if(km)km.onchange=()=>save({km:km.value});
+  const hk=$("nfHfKm");if(hk)hk.onchange=()=>save({hf_km:hk.value});
+  const ant=$("nfAnt"),pw=$("nfPw");if(ant){const f=()=>save({hf:{antenna:ant.value,power_w:pw.value}});ant.onchange=f;pw.onchange=f}
+  const bs=$("nfBands");if(bs)bs.onchange=()=>{NF.bands=bs.value||"";renderFind()};
+}
+document.addEventListener("click",async e=>{
+  const t=e.target;if(!t.closest||!t.closest("#nfBox"))return;
+  if(t.closest("[data-nfback]")){NV.finding=false;NF.d=null;NF.sel.clear();renderSchedule(true);return}
+  if(t.closest("[data-nfaddr]")){NF.addr=true;renderFind();return}
+  if(t.closest("[data-nfaddrsave]")){try{NF.d=await post("/api/netfind/settings",{address:$("nfAddr").value,gps:null});NF.addr=false;NF.msg=null}catch(err){NF.msg={bad:true,text:err.message}}renderFind();return}
+  if(t.closest("[data-nfgeo]")){NF.geoTried=false;const ok=await nfGeo();NF.msg=ok?null:{bad:true,text:"This PC did not give a location (Windows Settings → Privacy → Location, or the browser blocked it). Use an address instead."};if(!ok)NF.addr=true;renderFind();return}
+  const pk=t.closest("[data-nfpick]");if(pk){pk.checked?NF.sel.add(pk.dataset.nfpick):NF.sel.delete(pk.dataset.nfpick);renderFind();return}
+  const al=t.closest("[data-nfall]");if(al){(NF.d.nets||[]).filter(n=>!n.have&&$("nfBox").querySelector(`[data-nfpick="${n.id}"]`)).forEach(n=>al.checked?NF.sel.add(n.id):NF.sel.delete(n.id));renderFind();return}
+  if(t.closest("[data-nfnone]")){NF.sel.clear();renderFind();return}
+  if(t.closest("[data-nfgo]")){NF.busy=true;NF.msg=null;renderFind();
+    try{NF.d=await post("/api/netfind/search",{bands:NF.bands||null});NF.sel.clear();NF.radio={};const n=(NF.d.nets||[]).length;NF.msg={text:n?`Found ${n} net${n===1?"":"s"}.`:"No nets with a source page were found."}}
+    catch(err){NF.msg={bad:true,text:err.message}}NF.busy=false;renderFind();return}
+  if(t.closest("[data-nfadd]")){const b=t.closest("[data-nfadd]");b.disabled=true;
+    try{const d=await post("/api/netfind/add",{ids:[...NF.sel],radios:NF.radio});NF.d=d;S.schedule=d.schedule||S.schedule;NF.sel.clear();renderNetPick();renderRadios();
+      NF.msg={bad:!!d.failed.length,text:`Added ${d.added.length} net${d.added.length===1?"":"s"} to the schedule.`+(d.failed.length?` Not added: ${d.failed.map(f=>f.name+" ("+f.why+")").join("; ")}`:"")}}
+    catch(err){NF.msg={bad:true,text:err.message}}renderFind();return}
+});
+document.addEventListener("change",e=>{const s=e.target.closest&&e.target.closest("[data-nfradio]");if(s)NF.radio[s.dataset.nfradio]=s.value});
+
 async function renderAssign(){
   const sig=JSON.stringify([(S.schedule||[]).map(n=>[n.id,n.radio||""]),S.radios.map(r=>r.id)]);
   if(sig!==NA.sig){NA.sig=sig;try{NA.d=await api("/api/nets/unassigned")}catch(e){NA.d=null}}
