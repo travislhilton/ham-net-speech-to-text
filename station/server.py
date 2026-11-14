@@ -307,8 +307,8 @@ def make_handler(station):
                         return self._json({"error": "no such transmission"}, 404)
                 if u.path == "/api/netfind/settings":            # {km, hf_km, address, gps: {lat, lon, acc_m} | null, hf}
                     return self._json(_finder(station).settings(body))
-                if u.path == "/api/netfind/search":              # {"bands": "HF" | "VU" | null}: one xAI web search
-                    return self._json(_finder(station).search(body.get("bands")))
+                if u.path == "/api/netfind/search":              # {"bands": "HF"|"VU"|null, km, hf_km, hf, interests}
+                    return self._json(_finder(station).search(body.get("bands"), body))
                 if u.path == "/api/netfind/add":                 # {"ids": [...], "radios": {found id: radio id}}
                     return self._json(_finder(station).add(body.get("ids"), body.get("radios")))
                 if u.path == "/api/nets/assign":                # {"choices": {group key: radio id}}

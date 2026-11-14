@@ -4,8 +4,16 @@ import json
 
 import pytest
 
+from station import hfprop as HP
 from station import netfind as NF
 from tests.test_agent import _station, xai_key  # noqa: F401
+
+
+@pytest.fixture(autouse=True)
+def offline(monkeypatch):                                         # NOAA's solar flux: never fetched in tests
+    def no(url):
+        raise OSError("offline")
+    monkeypatch.setattr(HP, "_fetch", no)
 
 
 def _answer(nets, opened=()):
@@ -82,7 +90,7 @@ def test_a_search_keeps_nets_with_a_source_and_drops_the_rest(tmp_path, xai_key)
     assert v["emergency"] and v["source_opened"] and v["offset_mhz"] == -0.6 and v["tone_hz"] == 103.5
     assert v["radio"] == "ic" and v["org"] == "County ARES"
     assert not s["nets"][1]["source_opened"]
-    assert len(s["left_out"]) == 4 and s["cost_usd"] == 0.15
+    assert len(s["left_out"]) == 4 and s["cost_usd"] == 0.3        # two searches (VHF/UHF and HF), in parallel
     h = s["nets"][1]
     assert h["prop"]["chance"] in ("likely", "maybe", "unlikely") and "checkin" in h["prop"]
 
@@ -121,15 +129,57 @@ def test_no_key_and_no_location_are_said_plainly(tmp_path):
         NF.Finder(st).search()
 
 
-def test_hf_reach_depends_on_antenna_power_and_time():
-    P = NF.propagation
-    assert P(3.9, 200, "19:00", "dipole_low", 100)["chance"] == "likely"          # 80 m NVIS, evening
-    assert P(3.9, 200, "19:00", "whip", 10)["checkin"] == "unlikely"             # a whip at 10 W
-    assert P(7.2, 200, "21:00", "efhw", 100)["chance"] == "unlikely"             # 40 m skips short paths at night
-    assert P(14.3, 1500, "11:00", "vertical", 100)["chance"] == "likely"         # 20 m daytime, long path
-    assert P(14.3, 200, "11:00", "beam", 100)["chance"] == "unlikely"            # 20 m skips over 200 km
-    a, b = P(3.9, 300, "20:00", "efhw", 5), P(3.9, 300, "20:00", "efhw", 100)
-    assert a["chance"] == b["chance"] and a["checkin"] != "likely"                # power: checking in, not hearing
+def test_hf_reach_follows_the_antennas_pattern_the_hour_and_power():
+    E = HP.estimate
+    assert E(3.9, 300, "19:30", "dipole", 6, 100, 140)["chance"] == "likely"      # 80 m NVIS at night, low dipole
+    assert E(7.2, 300, "21:00", "dipole", 10, 100, 140)["chance"] == "unlikely"   # 40 m skips over 300 km at night
+    assert E(7.2, 300, "12:00", "dipole", 10, 100, 140)["chance"] == "likely"     # ... and covers it by day
+    assert E(14.3, 1800, "13:00", "dipole", 10, 100, 140)["chance"] == "likely"   # 20 m daytime, long path
+    assert E(14.3, 1800, "23:00", "dipole", 10, 100, 140)["chance"] == "unlikely" # 20 m closed at night
+    assert E(14.3, 300, "13:00", "beam", 15, 100, 140)["chance"] == "unlikely"    # a beam fires too low for 300 km
+    w = E(3.9, 300, "19:30", "whip", 0, 100, 140)
+    assert w["checkin"] == "unlikely" and w["snr_hear"] > w["snr_send"]           # a whip hears better than it is heard
+    a, b = E(3.9, 300, "19:30", "efhw", 10, 5, 140), E(3.9, 300, "19:30", "efhw", 10, 100, 140)
+    assert a["snr_hear"] == b["snr_hear"] and a["snr_send"] < b["snr_send"]       # power: checking in, not hearing
+
+
+def test_the_antenna_pattern_low_dipole_fires_up_high_dipole_and_vertical_fire_low():
+    g = HP.gain
+    assert g("dipole", 3.9, 6, 80) > g("dipole", 3.9, 6, 15) + 10                 # 0.08 wave up: NVIS
+    assert g("dipole", 14.2, 20, 12) > g("dipole", 14.2, 20, 80)                  # 1 wave up: low angles
+    assert g("vertical", 7.2, 0, 15) > g("vertical", 7.2, 0, 75) + 8              # a vertical: nothing straight up
+    assert g("whip", 3.9, 0, 30) < g("vertical", 3.9, 0, 30) - 15                 # a short whip on 80 m
+    assert g("beam", 7.2, 15, 20) <= -20                                          # a 20-10 m beam on 40 m
+
+
+def test_solar_flux_from_noaa_cached_and_offline_fallback():
+    c = {}
+    v, src = HP.solar_flux(c, fetch=lambda u: [{"time_tag": "2026-11-12", "flux": 150}, {"time_tag": "2026-11-13", "flux": 162.4}])
+    assert v == 162 and src == "NOAA, today" and c["sfi"] == 162
+    v, _ = HP.solar_flux(c, fetch=lambda u: 1 / 0)                                # cached: not fetched again
+    assert v == 162
+    assert HP.solar_flux({}, fetch=lambda u: 1 / 0) == (130.0, "typical (offline)")
+
+
+def test_settings_sent_with_the_search_are_used_and_one_band_keeps_the_other(tmp_path, xai_key):
+    sent = []
+    st, f = _finder(tmp_path, [VHF, HFNET], seen=sent)
+    f.search()
+    assert {n["name"] for n in f.state()["nets"]} == {"Springfield ARES Net", "Section Phone Net"}
+    sent.clear()
+    s = f.search("HF", {"hf_km": 2000, "hf": {"antenna": "vertical", "height_m": 0, "power_w": 100},
+                        "interests": ["traffic", "special"]})
+    assert len(sent) == 1 and "2000 km" in sent[0]["input"][0]["content"]
+    assert "National Traffic System" in sent[0]["input"][0]["content"] and "Hurricane" not in sent[0]["input"][0]["content"]
+    assert {n["name"] for n in s["nets"]} == {"Springfield ARES Net", "Section Phone Net"}   # VHF kept from before
+    assert s["hf"]["antenna"] == "vertical" and s["by_band"]["HF"]["km"] == 2000
+
+
+def test_a_regional_hf_net_far_away_is_kept_when_it_covers_the_station(tmp_path, xai_key):
+    far = dict(HFNET, name="Region Net", distance_km=1500, serves_station_area=True)
+    st, f = _finder(tmp_path, [far, dict(HFNET, name="Distant Club Net", distance_km=1500)])
+    names = [n["name"] for n in f.search("HF")["nets"]]
+    assert names == ["Region Net"]
 
 
 def test_times_in_another_zone_or_utc_become_this_pcs_time():
@@ -141,4 +191,47 @@ def test_times_in_another_zone_or_utc_become_this_pcs_time():
     assert (days, t) == (["Mon"], "13:00")
     st_days, st = NF._to_pc(["Mon"], "23:30", here - 2)             # late evening two hours west: after midnight here
     assert (st_days, st) == (["Tue"], "01:30")
+
+
+def test_distance_is_computed_from_the_nets_town_and_a_proven_range_shapes_hf_reach(tmp_path, xai_key):
+    near = dict(HFNET, name="Close Net", freq_mhz=7.2, start="12:00", time_zone="local", lat=40.3, lon=-89.6,
+                distance_km=999)                                   # ~55 km from the grid square: the search's 999 ignored
+    mid = dict(near, name="Sweet Spot Net", lat=43.6, lon=-89.0)  # ~ 450 km north
+    st, f = _finder(tmp_path, [near, mid])
+    st._save({})
+    f.settings({"gps": {"lat": 39.97, "lon": -89.96}})             # the example area
+    f.settings({"hf": {"antenna": "dipole", "height_m": 8, "power_w": 50, "good_from_km": 400, "good_to_km": 600}})
+    s = f.search("HF")
+    d = {n["name"]: n for n in s["nets"]}
+    assert d["Close Net"]["dist_src"] == "computed" and d["Close Net"]["distance_km"] < 80
+    assert d["Sweet Spot Net"]["prop"]["pct_hear"] > d["Close Net"]["prop"]["pct_hear"]
+    with pytest.raises(ValueError, match="both distances"):
+        f.settings({"hf": {"antenna": "dipole", "power_w": 50, "good_from_km": 400}})
+
+
+
+def test_the_sun_over_the_path_when_the_net_meets_decides_day_or_night_and_season():
+    from datetime import datetime, timezone
+    z = HP.solar_zenith
+    assert abs(z(datetime(2026, 6, 21, 18, 0, tzinfo=timezone.utc), 40, -90) - 17) < 2    # local noon, June
+    assert abs(z(datetime(2026, 12, 21, 18, 0, tzinfo=timezone.utc), 40, -90) - 63) < 2   # local noon, December
+    E = HP.estimate
+    nov = E(7.2, 600, "19:30", "dipole", 8, 50, 118, (400, 600), datetime(2026, 11, 17, 2, 30, tzinfo=timezone.utc), (38.5, -113))
+    jun = E(7.2, 600, "19:30", "dipole", 8, 50, 118, (400, 600), datetime(2026, 6, 17, 1, 30, tzinfo=timezone.utc), (38.5, -113))
+    assert nov["dark"] and not jun["dark"] and jun["muf"] > nov["muf"]                   # a June evening is still day
+    noon = E(3.9, 300, "12:00", "dipole", 8, 100, 118, None, datetime(2026, 6, 17, 18, 0, tzinfo=timezone.utc), (40, -90))
+    night = E(3.9, 300, "22:00", "dipole", 8, 100, 118, None, datetime(2026, 6, 18, 4, 0, tzinfo=timezone.utc), (40, -90))
+    assert night["snr_hear"] > noon["snr_hear"]                                           # 80 m: D-layer absorption by day
+
+
+def test_antenna_gains_match_the_published_models_within_a_db_or_two():
+    g, lam = HP.gain, 300 / 3.9
+    assert abs(g("dipole", 3.9, 0.04 * lam, 90) - (-0.5)) < 1.5              # NEC-4 (Cebik): low dipoles, zenith
+    assert abs(g("dipole", 3.9, 0.12 * lam, 90) - 5.6) < 1.5
+    assert abs(g("dipole", 3.9, 0.20 * lam, 90) - 6.4) < 1.5
+    assert g("invv", 7.2, 12, 50) < g("dipole", 7.2, 12, 50)                  # an inverted V: a bit lower and lower gain
+    assert g("vertical", 7.2, 0, 26, "average") > g("vertical", 7.2, 0, 75, "average") + 8
+    assert g("vertical", 7.2, 0, 6, "salt") > g("vertical", 7.2, 0, 6, "poor") + 8   # salt water fires low
+    w = [g("whip", f, 0, 30) - g("vertical", f, 0, 30) for f in (3.9, 7.2, 14.2)]
+    assert w[0] < w[1] < w[2] < 0                                              # whip efficiency improves going up
 
