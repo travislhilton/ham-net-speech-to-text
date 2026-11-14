@@ -78,6 +78,7 @@ CREATE INDEX IF NOT EXISTS item_inst ON item(inst);
 CREATE INDEX IF NOT EXISTS item_net ON item(net_id, kind, status);
 CREATE TABLE IF NOT EXISTS minutes(inst TEXT PRIMARY KEY, notes TEXT, ncs TEXT, added TEXT, removed TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS station(call TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT);
+CREATE TABLE IF NOT EXISTS summary(inst TEXT PRIMARY KEY, text TEXT, at TEXT, model TEXT, edited INTEGER, sig TEXT);
 """
 ITEM_FIELDS = ("kind", "text", "who", "place", "event_at", "due", "until", "status", "category")
 KINDS = ("announcement", "event", "action", "decision", "traffic", "urgent", "note")
@@ -206,7 +207,7 @@ class History:
                     self.con.execute(f"DELETE FROM item WHERE id IN ({ph(chunk)})", chunk)
                 for i in range(0, len(insts), 500):
                     chunk = insts[i:i + 500]
-                    for t in ("part", "minutes"):
+                    for t in ("part", "minutes", "summary"):
                         self.con.execute(f"DELETE FROM {t} WHERE inst IN ({ph(chunk)})", chunk)
                     self.con.execute(f"DELETE FROM inst WHERE key IN ({ph(chunk)})", chunk)
                 for name in log_names:
@@ -700,6 +701,11 @@ class History:
         m = self._one("SELECT * FROM minutes WHERE inst=?", (key,))
         d["notes"] = m["notes"] if m else ""
         d["ncs_set"] = m["ncs"] if m else None
+        try:
+            d["summary"] = {"lines": self.summary_lines(key, d), "ai": self.summary_ai(key)}
+        except Exception as e:  # noqa: BLE001 - the minutes show without it
+            print(f"summary: {type(e).__name__}: {e}", flush=True)
+            d["summary"] = {"lines": [], "ai": None}
         return d
 
     def _tx_views(self, key):
@@ -1150,6 +1156,99 @@ class History:
                 "ncs_id_min": mins(last_id), "id_every_min": id_every_min,
                 "review": d["review"]}
 
+    # ---------- the summary at the top of the minutes (owner 2026-11-14) ----------
+    def summary_lines(self, key: str, d: dict | None = None) -> list[str]:
+        """The minutes in a few lines, by rules (always there, offline): who took part, what was drafted under each
+        heading (the first one or two, and how many), how long it ran. The AI paragraph (summary_ai) goes above it."""
+        d = d or self.instance(key)
+        out = []
+        if d.get("emergency"):
+            out.append("Emergency / priority net.")
+        roll = [p for p in d["participants"] if p["role"] in ("ncs", "checkin")]
+        once = sum(1 for p in roll if not p.get("confirmed"))
+        try:
+            mins = int((datetime.fromisoformat(d["end"]) - datetime.fromisoformat(d["start"])).total_seconds() // 60)
+        except (TypeError, ValueError, KeyError):
+            mins = None
+        who = f"{len(roll)} station{'' if len(roll) == 1 else 's'} took part" if d.get("kind") == "net" or roll else ""
+        if who:
+            bits = [who]
+            if d.get("ncs"):
+                bits.append(f"net control {d['ncs']}")
+            new = self._newcomers(d, roll)
+            if new:
+                bits.append(f"new to this net: {', '.join(new[:6])}" + (f" and {len(new) - 6} more" if len(new) > 6 else ""))
+            if once:
+                bits.append(f"{once} heard once, not confirmed")
+            out.append("; ".join(bits) + ".")
+        if mins is not None and d.get("tx_count"):
+            out.append(f"{d['tx_count']} transmissions over {mins} min.")
+        for kind, label in (("urgent", "Urgent"), ("traffic", "Traffic"), ("announcement", "Announcements"),
+                            ("event", "Coming up"), ("action", "Action items"), ("decision", "Decisions")):
+            its = [i for i in d["items"] if i["kind"] == kind and i["status"] != "dismissed"]
+            if its:
+                first = "; ".join(_short(i["text"], 90).rstrip(" .;:,") for i in its[:2])
+                out.append(f"{label} ({len(its)}): {first}" + (f"; and {len(its) - 2} more" if len(its) > 2 else "") + ".")
+        if d.get("kind") == "net" and not any(i["status"] != "dismissed" for i in d["items"]):
+            out.append("No announcements, traffic, action items or decisions were drafted.")
+        return out
+
+    def _newcomers(self, d: dict, roll: list[dict]) -> list[str]:
+        """Calls in this net's roll never on its roll before (only when it met before)."""
+        if not d.get("net_id") or not roll:
+            return []
+        earlier = self._q("SELECT DISTINCT p.call FROM part p JOIN inst i ON p.inst=i.key WHERE i.net_id=? AND"
+                          " i.start<? AND i.key!=? AND p.role IN ('checkin','ncs')",
+                          (d["net_id"], d.get("start") or "", d["key"]))
+        if not self._one("SELECT 1 FROM inst WHERE net_id=? AND start<? AND key!=? AND tx_count>0",
+                         (d["net_id"], d.get("start") or "", d["key"])):
+            return []
+        seen = {r["call"] for r in earlier}
+        return [p["call"] for p in roll if p["call"] not in seen and p["role"] != "ncs"]
+
+    def summary_ai(self, key: str) -> dict | None:
+        r = self._one("SELECT * FROM summary WHERE inst=?", (key,))
+        return None if not r or not r["text"] else {"text": r["text"], "at": r["at"], "model": r["model"],
+                                                    "edited": bool(r["edited"]), "sig": r["sig"]}
+
+    def set_summary_ai(self, key: str, text: str, model: str | None = None, sig: str | None = None,
+                       edited: bool = False) -> dict | None:
+        """Store the AI paragraph (the summarizer) or the operator's edit of it (edited: never written over by
+        itself again; Rewrite does). An empty text removes it."""
+        if not self._one("SELECT 1 FROM inst WHERE key=?", (key,)):
+            raise LookupError(key)
+        text = str(text or "").strip()[:4000]
+        with self.lock:
+            if not text:
+                self.con.execute("DELETE FROM summary WHERE inst=?", (key,))
+            else:
+                self.con.execute("INSERT OR REPLACE INTO summary(inst, text, at, model, edited, sig) VALUES(?,?,?,?,?,?)",
+                                 (key, text, self.clock().isoformat(timespec="seconds"), model, 1 if edited else 0, sig))
+        return self.summary_ai(key)
+
+    def summary_sig(self, key: str, d: dict | None = None) -> str:
+        """Changes when what the summary is written from changes: the transmissions' text, the roll, the items."""
+        import hashlib
+        d = d or self.instance(key)
+        h = hashlib.sha1()
+        for t in d["tx"]:
+            h.update(f"{t.get('speaker')}|{t.get('text')}\n".encode("utf-8", "replace"))
+        for p in d["participants"]:
+            h.update(f"{p['call']}|{p['role']}\n".encode())
+        for i in d["items"]:
+            h.update(f"{i['kind']}|{i['text']}|{i['status']}\n".encode("utf-8", "replace"))
+        return h.hexdigest()[:16]
+
+    def summary_text(self, key: str, d: dict | None = None) -> str:
+        """The summary as plain text (the ICS-213 and the minutes' text): the AI paragraph, then the lines."""
+        d = d or self.instance(key)
+        ai = self.summary_ai(key)
+        parts = []
+        if ai:
+            parts.append(ai["text"] + ("" if ai["edited"] else "\n(AI-drafted from the transcript, checked by the operator.)"))
+        parts.append("\n".join(f"- {x}" for x in self.summary_lines(key, d)))
+        return "\n\n".join(p for p in parts if p.strip())
+
     def minutes_text(self, key: str, md=True) -> str:
         d = self.instance(key)
         h = (lambda s: f"\n## {s}\n") if md else (lambda s: f"\n{s.upper()}\n")
@@ -1162,6 +1261,11 @@ class History:
                  + (f". Net control: {d['ncs']}" if d.get("ncs") else "") + f". {d.get('tx_count', 0)} transmissions."]
         if d.get("emergency"):
             lines.append("EMERGENCY / PRIORITY NET")
+        summ = self.summary_text(key, d)
+        if summ:
+            lines.append(h("Summary"))
+            lines.append(summ if md else "\n".join("  * " + x[2:] if x.startswith("- ") else x
+                                                    for x in summ.split("\n")))
         roll = [p for p in d["participants"] if p["role"] in ("ncs", "checkin")]
         lines.append(h(f"Attendance ({len(roll)})"))
         for p in roll:
@@ -1208,3 +1312,8 @@ class History:
                     f"  - {i['text'][:160]}" + (f" ({i['who']})" if i.get("who") else "")
                     + (f" [{i['status']}]" if kind in ("urgent", "action") else "") for i in its))
         return "\n".join(out)
+
+
+def _short(t: str, n: int) -> str:
+    t = " ".join(str(t or "").split())
+    return t if len(t) <= n else t[:n - 1].rstrip() + "…"

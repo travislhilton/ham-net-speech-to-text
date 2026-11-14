@@ -202,7 +202,8 @@ def make_handler(station):
                                                                 int(q.get("limit") or 200), q.get("before")),
                                        "status": h.status})
                 if u.path == "/api/history/instance":
-                    return self._json(h.instance(q.get("key", "")))
+                    from .netsummary import enabled as ai_on
+                    return self._json(h.instance(q.get("key", "")) | {"summary_ai_on": ai_on(station)})
                 if u.path == "/api/netboard":                   # the net on the air on a radio (station/history.py board)
                     return self._json({"board": h.board(q.get("radio", ""), station.clock())})
                 if u.path == "/api/history/minutes":            # export: Markdown or plain text, as a download
@@ -231,7 +232,7 @@ def make_handler(station):
             who = re.fullmatch(r"/api/tx/(\w+)/speaker", u.path)
             fix = re.fullmatch(r"/api/tx/(\w+)/correct", u.path)                                        # ✎ Fix
             routes = {"/api/radio-list", "/api/settings", "/api/winlink/preview", "/api/winlink/send", "/api/accurate", "/api/test",
-                      "/api/history/minutes", "/api/learned", "/api/local-names", "/api/local-names/import",
+                      "/api/history/minutes", "/api/history/summary", "/api/learned", "/api/local-names", "/api/local-names/import",
                       "/api/pc/measure", "/api/pc/seen", "/api/settings-pack/preview", "/api/settings-pack/apply",
                       "/api/nets/assign", "/api/netfind/settings", "/api/netfind/search", "/api/netfind/add"}
             sched = re.fullmatch(r"/api/schedule(/[\w-]+(/(delete|skip|move|restore|radio|settle|keep|unheard|back|forget))?)?", u.path)   # schedule
@@ -292,6 +293,8 @@ def make_handler(station):
                     return self._json(station.history.update_item(int(item.group(1)), body))
                 if u.path == "/api/history/minutes":            # notes, net control, attendance corrections
                     return self._json(station.history.set_minutes(str(body.get("key") or ""), body))
+                if u.path == "/api/history/summary":            # {key, action: rewrite | edit | clear, text}
+                    return self._json(station.summary_post(body))
                 if who:                                         # the operator's "Who?" ({"call": ""} = automatic)
                     try:
                         return self._json(with_who("tx", station.set_speaker(who.group(1), body.get("call"),

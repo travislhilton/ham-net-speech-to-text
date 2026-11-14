@@ -488,6 +488,7 @@ button:disabled{cursor:not-allowed}
   header button{min-height:36px}
 }
 details.unheard{margin:12px 0;padding:8px 10px;border:1px dashed var(--line,#999);border-radius:8px}details.unheard ul{margin:6px 0 0;padding-left:18px}details.unheard li{margin:4px 0}
+.msum{border-left:3px solid var(--accent);padding-left:10px}.msum .msumai{margin:4px 0;line-height:1.45}.msum .msumlines{margin:6px 0;padding-left:18px}.msum .mjumps{margin-top:4px}
 </style>
 <script>try{for(const k of Object.keys(localStorage))if(k.startsWith("hamnet.")){const n="hamsidekick."+k.slice(7);if(localStorage.getItem(n)===null)localStorage.setItem(n,localStorage.getItem(k))}}catch(e){}</script>
 <script>
@@ -545,6 +546,8 @@ function setDisplay(k,v){DISP[k]=v;try{localStorage.setItem("hamsidekick.display
     <option value="always">Always, while the station runs</option>
     <option value="off">Never (my power settings only)</option></select></label>
   <div class="small muted">Laptops run several times slower once the screen goes dark. “During nets and traffic” switches to full speed for a scheduled net, for every transmission (from its first moment) and for 10 minutes after the last one; the rest of the time your own power plan, screen and sleep settings apply, and the radio still listens.</div>
+  <label class="chk"><input type="checkbox" name="ai_summary"> AI summary at the top of each net's minutes</label>
+  <div class="small muted">With the xAI key (Station agent, below): a short paragraph written about 10 minutes after each net ends, from its minutes and transcript (well under a cent a net), shown above the summary lines and put in the ICS-213. Off: the summary lines only (written by the station, no internet).</div>
   <label class="inl">Keep recordings and net history for <input name="keep_weeks" type="number" min="1" max="104" step="1" style="width:5em"> weeks</label>
   <div class="small muted" id="keepNote">Older recordings, day logs, net history, minutes and voiceprints are deleted (checked every 6 hours). Settings, radios, the net schedule and local names are always kept.</div>
   <h4>Display <span class="muted small" style="text-transform:none">(this browser only, applied at once)</span></h4>
@@ -1493,7 +1496,7 @@ function fillAccounts(f){
 $("openSettings").onclick=async()=>{
   const op=await loadSettings(),f=$("setForm");
   $("dispTheme").value=DISP.theme;$("dispClock").value=DISP.clock;
-  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";f.keep_weeks.value=op.keep_weeks||6;f.keep_weeks.dataset.was=op.keep_weeks||6;
+  f.callsign.value=op.callsign||"";f.name.value=op.name||"";f.grid.value=op.grid||"";f.reach_km.value=op.reach_km||300;f.keep_awake.value=op.keep_awake||"traffic";f.keep_weeks.value=op.keep_weeks||6;f.keep_weeks.dataset.was=op.keep_weeks||6;f.ai_summary.checked=op.ai_summary!==false;
   f.winlink_dir.innerHTML=(op.installs||[]).map(i=>`<option value="${esc(i.path)}"${i.path===op.winlink_dir?" selected":""}>${esc(i.path)}${i.active?" (active "+esc(i.active)+")":""}</option>`).join("");
   $("wlNone").textContent=(op.installs||[]).length?"":"No Winlink Express found on this PC (looked in C:\\RMS Express and the installed-programs list).";
   fillAccounts(f);$("setErr").textContent="";loadPC();renderAlertSettings();renderLearned();renderKeys();loadAgent().then(renderAgentSet);loadLocalNames();renderShare();loadVoice();loadGrok();$("settings").showModal();
@@ -1503,7 +1506,7 @@ $("setSave").onclick=async e=>{
   e.preventDefault();const f=$("setForm");
   const kw=+f.keep_weeks.value,was=+f.keep_weeks.dataset.was||6;
   if(kw&&kw<was&&!confirm(`Keep recordings and net history for ${kw} weeks instead of ${was}?\n\nEverything older than ${kw} weeks (recordings, logs, net history and minutes) will be deleted in about a minute. This cannot be undone.`))return;
-  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value,reach_km:f.reach_km.value,keep_awake:f.keep_awake.value,keep_weeks:f.keep_weeks.value})});
+  const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callsign:f.callsign.value,name:f.name.value,grid:f.grid.value,winlink_dir:f.winlink_dir.value,winlink_account:f.winlink_account.value,reach_km:f.reach_km.value,keep_awake:f.keep_awake.value,keep_weeks:f.keep_weeks.value,ai_summary:f.ai_summary.checked})});
   const d=await r.json();if(!r.ok){$("setErr").textContent=d.error||"not saved";return}
   OP=d;$("me").textContent=d.callsign+" station";$("settings").close();
 };
@@ -1716,6 +1719,7 @@ function connect(){
   es.addEventListener("hints",e=>{S.hints=JSON.parse(e.data);renderHints()});
   es.addEventListener("heard",e=>{S.heard=JSON.parse(e.data).heard;renderHeard()});
   es.addEventListener("today",e=>{S.net=JSON.parse(e.data).net;renderNet()});
+  es.addEventListener("minutes",e=>{const k=JSON.parse(e.data).key;if(MIN&&MIN.key===k&&SUMED!==k&&$("netsDlg").open&&NV.tab==="minutes")renderMinutes()});   // the AI summary arrived
   es.addEventListener("radios",e=>{const d=JSON.parse(e.data);S.radios=d.radios;S.net=d.net;renderRadios();renderNet()});
   es.addEventListener("m",e=>onMeter(JSON.parse(e.data)));
   es.addEventListener("engines",e=>renderEngine(JSON.parse(e.data)));
@@ -2187,6 +2191,28 @@ function copyText(text){
 function legacyCopy(text){const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");
   ta.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";(document.querySelector("dialog[open]")||document.body).appendChild(ta);
   ta.select();ta.setSelectionRange(0,text.length);let ok=false;try{ok=document.execCommand("copy")}catch(e){}ta.remove();return ok}   // refresh the open minutes/history at most every 3 s while a pass streams updates
+// ----- the Summary at the top of the minutes (history.py summary_lines; netsummary.py the AI paragraph) -----
+let SUMED=null;   // the key whose AI paragraph is being edited
+function summaryBox(d,by,carried){
+  const s=d.summary||{lines:[],ai:null},ai=s.ai,ed=SUMED===d.key;
+  const jumps=[["urgent","Urgent"],["review","Attendance"],["announcement","Announcements"],["event","Schedule"],["action","Action items"],["decision","Decisions"],["traffic","Traffic"],["note","Notes"],["tx","Transcript"]]
+    .filter(([k])=>k==="review"||k==="tx"||by(k).length||(carried||[]).some(i=>i.kind===k))
+    .map(([k,l])=>`<button type="button" class="linkish small" data-mjump="${k}">${l}</button>`).join(" · ");
+  let para="";
+  if(ed)para=`<textarea id="mSumTxt" rows="5" style="width:100%">${esc(ai?ai.text:"")}</textarea><div class="row"><button class="primary" data-msum="save">Save</button><button data-msum="cancel">Cancel</button></div>`;
+  else if(ai)para=`<p class="msumai">${esc(ai.text)}</p><div class="small muted">${ai.edited?"Edited by you":"AI-drafted from the minutes and transcript: check it before you send it"} · <button type="button" class="linkish small" data-msum="edit">Edit</button>${d.summary_ai_on||ai.edited?` · <button type="button" class="linkish small" data-msum="rewrite" title="Ask for a new paragraph now (your edit is replaced)">Rewrite</button>`:""} · <button type="button" class="linkish small" data-msum="clear">Remove</button></div>`;
+  else if(d.summary_ai_on&&d.kind==="net")para=`<p class="small muted">The AI paragraph is written about 10 minutes after the net ends. <button type="button" class="linkish small" data-msum="rewrite">Write it now</button></p>`;
+  else if(d.summary_ai_on)para=`<p class="small muted"><button type="button" class="linkish small" data-msum="rewrite">Write an AI summary</button> of this conversation</p>`;
+  return `<section class="msec msum" id="mSum"><h4>Summary</h4>${para}${s.lines.length?`<ul class="small msumlines">${s.lines.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}<div class="small mjumps">Jump to: ${jumps}</div><span class="small" id="mSumSt"></span></section>`}
+document.addEventListener("click",async e=>{
+  const j=e.target.closest("[data-mjump]");if(j){const k=j.dataset.mjump,el=k==="review"?$("mReview"):k==="tx"?$("mTx"):$("msec-"+k);if(el){if(k==="tx")el.open=true;el.scrollIntoView({behavior:"smooth",block:"start"})}return}
+  const b=e.target.closest("[data-msum]");if(!b||!MIN)return;const a=b.dataset.msum,key=MIN.key;
+  if(a==="edit"){SUMED=key;renderMinutes();return}
+  if(a==="cancel"){SUMED=null;renderMinutes();return}
+  if(a==="clear"&&!confirm("Remove the AI paragraph from these minutes?\n\nThe summary lines stay. It is not written again by itself unless the minutes change."))return;
+  const body={key,action:a==="save"?"edit":a};if(a==="save")body.text=$("mSumTxt").value;
+  b.disabled=true;const st=$("mSumSt");if(st)st.textContent=a==="rewrite"?" Writing… (up to a minute)":" Saving…";
+  try{await post("/api/history/summary",body);SUMED=null;renderMinutes()}catch(err){if(st)st.textContent=" "+err.message;b.disabled=false}});
 async function renderMinutes(){
   const box=$("netsBody");
   if(!NV.key){if(!NV.net){box.innerHTML=pickNetHtml("its latest minutes (or open any net from History)");return}
@@ -2200,7 +2226,7 @@ async function renderMinutes(){
   const acc=d.acc_total?(d.acc_final>=d.acc_total?'<span class="ok">✓ accurate text</span>':`${d.acc_final} of ${d.acc_total} accurate`):"";
   const by=k=>d.items.filter(i=>i.kind===k);
   const sec=(k,extra=[])=>{const its=by(k).concat(extra);if(!its.length)return "";
-    return `<section class="msec k-${k}"><h4>${KIND[k]} <span class="muted">(${its.length})</span></h4><ul class="items">${its.map(i=>itemHtml(i,{from:i.inst!==d.key})).join("")}</ul></section>`};
+    return `<section class="msec k-${k}" id="msec-${k}"><h4>${KIND[k]} <span class="muted">(${its.length})</span></h4><ul class="items">${its.map(i=>itemHtml(i,{from:i.inst!==d.key})).join("")}</ul></section>`};
   const carried=(d.carried||[]).map(i=>({...i}));
   const txrows=d.tx.map(t=>{const ed=FIX&&FIX.where==="min"&&FIX.id===t.id,c=t.corrected;
     return `<li id="mtx-${esc(t.id)}" class="${t.noise?"noise":""}"><span class="t">${hhmm(t.start)}</span> <b>${esc(t.speaker||"")}</b> ${ed
@@ -2214,6 +2240,7 @@ async function renderMinutes(){
      <div class="row mtools"><label class="inl small">Net control <input id="mNcs" class="up" maxlength="11" value="${esc(d.ncs||"")}" placeholder="callsign"></label>
       <button id="mWl" title="ICS-309 log + ICS-213 summary with these minutes">Winlink messages…</button>
       <a class="helpbtn" href="/api/history/minutes?key=${enc(d.key)}&format=md" download>Download .md</a> <button id="mCopy">Copy as text</button>${d.net_id?` <button data-goto="open" data-net="${esc(d.net_id)}">Still open</button>`:""}</div></div>
+   ${summaryBox(d,by,carried)}
    <p class="small muted">Drafted from the transcript by rules: <span class="sug">suggested</span> items are the station's; check them, edit or mark them not right. Your changes are kept and never overwritten.</p>
    ${sec("urgent",carried.filter(i=>i.kind==="urgent"))}
    <section class="msec" id="mReview"><h4>Attendance <span class="muted">(${roll.length})</span></h4>

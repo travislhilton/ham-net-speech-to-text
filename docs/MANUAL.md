@@ -253,6 +253,15 @@ you chose is remembered. Each column shows:
     at least half of the last 8 times, and at least twice), the **net control** rota, and every station that ever took
     part: times, of the last 8, first and last time, and streak. Taking part = spoke, checked in, or was
     acknowledged by net control; a callsign only mentioned does not count.
+  - **Summary** at the top of the minutes (owner 2026-11-14), so nothing needs scrolling: lines written by the
+    station (who took part, net control, newcomers to this net, check-ins heard once, how long it ran, and the
+    first one or two urgent matters, traffic, announcements, events, action items and decisions, with how many more)
+    and **Jump to** links for each section. With the xAI key and Settings → **AI summary at the top of each net's
+    minutes** on (the default), a 3–5 sentence paragraph is written about 10 minutes after the net ends, from the
+    minutes and the transcript (station/netsummary.py; well under a cent a net, at most 30 an hour), marked
+    *AI-drafted*, and written again when the text changes (the accurate pass, your fixes). **Edit** keeps your words
+    (never written over by itself), **Rewrite** asks for a new one, **Remove** drops it. The Summary leads the .md /
+    text export and the **ICS-213** message (before the stations heard). Off, or offline: the station's lines only.
   - **Minutes** (per time the net met; also **Minutes** on each net's header in the log): drafted from the
     transcript by rules as the net runs, offline: **attendance** in check-in order with net control, **urgent**
     issues, **announcements** (with the date or place they are about), **schedule** (events), **action items**

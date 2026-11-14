@@ -85,7 +85,7 @@ def participants(span, me_calls: set[str], heard: dict) -> list[dict]:
 
 
 def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | None, title: str | None,
-           minutes: str = "", local_terms: str = "") -> list[dict]:
+           minutes: str = "", local_terms: str = "", summary: str = "") -> list[dict]:
     if not span:
         return []
     first, last = datetime.fromisoformat(span[0]["start"]), datetime.fromisoformat(span[-1]["start"])
@@ -118,7 +118,8 @@ def drafts(span, radio: dict, op: dict, people: list[dict], net_label: str | Non
     traffic = [t for t in span if set(t.get("hint_keys") or []) & {"emergency", "traffic", "relay"}]
     msg = (f"{title}\n{first:%Y-%m-%d %H:%M} to {last:%H:%M} local{', ' + freq if freq else ''}.\n"
            f"{len(span)} transmission{'' if len(span) == 1 else 's'} logged by {sender}{' (' + net_label + ')' if net_label else ''}.\n\n"
-           f"Stations heard:\n{who}\n")
+           + (f"Summary:\n{summary}\n\n" if summary else "")         # the minutes' Summary (owner 2026-11-14)
+           + f"Stations heard:\n{who}\n")
     if traffic:
         msg += "\nTraffic / relays / emergency calls heard:\n" + "\n".join(
             f"  {datetime.fromisoformat(t['start']):%H:%M} {t.get('speaker') or '?'}: {t.get('text', '')[:160]}" for t in traffic)

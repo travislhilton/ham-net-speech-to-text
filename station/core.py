@@ -266,6 +266,30 @@ class Station:
         if self.cat.cfg:
             threading.Thread(target=self.scan.run, args=(self.stop,), daemon=True, name="scan").start()
         threading.Thread(target=self.accurate.run, args=(self.stop,), daemon=True, name="accurate").start()
+        threading.Thread(target=self.summarizer.run, args=(self.stop,), daemon=True, name="summary").start()
+
+    @property
+    def summarizer(self):
+        """The AI paragraph at the top of a net's minutes (station/netsummary.py)."""
+        s = self.__dict__.get("_summarizer")
+        if s is None:
+            from .netsummary import Summarizer
+            s = self.__dict__["_summarizer"] = Summarizer(self)
+        return s
+
+    def summary_post(self, body: dict) -> dict:
+        """POST /api/history/summary {key, action: "rewrite" | "edit" | "clear", text}: the minutes' Summary box."""
+        key, act = str(body.get("key") or ""), str(body.get("action") or "")
+        if act == "rewrite":
+            self.summarizer.write(key, force=True)
+        elif act == "edit":
+            self.history.set_summary_ai(key, str(body.get("text") or ""), "operator", edited=True)
+        elif act == "clear":
+            self.history.set_summary_ai(key, "")
+        else:
+            raise ValueError("action: rewrite, edit or clear")
+        from .netsummary import enabled
+        return self.history.instance(key) | {"summary_ai_on": enabled(self)}
 
     def _index_history(self):
         """Bring the history index up to date with the day logs (the first run: all of them), in the background."""
@@ -390,7 +414,7 @@ class Station:
     def operator(self) -> dict:
         from . import winlink
         op = {"callsign": self.me, "name": "", "grid": "", "winlink_dir": "", "winlink_account": "",
-              "reach_km": self.reach_km(), "keep_awake": self.awake_mode} | \
+              "reach_km": self.reach_km(), "keep_awake": self.awake_mode, "ai_summary": True} | \
              {k: v for k, v in (self._saved().get("operator") or {}).items() if v is not None}
         op["keep_weeks"] = self.keep_weeks()
         op["callsign"] = self.me
@@ -472,6 +496,8 @@ class Station:
             if ka:
                 op["keep_awake"] = ka
                 self.awake_mode = ka
+            if "ai_summary" in body:                  # the AI paragraph on each net's minutes (netsummary.py)
+                op["ai_summary"] = bool(body["ai_summary"])
             saved["operator"] = op
             self._save(saved)
             self._apply_callsign(call)
@@ -509,11 +535,12 @@ class Station:
         net = (self.hints.get(rid) or {}).get("net") or {}
         sched = self._current_by_radio(datetime.fromisoformat(start)).get(rid) or {}
         key = self.history.instance_of(rid, start)
-        inst, notes = None, ""
+        inst, notes, summ = None, "", ""
         if key:
             try:
                 inst = self.history.instance(key)
                 notes = self.history.summary_for_213(key)
+                summ = self.history.summary_text(key, inst)
             except LookupError:
                 pass
         filed = Counter((t.get("net") or {}).get("name") for t in span if (t.get("net") or {}).get("name"))
@@ -524,7 +551,8 @@ class Station:
         from . import localnames
         terms = localnames.footer(localnames.terms_in([t.get("text") for t in span] + [notes, name or ""],
                                                       localnames.load(self.data)))
-        d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), name, minutes=notes, local_terms=terms)
+        d = ics.drafts(span, self.radios[rid], op, people, net.get("type"), name, minutes=notes, local_terms=terms,
+                       summary=summ)
         acc = None
         if getattr(self, "accurate", None):
             jobs = [j for j in self.accurate.status() if j["radio"] == rid and start <= j["start"] <= end]
