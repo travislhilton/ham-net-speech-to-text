@@ -1900,11 +1900,11 @@ async function renderFind(){
   const nets=(d.nets||[]).filter(n=>bands===""||(bands==="HF")===(n.band==="HF"));
   const tgt=S.radios.filter(r=>r.role!=="winlink");
   for(const id of [...NF.sel])if(!nets.some(n=>n.id===id))NF.sel.delete(id);
-  const allOn=nets.length&&nets.filter(n=>!n.have).every(n=>NF.sel.has(n.id));
+  const allOn=nets.length&&nets.every(n=>NF.sel.has(n.id));
   const chip=c=>`<span class="np k-${c==="likely"?"ready":c==="maybe"?"tune":"cant"}" style="padding:0 6px">${c}</span>`;
   const rows=nets.map(n=>{const rid=NF.radio[n.id]!==undefined?NF.radio[n.id]:(n.radio||"");
     return `<tr class="${NF.sel.has(n.id)?"picked":""}"><td class="ck"><input type="checkbox" data-nfpick="${n.id}"${NF.sel.has(n.id)?" checked":""} aria-label="Select ${esc(n.name)}"></td>
-    <td><b>${esc(n.name)}</b>${n.emergency?' <span class="badge emergency">Emergency</span>':""}${n.have?` <span class="small warnc">already on your schedule${n.have!==n.name?` as ${esc(n.have)}`:""}</span>`:""}
+    <td><b>${esc(n.name)}</b>${n.emergency?' <span class="badge emergency">Emergency</span>':""}
       <div class="small muted">${esc([n.org,n.area,n.distance_km!=null?`~${n.distance_km} km`:""].filter(Boolean).join(" · "))}${n.note?` · ${esc(n.note)}`:""}</div></td>
     <td>${nfRule(n)}</td>
     <td class="f">${Number(n.freq_mhz).toFixed(3)} MHz ${esc(n.mode)}${n.offset_mhz!=null?`<div class="small muted">${n.offset_mhz>0?"+":""}${n.offset_mhz} MHz${n.tone_hz?` · tone ${n.tone_hz}`:""}</div>`:n.tone_hz?`<div class="small muted">tone ${n.tone_hz}</div>`:""}</td>
@@ -1912,11 +1912,12 @@ async function renderFind(){
     <td><select data-nfradio="${n.id}" aria-label="Radio for ${esc(n.name)}"><option value="">no radio</option>${tgt.map(r=>`<option value="${esc(r.id)}"${rid===r.id?" selected":""}>${esc(r.name)}</option>`).join("")}</select>${n.radio_why&&rid===n.radio?`<div class="small muted">${esc(n.radio_why)}</div>`:""}</td>
     <td class="small"><a href="${esc(n.source_url)}" target="_blank" rel="noopener noreferrer">source</a><div class="${n.source_opened?"muted":"warnc"}">${n.source_opened?"opened by the search":"not opened: check it"}</div></td></tr>`}).join("");
   const table=nets.length?`<div class="nsel">${NF.sel.size?`<b>${NF.sel.size} selected</b><button class="primary" data-nfadd>Add ${NF.sel.size===1?"1 net":NF.sel.size+" nets"} to the schedule</button><button type="button" class="linkish" data-nfnone>Clear selection</button>`:'<span class="muted">Tick the nets to add (or the box in the heading for all of them).</span>'}</div>
-    <div class="nlistwrap"><table class="nlist"><thead><tr><th class="ck"><input type="checkbox" data-nfall${allOn?" checked":""} aria-label="Select every net found" title="Select every net found (not ones already on your schedule)"></th><th>Net</th><th>When</th><th>Frequency</th><th title="HF: a rough estimate from the band, distance, time of day, your antenna and power">HF reach</th><th>Radio</th><th>Found on</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="nlistwrap"><table class="nlist"><thead><tr><th class="ck"><input type="checkbox" data-nfall${allOn?" checked":""} aria-label="Select every net found" title="Select every net found"></th><th>Net</th><th>When</th><th>Frequency</th><th title="HF: a rough estimate from the band, distance, time of day, your antenna and power">HF reach</th><th>Radio</th><th>Found on</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="small muted">Found by an AI web search: check the source before relying on a net. Added nets keep a link to their source on the net's card; HF reach is a rough estimate for typical conditions (hover it for why).</p>`
-    :d.at?`<p class="muted">${esc(d.error||"No nets found.")}</p>`:"";
+    :d.at?`<p class="muted">${(d.scheduled||[]).length?"Every net found is already on your schedule.":esc(d.error||"No nets found.")}</p>`:"";
+  const sch=(d.scheduled||[]).length?`<details class="small"><summary>${d.scheduled.length} found already on your schedule (not shown)</summary><ul>${d.scheduled.map(x=>`<li>${esc(x.name)}${x.as!==x.name?` (as ${esc(x.as)})`:""}</li>`).join("")}</ul></details>`:"";
   const out=(d.left_out||[]).length?`<details class="small"><summary>${d.left_out.length} more found but left out</summary><ul>${d.left_out.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></details>`:"";
-  box.innerHTML=back+`<h4>Find nets near you</h4><p>${where}</p>${addr}<p>${radios}</p><div class="row nfrow">${pickBands} ${dist}</div>${hfset}${go}${msg}${table}${out}`;
+  box.innerHTML=back+`<h4>Find nets near you</h4><p>${where}</p>${addr}<p>${radios}</p><div class="row nfrow">${pickBands} ${dist}</div>${hfset}${go}${msg}${table}${sch}${out}`;
   const save=async b=>{try{NF.d=await post("/api/netfind/settings",b);NF.msg=null}catch(e){NF.msg={bad:true,text:e.message}}renderFind()};
   const km=$("nfKm");if(km)km.onchange=()=>save({km:km.value});
   const hk=$("nfHfKm");if(hk)hk.onchange=()=>save({hf_km:hk.value});
@@ -1930,10 +1931,10 @@ document.addEventListener("click",async e=>{
   if(t.closest("[data-nfaddrsave]")){try{NF.d=await post("/api/netfind/settings",{address:$("nfAddr").value,gps:null});NF.addr=false;NF.msg=null}catch(err){NF.msg={bad:true,text:err.message}}renderFind();return}
   if(t.closest("[data-nfgeo]")){NF.geoTried=false;const ok=await nfGeo();NF.msg=ok?null:{bad:true,text:"This PC did not give a location (Windows Settings → Privacy → Location, or the browser blocked it). Use an address instead."};if(!ok)NF.addr=true;renderFind();return}
   const pk=t.closest("[data-nfpick]");if(pk){pk.checked?NF.sel.add(pk.dataset.nfpick):NF.sel.delete(pk.dataset.nfpick);renderFind();return}
-  const al=t.closest("[data-nfall]");if(al){(NF.d.nets||[]).filter(n=>!n.have&&$("nfBox").querySelector(`[data-nfpick="${n.id}"]`)).forEach(n=>al.checked?NF.sel.add(n.id):NF.sel.delete(n.id));renderFind();return}
+  const al=t.closest("[data-nfall]");if(al){(NF.d.nets||[]).filter(n=>$("nfBox").querySelector(`[data-nfpick="${n.id}"]`)).forEach(n=>al.checked?NF.sel.add(n.id):NF.sel.delete(n.id));renderFind();return}
   if(t.closest("[data-nfnone]")){NF.sel.clear();renderFind();return}
   if(t.closest("[data-nfgo]")){NF.busy=true;NF.msg=null;renderFind();
-    try{NF.d=await post("/api/netfind/search",{bands:NF.bands||null});NF.sel.clear();NF.radio={};const n=(NF.d.nets||[]).length;NF.msg={text:n?`Found ${n} net${n===1?"":"s"}.`:"No nets with a source page were found."}}
+    try{NF.d=await post("/api/netfind/search",{bands:NF.bands||null});NF.sel.clear();NF.radio={};const n=(NF.d.nets||[]).length,k=(NF.d.scheduled||[]).length;NF.msg={text:(n?`Found ${n} new net${n===1?"":"s"}`:"No new nets found")+(k?` (${k} more already on your schedule).`:".")}}
     catch(err){NF.msg={bad:true,text:err.message}}NF.busy=false;renderFind();return}
   if(t.closest("[data-nfadd]")){const b=t.closest("[data-nfadd]");b.disabled=true;
     try{const d=await post("/api/netfind/add",{ids:[...NF.sel],radios:NF.radio});NF.d=d;S.schedule=d.schedule||S.schedule;NF.sel.clear();renderNetPick();renderRadios();

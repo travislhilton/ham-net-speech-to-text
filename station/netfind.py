@@ -437,10 +437,13 @@ class Finder:
         if last.get("at") and time.time() - last["at"] > KEEP_S:
             last = {}
         nets = _mark(self.st, [dict(n) for n in last.get("nets") or []], self._hf(d))
+        have = [n for n in nets if n["have"]]                   # owner 11-14: only nets not already scheduled are shown
+        nets = [n for n in nets if not n["have"]]
         return {"key": bool(self.key()), "location": location(self.st), "km": d.get("km", DEFAULT_KM),
                 "hf_km": d.get("hf_km", DEFAULT_HF_KM), "reach": reach(self.st), "hf": self._hf(d),
                 "antennas": [{"id": k, "label": v[0]} for k, v in ANTENNAS.items()], "address": d.get("address") or "",
-                "busy": self.busy, "at": last.get("at"), "nets": nets, "left_out": last.get("left_out") or [],
+                "busy": self.busy, "at": last.get("at"), "nets": nets,
+                "scheduled": [{"name": n["name"], "as": n["have"]} for n in have], "left_out": last.get("left_out") or [],
                 "error": last.get("error"), "cost_usd": last.get("cost_usd"), "searched": last.get("searched")}
 
     def _hf(self, d: dict) -> dict:

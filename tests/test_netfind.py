@@ -110,7 +110,9 @@ def test_adding_the_ticked_nets_with_a_chosen_radio(tmp_path, xai_key):
     assert n["source"] == "https://example.org/nets/"
     assert n.get("radio") is None and n["freq_mhz"] == 146.94 and n["emergency"] and n["tone_hz"] == 103.5
     assert n["repeat"] == {"freq": "weekly", "weekdays": ["Tue"]} and len(st.cfg["schedule"]) == before + 1
-    assert next(x for x in f.state()["nets"] if x["id"] == vid)["have"] == "Springfield ARES Net"
+    s2 = f.state()                                                 # added: no longer offered, listed as scheduled
+    assert vid not in [x["id"] for x in s2["nets"]] and s2["scheduled"] == [{"name": "Springfield ARES Net",
+                                                                             "as": "Springfield ARES Net"}]
 
 
 def test_no_key_and_no_location_are_said_plainly(tmp_path):
